@@ -100,12 +100,14 @@ def design(F, y, mat, taper=1.0, od_max=None):
     return None, (best_any[1] if best_any else [])
 
 
-def helix_points(geo, per_turn=24):
+def helix_points(geo, per_turn=24, compression=0.0):
     """Yay ekseni z boyunca tel merkez cizgisi noktalari (mm). Uclarda 1'er kapali sarim (hatve = d),
     aktif sarimlarda hatve p; konik yayda yaricap aktif bolgede D1/2 -> D2/2 dogrusal.
     Merkez cizgisi z = 0 -> L0 (= 2d + p Na); z = 0 ve z = L0 duzlemleriyle kesilince (taslama)
-    uclardaki telin yarisi gider: kare ve taslanmis uclar."""
-    d, Na, p = geo["d"], geo["Na"], geo["pitch"]
+    uclardaki telin yarisi gider: kare ve taslanmis uclar.
+    compression: yay bu kadar sikismis (mm): aktif hatve p - compression / Na (animasyon kareleri)."""
+    d, Na = geo["d"], geo["Na"]
+    p = geo["pitch"] - compression / Na
     R1, R2 = geo["D1"] / 2, geo["D2"] / 2
     Nt = Na + 2
     pts = []

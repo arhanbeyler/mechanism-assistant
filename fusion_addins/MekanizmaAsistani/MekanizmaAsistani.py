@@ -253,11 +253,58 @@ def cam_follower():
     return (adsk.fusion.SliderJointMotion.cast(joint[0].jointMotion), json.loads(table.value), float(sign.value))
 
 
+def spring_frames():
+    """Yay tasariminda sikisma karesi bilesenleri (0 = serbest ... son = calisma cokmesi) ya da None."""
+    design = adsk.fusion.Design.cast(app.activeProduct)
+    if not design or not design.attributes.itemByName("MekanizmaAsistani", "spring_frames"):
+        return None
+    occs = [o for o in design.rootComponent.occurrences if o.component.name.startswith("Yay ")]
+    return sorted(occs, key=lambda o: int(o.component.name.split()[1])) or None
+
+
+def animate_spring(mode):
+    """Yay: kareleri sirayla gorunur yaparak sikisip acilma. 'turn' = bir sikistir-birak dongusu."""
+    anim["running"] = True
+    send_to_palette("anim", {"running": True, "mode": mode})
+
+    def worker():
+        n = len(spring_frames() or [])
+        seq = list(range(n)) + list(range(n - 2, 0, -1))      # 0..n-1..1 (sonra tekrar 0)
+        i = 0
+        while anim["running"]:
+            k = seq[i % len(seq)]
+            done = threading.Event()
+
+            def show(k=k):
+                try:
+                    for j, occ in enumerate(spring_frames() or []):
+                        occ.isLightBulbOn = (j == k)
+                except Exception:
+                    anim["running"] = False
+                finally:
+                    done.set()
+
+            run_on_main(show)
+            done.wait(2.0)
+            time.sleep(0.07)
+            i += 1
+            if mode == "turn" and i > len(seq):
+                break
+        run_on_main(lambda: [setattr(o, "isLightBulbOn", j == 0) for j, o in enumerate(spring_frames() or [])])
+        anim["running"] = False
+        run_on_main(lambda: send_to_palette("anim", {"running": False}))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
 def rotate(mode):
     """mode: 'turn' (bir tam tur) ya da 'toggle' (surekli donmeyi ac/kapat)."""
     if anim["running"]:
         if mode == "toggle":
             anim["running"] = False       # calisan is parcacigi durur ve paneli gunceller
+        return
+    if spring_frames():
+        animate_spring(mode)
         return
     if crank_motion() is None:
         send_to_palette("status", {"text": "Açık belgede dönecek bir mekanizma yok. Önce 'Fusion'da çiz'."})

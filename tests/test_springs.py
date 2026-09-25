@@ -62,3 +62,12 @@ def test_helix_points_geometry():
     assert pts[0][2] == pytest.approx(0.0)
     assert pts[-1][2] == pytest.approx(geo["L0"], rel=1e-6)    # taslanmis uclar: serbest boy = L0
     assert all(abs(math.hypot(x, y) - geo["D1"] / 2) < 1e-9 for x, y, _ in pts)
+
+
+def test_compressed_helix_is_shorter_by_deflection():
+    """Animasyon karesi: delta kadar sikismis yayin boyu L0 - delta; en fazla calisma cokmesinde
+    aktif sarimlar arasinda hala bosluk kalir (tam sikisma degil)."""
+    geo, _ = springs.design(100.0, 20.0, MW)
+    pts = springs.helix_points(geo, compression=geo["y_work"])
+    assert pts[-1][2] == pytest.approx(geo["L0"] - geo["y_work"], rel=1e-6)
+    assert geo["pitch"] - geo["y_work"] / geo["Na"] > geo["d"]      # teller birbirine degmiyor

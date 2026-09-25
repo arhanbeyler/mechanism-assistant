@@ -157,14 +157,15 @@ def build(mech, reuse=True):
         gear.build(mech, root)
         app.activeViewport.fit()
         return design
-    if mech.get("type") == "spring":          # C10: basma yayi
+    for key, owner in (("cam_table", "cam"), ("cam_slide_sign", "cam"), ("spring_frames", "spring")):
+        old = design.attributes.itemByName(MARK_GROUP, key)
+        if old and mech.get("type") != owner:
+            old.deleteMe()                    # onceki tasarimin animasyon verisi kalmasin
+    if mech.get("type") == "spring":          # C10: basma yayi (+ sikisma animasyonu kareleri)
         import fusion_lib.spring as spring
-        spring.build(mech, root)
+        spring.build(mech, root, design)
         app.activeViewport.fit()
         return design
-    old_table = design.attributes.itemByName(MARK_GROUP, "cam_table")
-    if old_table and mech.get("type") != "cam":
-        old_table.deleteMe()                  # onceki kam tasariminin tablosu kalmasin
     if mech.get("type") == "cam":             # C11a: kam + itici
         import fusion_lib.cam as cam
         cam.build(mech, root, design)
