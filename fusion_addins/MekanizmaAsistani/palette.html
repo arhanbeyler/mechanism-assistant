@@ -73,7 +73,7 @@
   .col svg { max-height: 180px; }
   table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 12px; }
   td { padding: 2px 3px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  td.r { text-align: right; } td.m { color: var(--muted); text-align: right; }
+  td.r { text-align: right; white-space: normal; } td.m { color: var(--muted); text-align: right; }
   .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
   .check { display: flex; gap: 6px; padding: 1px 0; font-size: 12px; }
   .check .i { width: 12px; font-weight: 700; }
@@ -364,7 +364,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (d.status === "ok" && d.drawn) text += "\nMekanizma Fusion'da çizildi.";
     if (d.status === "failed") text += "\nBu tasarım çizilmedi. Kaydırıcılarla uygun değeri arayabilirsin.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -373,7 +373,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // tamami: fareyle ustune gelince
-    if (d.lengths || d.gear || d.spring || d.cam) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft) renderCard(d);
   }
 
   // ------------------------------------------------------------ sonuc karti
@@ -474,7 +474,50 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
   }
 
+  function renderShaftCard(d) {              // C11b: iki yatakli mil (DE-Goodman)
+    const g = d.shaft;
+    if (!g) { $("result").innerHTML = `<h3>Kontroller</h3>${checksHtml(d.checks)}`; return; }
+    const ft = g.layout.feature;
+    const featTxt = {
+      keyseat: `kama ${ft.b}×${ft.h}×${ft.length}`, round_shoulder: `omuz Ø${ft.D}, r${ft.fillet}`,
+      sharp_shoulder: `omuz Ø${ft.D}, r${ft.fillet}`, ring_groove: `kanal ${ft.width}×${ft.depth}`, plain: "düz" }[ft.kind];
+    const rows = [["Çap", `${f(g.d_min, 2)} → Ø${f(g.d, 0)}`], ["Çelik", g.material.replace("AISI ", "")],
+                  ["M / T", `${f(g.M / 1000, 0)} / ${f(g.T / 1000, 0)} N·m`], ["S_e", `${f(g.Se, 0)} MPa`],
+                  ["K_f / K_fs", `${g.Kf} / ${g.Kfs}`], ["n_f / n_y", `${f(g.nf, 2)} / ${f(g.ny, 2)}`],
+                  ["Özellik", featTxt], ["Yatak arası", `${f(g.layout.span, 0)} mm`]]
+      .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Mil</h3><table>${rows}</table></div>
+        <div class="col"><h3>Kontroller</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Görünüm</h3>${shaftSvg(g.layout)}</div>
+      </div>`;
+  }
+
+  function shaftSvg(lay) {                   // yandan kesit: kademeler, yataklar, gobek, ozellik (olcekli)
+    const W = 220, H = 150, pad = 8;
+    const rmax = Math.max(...lay.bearings.map((b) => b[2] / 2), ...lay.segments.map((s) => s[2]));
+    const sc = Math.min((W - 2 * pad) / lay.length, (H - 2 * pad) / (2 * rmax));
+    const X = (x) => pad + x * sc, cy = H / 2, Y = (r) => cy - r * sc;
+    const top = lay.segments.map(([x0, x1, r]) => `${X(x0)},${Y(r)} ${X(x1)},${Y(r)}`).join(" ");
+    const bot = lay.segments.slice().reverse().map(([x0, x1, r]) => `${X(x1)},${cy + r * sc} ${X(x0)},${cy + r * sc}`).join(" ");
+    const brg = lay.bearings.map(([xc, B, Do]) => [1, -1].map((s) =>
+      `<rect x="${X(xc - B / 2)}" y="${s > 0 ? Y(Do / 2) : cy + lay.d / 2 * sc}" width="${B * sc}"
+        height="${(Do - lay.d) / 2 * sc}" fill="var(--line)" stroke="var(--muted)"/>`).join("")).join("");
+    const ft = lay.feature;
+    const key = ft.kind === "keyseat"
+      ? `<rect x="${X(ft.x - ft.length / 2)}" y="${Y(lay.d / 2 - ft.t1 + ft.h)}" width="${ft.length * sc}" height="${ft.h * sc}"
+           rx="${ft.b / 2 * sc}" fill="var(--rocker)"/>` : "";
+    const hub = `<rect x="${X(lay.hub[0])}" y="${Y(lay.d / 2) - 2}" width="${(lay.hub[1] - lay.hub[0]) * sc}"
+      height="${lay.d * sc + 4}" fill="none" stroke="var(--crank)" stroke-dasharray="3 2"/>`;
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <line class="axis" x1="${pad / 2}" y1="${cy}" x2="${W - pad / 2}" y2="${cy}" stroke-dasharray="6 2 1 2"/>
+      ${brg}<polygon points="${top} ${bot}" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.5"/>${key}${hub}
+      <text class="lbl" x="${X((lay.hub[0] + lay.hub[1]) / 2)}" y="${H - 4}" text-anchor="middle">göbek (M maks)</text></svg>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "shaft") return renderShaftCard(d);
     if (d.mechanism_type === "spur_gear") return renderGearCard(d);
     if (d.mechanism_type === "spring") return renderSpringCard(d);
     if (d.mechanism_type === "cam") return renderCamCard(d);

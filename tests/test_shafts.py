@@ -51,3 +51,53 @@ def test_stronger_steel_thinner_shaft():
     s1020, _ = shafts.design(60000.0, 100000.0, "1020")
     s1045, _ = shafts.design(60000.0, 100000.0, "1045")
     assert s1045["d_min"] < s1020["d_min"]
+
+
+# ------------------------------------------------------------------ geometri (C11b)
+
+def test_key_table_din6885():
+    assert shafts.key_for(28) == (8, 7, 4.0)      # 22 < d <= 30
+    assert shafts.key_for(30) == (8, 7, 4.0)
+    assert shafts.key_for(31) == (10, 8, 5.0)
+
+
+@pytest.mark.parametrize("feature", list(shafts.FEATURES))
+def test_layout_is_continuous_and_hub_at_midspan(feature):
+    lay = shafts.layout(28.0, feature)
+    segs = lay["segments"]
+    assert segs[0][0] == 0 and segs[-1][1] == pytest.approx(lay["length"])
+    assert all(a[1] == pytest.approx(b[0]) for a, b in zip(segs, segs[1:]))   # bosluksuz
+    assert min(r for *_, r in segs) <= 14.0 and all(r >= 14.0 - 1.0 for *_, r in segs)
+    (xb1, B, _), (xb2, _, _) = lay["bearings"]
+    assert sum(lay["hub"]) / 2 == pytest.approx((xb1 + xb2) / 2)            # gobek aciklik ortasinda (M maks)
+    assert lay["hub"][0] - (xb1 + B / 2) > 0                                # gobek yatakla cakismaz
+
+
+def test_layout_draws_only_the_analysed_notch():
+    """Hesap tek bir K_t ile yapildi: baska kademe/kanal cizilmemeli."""
+    for feature in ("keyseat", "plain"):
+        assert len(shafts.layout(28.0, feature)["segments"]) == 1
+    sh = shafts.layout(20.0, "round_shoulder")
+    assert sh["feature"]["D"] / 20.0 == pytest.approx(1.5) and sh["feature"]["fillet"] == pytest.approx(2.0)
+    assert shafts.layout(20.0, "sharp_shoulder")["feature"]["fillet"] == pytest.approx(0.4)
+
+
+def test_keyseat_inside_hub():
+    lay = shafts.layout(28.0, "keyseat")
+    ft = lay["feature"]
+    assert lay["hub"][0] < ft["x"] - ft["length"] / 2 and ft["x"] + ft["length"] / 2 < lay["hub"][1]
+    assert ft["t1"] < ft["h"]                     # kama yuvadan tasar (gobek tarafi)
+
+
+def test_profile_fillet_is_tangent_quarter_arc():
+    pts = shafts.profile(shafts.layout(20.0, "round_shoulder"))
+    arc = next(p for p in pts if p[0] == "arc")
+    _, c, s, e = arc
+    assert math.dist(c, s) == pytest.approx(2.0) and math.dist(c, e) == pytest.approx(2.0)
+    assert s[0] == pytest.approx(e[0] - 2.0) and s[1] == pytest.approx(e[1] + 2.0)
+    assert pts[0] == (0.0, 0.0) and pts[-1][1] == 0.0      # eksen uzerinde kapanir
+
+
+def test_span_is_respected_or_widened():
+    assert shafts.layout(20.0, "plain", span=200)["span"] == 200
+    assert shafts.layout(20.0, "plain", span=10)["span"] >= 3 * 20.0

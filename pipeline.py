@@ -366,6 +366,7 @@ def _shaft(result, spec, say):
         return dict(result, status="failed", message=" ".join(notes + [
             "Standart çaplar içinde uygun mil yok. Öneri: yükü azaltın ya da daha dayanıklı çelik seçin."]))
     g["span_mm"] = spec.get("span_mm")
+    g["layout"] = shafts.layout(g["d"], feature, g["span_mm"])   # kart ve Fusion ayni geometri
     fname = shafts.FEATURES[feature][0]
     result.update(
         shaft=g, fusion={"type": "shaft", "passed_checks": True, **g},

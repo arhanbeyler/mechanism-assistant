@@ -152,23 +152,17 @@ def build(mech, reuse=True):
         design.attributes.add(MARK_GROUP, MARK_NAME, "1")
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
-    if mech.get("type") == "spur_gear":       # C9: ayni (etiketli) belgede disli cifti
-        import fusion_lib.gear as gear
-        gear.build(mech, root)
-        app.activeViewport.fit()
-        return design
     for key, owner in (("cam_table", "cam"), ("cam_slide_sign", "cam"), ("spring_frames", "spring")):
         old = design.attributes.itemByName(MARK_GROUP, key)
         if old and mech.get("type") != owner:
             old.deleteMe()                    # onceki tasarimin animasyon verisi kalmasin
-    if mech.get("type") == "spring":          # C10: basma yayi (+ sikisma animasyonu kareleri)
-        import fusion_lib.spring as spring
-        spring.build(mech, root, design)
-        app.activeViewport.fit()
-        return design
-    if mech.get("type") == "cam":             # C11a: kam + itici
-        import fusion_lib.cam as cam
-        cam.build(mech, root, design)
+    other = {"spur_gear": "gear",             # C9: disli cifti
+             "spring": "spring",              # C10: basma yayi (+ sikisma animasyonu kareleri)
+             "cam": "cam",                    # C11a: kam + itici
+             "shaft": "shaft"}.get(mech.get("type"))   # C11b: iki yatakli mil
+    if other:
+        import importlib
+        importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)
         app.activeViewport.fit()
         return design
     pts = mech["points_mm"]

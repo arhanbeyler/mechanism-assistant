@@ -37,7 +37,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **C10. Helis ve konik yay.** Shigley: Bergsträsser, S_ut = A/dᵐ, tam sıkışmada akma yok, burkulma; konik k = G·d⁴/(16·Nₐ(R₁+R₂)(R₁²+R₂²)); Fusion'da helis sweep + taşlanmış uçlar
 - [x] **L1. İki aşamalı LLM.** Yönlendirici (tür) + modüle özel kısa çıkarıcı; tek uzun istem 9B modelde ayrıntı kaçırıyordu; llm_eval 16/16
 - [x] **C11a. Kam.** Sikloidal / harmonik / 3-4-5; basınç açısı ≤ 30°, alttan kesme yok, ρ ≥ 2·R_makara; en küçük temel daire; Fusion'da kam + makaralı itici + s(θ) animasyonu (8 açıda temas boşluğu 0, kesişim 0)
-- [ ] **C11b. Mil.** Shigley 7. bölüm, DE-Goodman yorulma
+- [x] **C11b. Mil.** Shigley 7. bölüm, DE-Goodman yorulma (Marin faktörleri, k_b iterasyonu, Tablo 7-1 K_t), von Mises akma; standart çapa yuvarlama. Fusion'da iki yataklı mil: sadece hesaptaki gerilme yığılması çizilir (DIN 6885 kama + parmak freze yuvası / segman kanalı / D/d = 1.5 omuz, r/d 0.02 veya 0.1). 5 türde boy, çap ve hacim hesapla birebir; mafsalla döner
 
 ## D. Dış dünya
 - [ ] **D12. Fiziksel baskı** (arkadaşın yazıcısı)

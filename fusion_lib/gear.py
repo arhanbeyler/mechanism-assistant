@@ -86,7 +86,7 @@ def _bore_edge(occ, bore, z_top):
     raise RuntimeError(f"{occ.component.name}: mil deligi kenari bulunamadi")
 
 
-def build(g, root):
+def build(g, root, design=None):
     """g: gears.design() ciktisi (+ type). root: temizlenmis kok bilesen."""
     m, z1, z2, b = g["module"], g["z1"], g["z2"], g["face_width"]
     a = g["center_distance"]

@@ -235,7 +235,7 @@ def crank_motion():
     if not design:
         return None
     for j in design.rootComponent.asBuiltJoints:
-        if j.name.startswith("Sabit-Krank") or j.name in ("Sabit-Pinyon", "Sabit-Kam"):   # giris mafsali
+        if j.name.startswith("Sabit-Krank") or j.name in ("Sabit-Pinyon", "Sabit-Kam", "Sabit-Mil"):   # giris mafsali
             return adsk.fusion.RevoluteJointMotion.cast(j.jointMotion)
     return None
 
@@ -452,7 +452,9 @@ def show_palette():
         on_html = PaletteHTMLHandler()
         pal.incomingFromHTML.add(on_html)
         handlers.append(on_html)
-        pal.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateBottom
+        # Alta yapisik (docked) halde Fusion paneli daraltip "kaybedebiliyordu": serbest pencere
+        pal.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateFloating
+        pal.setSize(1100, 320)
     pal.isVisible = True
 
 
