@@ -6,6 +6,7 @@ Hem terminal (main.py) hem Fusion paneli bunu kullanir.
 Sadece standart kutuphane: Fusion'in kendi Python'unda da calisir.
 """
 
+import interference
 import kinematics as kin
 import strength
 from llm_extract import extract_spec
@@ -169,10 +170,21 @@ def design_from_spec(spec, on_status=None):
     elif passed:
         notes.append("Yük verilmediği için mukavemet hesabı yapılmadı; "
                      "varsayılan kesit (10×4 mm, Ø4 pim) kullanıldı.")
+    section = strength.section_with_bosses(section)
     result["section_mm"] = section
 
-    fusion = kin.to_fusion_dict(mech, frames, passed and strength_ok)
+    # ---- katman cakismasi: ara katmanlardan gecen mil, hareketli uzuvlara carpmamali
+    order, clearances, layers_ok = interference.choose_layer_order(mech, frames, section)
+    for p, between, margin in clearances:
+        checks.append({"name": f"Katman çakışması ({p} mili)", "ok": margin >= 0,
+                       "detail": f"{', '.join(between)} katmanından geçiyor; en az boşluk "
+                                 f"{margin + interference.CLEARANCE:.1f} mm (gereken {interference.CLEARANCE:g})"})
+    if passed and not layers_ok:
+        notes.append("Hiçbir katman sırasında mil, hareketli uzuvlardan kurtulamıyor.")
+
+    fusion = kin.to_fusion_dict(mech, frames, passed and strength_ok and layers_ok)
     fusion["section_mm"] = section
+    fusion["layer_order"] = list(order)
     result.update(
         lengths={k: mech[k] for k in "abcd"},
         target={"swing": psi, "Q": Q},
@@ -187,6 +199,10 @@ def design_from_spec(spec, on_status=None):
         passed = False
         msg = (f"{F:g} N yük için {strength.MATERIALS[mat_key]['name']} ile uygun kesit bulunamadı "
                f"(genişlik ≤ {strength.MAX_WIDTH} mm). Öneri: daha dayanıklı malzeme ya da daha küçük yük.")
+    elif passed and not layers_ok:
+        passed = False
+        msg = ("Mekanizma kendi kendine çarpıyor: ara katmandan geçen mil, dönen uzuvların yolunda. "
+               "Öneri: sabit uzvu iki taraflı (üst ve alt) yapmak ya da ölçüleri değiştirmek.")
     elif passed:
         msg = "Tasarım tüm kontrollerden geçti."
         if "strength" in result:

@@ -27,7 +27,9 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B7g. Göbek esnekliği.** Model δ_göbek = P·L²/(C·E·t·r²), C FEA ile kalibre (21 geometri, C = 6–9, L'den bağımsız); güvenli taraf için C = 6
 - [x] **B7h. Mil ve pim çaplarını ayırmak.** O2/O4 çelik mil (burulma + kayma kontrolü), A/B pim; Fusion her uçta doğru deliği çiziyor. PETG 5 kg: biyel 25→13 mm, hacim −%12
 - [x] **B8a. Yerel göbek (boss).** Delikler kendi göbeğinde (D = 2.5·d), gövde kontrollerin gerektirdiği kadar ince; göbek ve gövde kesitleri ayrı kontrol; Fusion'da dolu extrude + delik kesme. PETG hacim −%29, Al −%59
-- [ ] **B8b. Pimler, boşluk ve katman çakışması.** Print-in-place pim/boşluk geometrisi; O2/O4 milinin ara katmanlardan geçerken hareketli uzuvlarla çakışma kontrolü
+- [x] **B8b. Katman çakışması.** Ara katmandan geçen milin, hareketli uzuvlardan (gövde + göbek) çevrim boyunca en az 1 mm uzak kalması; gerekirse katman sırası değişir, olmazsa tasarım reddedilir
+- [ ] **B8c. Pimler ve boşluk (print-in-place).** Pim/başlık geometrisi, radyal ve eksenel boşluk (baskı zamanı, D12 ile birlikte)
+- [ ] **B9. Tam tur atmayan dört çubuklar.** Çift kol (double-rocker) ve Grashof olmayan (üçlü kol) sentezi; Fusion'da sınırlı açıda salınım
 
 ## C. Yeni modüller
 - [ ] **C0. Modüle özel kaydırıcılar.** Her modül kendi parametrelerini (ad, birim, aralık) tanımlar, panel kaydırıcıları otomatik kurar (yay seçiliyse yay kaydırıcıları). İlk yeni modülle birlikte

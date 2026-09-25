@@ -161,8 +161,11 @@ def build(mech, reuse=True):
     secs = {n: dict(section["links"][n], hole=d_pin, hole0=hole_at(s), hole1=hole_at(e))
             for n, (s, e, _) in LINKS.items()}
 
+    # Katman sirasi motordan (interference.choose_layer_order); yoksa LINKS'teki varsayilan
+    order = mech.get("layer_order") or [n for n, _ in sorted(LINKS.items(), key=lambda kv: kv[1][2])]
     occs, lengths, z = {}, {}, 0.0
-    for name, (s, e, _) in sorted(LINKS.items(), key=lambda kv: kv[1][2]):   # katman sirasiyla
+    for name in order:
+        s, e, _ = LINKS[name]
         occs[name], lengths[name] = make_link(root, name, pts[s], pts[e], z, secs[name])
         z += secs[name]["thickness"] + GAP
     occs["Sabit"].isGrounded = True

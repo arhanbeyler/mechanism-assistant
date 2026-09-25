@@ -194,7 +194,9 @@ def test_pipeline_does_not_invent_load(monkeypatch):
     r = pipeline.design_from_text("x")
     assert r["status"] == "ok"
     assert "strength" not in r
-    assert r["fusion"]["section_mm"] == strength.DEFAULT_SECTION
+    sec = r["fusion"]["section_mm"]                    # varsayilan kesit (+ gobek bilgisi)
+    assert sec["hole"] == strength.DEFAULT_SECTION["hole"]
+    assert all(s["width"] == 10.0 and s["thickness"] == 4.0 for s in sec["links"].values())
     assert "mukavemet hesabı yapılmadı" in r["message"]
 
 
