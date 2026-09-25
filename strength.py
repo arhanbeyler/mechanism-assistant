@@ -60,8 +60,23 @@ def kt_hole_tension(d, w):
 
 LINK_KEYS = {"Krank": "a", "Biyel": "b", "Kol": "c", "Sabit": "d"}
 
+# B7h: mafsal turleri. O2 (tahrik mili) ve O4 (cikis mili) MIL: tork tasir, uzuv milden
+# tutulur (gobek). A ve B serbest PIM: sadece kuvvet tasir. Her uzvun (baslangic, bitis) ucu:
+LINK_ENDS = {"Krank": ("O2", "A"), "Biyel": ("A", "B"), "Kol": ("O4", "B"), "Sabit": ("O2", "O4")}
+SHAFT_POINTS = {"O2", "O4"}
+
+
+def hole_at(point, d_pin, d_shaft):
+    return d_shaft if point in SHAFT_POINTS else d_pin
+
+
+def link_holes(name, d_pin, d_shaft):
+    """(baslangic, bitis) delik caplari."""
+    return tuple(hole_at(p, d_pin, d_shaft) for p in LINK_ENDS[name])
+
+
 # Yuk verilmediginde kullanilan kesit
-DEFAULT_SECTION = {"hole": 4.0,
+DEFAULT_SECTION = {"hole": 4.0, "shaft": 4.0,
                    "links": {name: {"width": 10.0, "thickness": 4.0} for name in LINK_KEYS}}
 
 PIN_DIAMETERS = [3, 4, 5, 6, 8, 10, 12]
@@ -91,14 +106,18 @@ def analyze_forces(mech, frames, F):
             "M_rocker": F * mech["c"]}
 
 
-def check_link(name, forces, length, mat, w, t, d):
-    """Tek uzvun kontrolleri (kullanim oranlari, <= 1 gecer)."""
+def check_link(name, forces, length, mat, w, t, d, d_shaft=None):
+    """Tek uzvun kontrolleri (kullanim oranlari, <= 1 gecer).
+    d: pim capi (A, B); d_shaft: mil capi (O2, O4), verilmezse d."""
     n, sy, E = mat["n"], mat["sy"], mat["E"]
     allow = sy / n
     F_ab = forces["F_ab_max"]
-    A_net = (w - d) * t
-    S_net = t * (w ** 3 - d ** 3) / (6 * w)          # delikli kesit, duzlem ici egilme
+    holes = link_holes(name, d, d if d_shaft is None else d_shaft)
+    d_big, d_small, d_root = max(holes), min(holes), holes[0]   # kok = milli uc (krank, kol)
+    A_net = (w - d_big) * t                             # en buyuk delikteki net kesit
+    S_net = t * (w ** 3 - d_root ** 3) / (6 * w)        # moment kokte (mil ucunda) en buyuk
     I_min = min(w * t ** 3, t * w ** 3) / 12.0
+    d = d_big                                           # Kt icin
 
     P_cr = math.pi ** 2 * E * I_min / length ** 2
     checks = [{"group": "Burkulma", "name": f"{name} burkulması", "util": F_ab * n / P_cr,
@@ -118,7 +137,7 @@ def check_link(name, forces, length, mat, w, t, d):
         G = E / (2 * (1 + mat.get("nu", 0.35)))
         d_bend = P_tip * length ** 3 / (3 * E * I_in)                 # Euler-Bernoulli
         d_shear = P_tip * length / ((5.0 / 6.0) * G * w * t)         # Timoshenko kayma
-        d_hub = P_tip * length ** 2 / (HUB_C * E * t * (d / 2) ** 2)  # gobek donmesi (FEA kalibre)
+        d_hub = P_tip * length ** 2 / (HUB_C * E * t * (d_root / 2) ** 2)  # gobek (mil) donmesi
         delta = d_bend + d_shear + d_hub
         kind = "sehimi (eğilme + kayma + göbek)"
     else:
@@ -126,7 +145,7 @@ def check_link(name, forces, length, mat, w, t, d):
         kind = "eksenel uzama"
     checks.append({"group": "Rijitlik", "name": f"{name} {kind}", "util": delta / limit,
                    "detail": f"δ = {delta:.2f} mm (sınır L/{DEFLECTION_RATIO} = {limit:.2f} mm)"})
-    s_br = F_ab / (d * t)
+    s_br = F_ab / (d_small * t)                         # en kucuk delikte ezilme en buyuk
     checks.append({"group": "Pim", "name": f"{name} pim ezilmesi", "util": s_br / allow,
                    "detail": f"σ_ez = {s_br:.1f} MPa"})
     return checks
@@ -138,12 +157,27 @@ def check_pin(forces, mat, d):
             "detail": f"τ = {tau:.1f} MPa"}
 
 
-def _lightest_link(name, forces, length, mat, d):
-    """Verilen pim capi icin bu uzvun en hafif (w * t en kucuk) gecen kesiti."""
+SHAFT_MATERIAL = "steel"   # tork tasiyan miller celik (plastik uzvun gobeginden gecer)
+
+
+def check_shaft(forces, mat, d):
+    """Mil (O2, O4), CELIK: burulma 16 T / (pi d^3) + dogrudan kayma 4 F / (pi d^2) (ihtiyatli toplam).
+    mat parametresi kullanilmaz (uzuv malzemesi); mil her zaman SHAFT_MATERIAL."""
+    sm = MATERIALS[SHAFT_MATERIAL]
+    T = max(forces["M_crank_max"], forces["M_rocker"])
+    tau = 16 * T / (math.pi * d ** 3) + 4 * forces["F_ab_max"] / (math.pi * d ** 2)
+    return {"group": "Pim", "name": "Mil (çelik) burulma + kayma", "util": tau / (0.5 * sm["sy"] / sm["n"]),
+            "detail": f"τ = {tau:.1f} MPa (T = {T / 1000:.2f} N·m)"}
+
+
+def _lightest_link(name, forces, length, mat, d, d_shaft=None):
+    """Verilen pim/mil caplari icin bu uzvun en hafif (w * t en kucuk) gecen kesiti."""
+    d_shaft = d if d_shaft is None else d_shaft
+    d_big = max(link_holes(name, d, d_shaft))
     best = None
     for t in THICKNESSES:
-        for w in range(max(math.ceil(2.5 * d), 8), MAX_WIDTH + 1):  # kenar mesafesi
-            checks = check_link(name, forces, length, mat, w, t, d)
+        for w in range(max(math.ceil(2.5 * d_big), 8), MAX_WIDTH + 1):  # kenar mesafesi
+            checks = check_link(name, forces, length, mat, w, t, d, d_shaft)
             if max(c["util"] for c in checks) <= 1.0:
                 if best is None or w * t < best[0] * best[1]:
                     best = (w, t, checks)
@@ -153,7 +187,7 @@ def _lightest_link(name, forces, length, mat, d):
 
 def size_links(forces, lengths, mat):
     """
-    Ortak pim capi + uzuv basina en hafif kesit; toplam hacim en kucuk.
+    Pim capi (A, B) + mil capi (O2, O4) + uzuv basina en hafif kesit; toplam hacim en kucuk.
     Dondurur: (kesit, kontroller). Uygun kesit yoksa (None, en zor kontroller).
     """
     best = None
@@ -161,23 +195,27 @@ def size_links(forces, lengths, mat):
         pin = check_pin(forces, mat, d)
         if pin["util"] > 1.0:
             continue
-        links, checks, volume = {}, [pin], 0.0
-        for name, key in LINK_KEYS.items():
-            found = _lightest_link(name, forces, lengths[key], mat, d)
-            if found is None:
-                break
-            w, t, c = found
-            links[name] = {"width": float(w), "thickness": float(t)}
-            checks += c
-            volume += w * t * lengths[key]
-        else:
-            if best is None or volume < best[2]:
-                best = ({"hole": float(d), "links": links}, checks, volume)
+        for ds in (x for x in PIN_DIAMETERS if x >= d):
+            shaft = check_shaft(forces, mat, ds)
+            if shaft["util"] > 1.0:
+                continue
+            links, checks, volume = {}, [pin, shaft], 0.0
+            for name, key in LINK_KEYS.items():
+                found = _lightest_link(name, forces, lengths[key], mat, d, ds)
+                if found is None:
+                    break
+                w, t, c = found
+                links[name] = {"width": float(w), "thickness": float(t)}
+                checks += c
+                volume += w * t * lengths[key]
+            else:
+                if best is None or volume < best[2] - 1e-9:
+                    best = ({"hole": float(d), "shaft": float(ds), "links": links}, checks, volume)
     if best:
         return best[0], best[1]
     # Hicbiri gecmedi: en buyuk kesitteki kontroller neyin yetmedigini gosterir
     d, w, t = PIN_DIAMETERS[-1], MAX_WIDTH, THICKNESSES[-1]
-    fail = [check_pin(forces, mat, d)]
+    fail = [check_pin(forces, mat, d), check_shaft(forces, mat, d)]
     for name, key in LINK_KEYS.items():
-        fail += check_link(name, forces, lengths[key], mat, w, t, d)
+        fail += check_link(name, forces, lengths[key], mat, w, t, d, d)
     return None, fail

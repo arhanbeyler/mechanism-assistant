@@ -218,7 +218,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (!d.ok) { addMsg("ai", d.message, "info"); return; }
     const pct = (x) => (x >= 0 ? "+" : "") + x.toFixed(0) + "%";
     const lines = Object.entries(d.links).map(([n, r]) =>
-      `${n} (${r.width}×${r.thickness} mm, pim Ø${r.hole}):\n` +
+      `${n} (${r.width}×${r.thickness} mm, mil Ø${r.shaft}, pim Ø${r.hole}):\n` +
       `  gerilme (orta kesit): FEA ${r.fea_sigma_mid.toFixed(1)} · model ${r.hand_sigma_mid.toFixed(1)} MPa (${pct(r.err_sigma_pct)})\n` +
       `  uç sehimi: FEA ${r.fea_delta.toFixed(3)} · model ${r.hand_delta.toFixed(3)} mm (${pct(r.err_delta_pct)})`);
     const errs = Object.values(d.links).map((r) => r.err_delta_pct);
@@ -306,7 +306,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       `<div class="check"><span class="i ${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"}</span>
        <span>${c.name}<br><span class="d">${c.detail}</span></span></div>`).join("");
     const st = d.strength;
-    const extra = st ? `Pim Ø${f(d.section_mm.hole, 0)} mm · tahrik torku ${f(st.input_torque_max_Nmm / 1000, 2)} N·m · n = ${st.safety_factor}`
+    const extra = st ? `Pim Ø${f(d.section_mm.hole, 0)} · mil Ø${f(d.section_mm.shaft || d.section_mm.hole, 0)} (çelik) · tork ${f(st.input_torque_max_Nmm / 1000, 2)} N·m · n = ${st.safety_factor}`
                      : "Yük yok: kesit varsayılan";
     $("result").innerHTML = `
       <div class="grid">

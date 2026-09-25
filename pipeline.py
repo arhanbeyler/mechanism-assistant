@@ -192,7 +192,8 @@ def design_from_spec(spec, on_status=None):
         if "strength" in result:
             parts = ", ".join(f"{n} {s['width']:g}×{s['thickness']:g}"
                               for n, s in section["links"].items())
-            msg += (f" Kesitler (mm): {parts}; pim Ø{section['hole']:g} mm. "
+            msg += (f" Kesitler (mm): {parts}; pim Ø{section['hole']:g} mm, "
+                    f"mil Ø{section.get('shaft', section['hole']):g} mm (çelik). "
                     f"En büyük tahrik torku {result['strength']['input_torque_max_Nmm'] / 1000:.2f} N·m.")
     else:
         msg = (f"{psi:g}° salınım" + (f", Q = {Q:g}" if Q > 1 else "") +

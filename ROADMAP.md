@@ -25,8 +25,8 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B7e. Fusion FEA ile doğrulama (niteliksel).** Al 6061 kol konsol, 49 N: kökte FEA n = 2–4, el hesabı n ≈ 3.6 ✓. Sim API önizlemede çalışmıyor, çözüm buluta gitti, sonuç sayısal okunamıyor
 - [x] **B7f. Yerel, otomatik FEA.** gmsh + scikit-fem (tamamen yerel); kol ve krank için FEA ile el hesabı karşılaştırması; panelde "FEA" düğmesi (Fusion içinde deneme bekliyor)
 - [x] **B7g. Göbek esnekliği.** Model δ_göbek = P·L²/(C·E·t·r²), C FEA ile kalibre (21 geometri, C = 6–9, L'den bağımsız); güvenli taraf için C = 6
-- [ ] **B7h. Mil ve pim çaplarını ayırmak.** O2/O4 (tahrik/çıkış mili, göbek) ile A/B (serbest pim) farklı çap; şu an ortak pim göbek yüzünden Ø10'a çıkıp tüm uzuvları genişletiyor
-- [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
+- [x] **B7h. Mil ve pim çaplarını ayırmak.** O2/O4 çelik mil (burulma + kayma kontrolü), A/B pim; Fusion her uçta doğru deliği çiziyor. PETG 5 kg: biyel 25→13 mm, hacim −%12
+- [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık; mil çevresinde yerel göbek (boss) ile uzvun geri kalanını inceltmek
 
 ## C. Yeni modüller
 - [ ] **C0. Modüle özel kaydırıcılar.** Her modül kendi parametrelerini (ad, birim, aralık) tanımlar, panel kaydırıcıları otomatik kurar (yay seçiliyse yay kaydırıcıları). İlk yeni modülle birlikte
@@ -61,3 +61,6 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - **Göbek modeli (FEA kalibrasyonu):** Delikten tutulan uzvun dönme rijitliği k = C·E·t·r². 21 FEA çözümünde
   C, uzunluktan bağımsız (±%3, L² ölçeklemesi doğrulandı) ve d/w ≤ 0.3 için 5.96–9.17. Güvenli taraf için C = 6.
   Etkisi: 40 mm, 29 mm genişlik, Ø3 pim uzuvda göbek sehimi kiriş eğilmesinin 11 katı.
+- **Gizli güvensizlik yakalandı:** Mil burulma kontrolü eklenince, önceki alüminyum tasarımdaki Ø3 ortak pimin
+  2.94 N·m çıkış torkunda τ ≈ 555 MPa'ya çıkacağı görüldü (çelik bile kopar). Tork taşıyan mafsal ile serbest pim
+  ayrı düşünülmeli. PETG örneği (mil Ø12, pim Ø4): FEA ile model sehimi %24–35 güvenli tarafta, gerilme %6–11 uyumlu.

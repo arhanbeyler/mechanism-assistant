@@ -13,9 +13,10 @@ import adsk.core
 import adsk.fusion
 
 # Varsayilan kesit (mech['section_mm'] yoksa). Yuk verildiyse strength.py hesaplar:
-# ortak pim capi + uzuv basina genislik/kalinlik.
-DEFAULT_SECTION = {"hole": 4.0, "links": {n: {"width": 10.0, "thickness": 4.0}
-                                          for n in ("Sabit", "Krank", "Biyel", "Kol")}}
+# pim capi (A, B), mil capi (O2, O4) + uzuv basina genislik/kalinlik.
+DEFAULT_SECTION = {"hole": 4.0, "shaft": 4.0, "links": {n: {"width": 10.0, "thickness": 4.0}
+                                                        for n in ("Sabit", "Krank", "Biyel", "Kol")}}
+SHAFT_POINTS = {"O2", "O4"}   # tahrik ve cikis milleri; A, B serbest pim
 GAP = 0.5          # mm, katmanlar arasi bosluk
 
 # uzuv adi: (baslangic noktasi, bitis noktasi, katman)
@@ -41,9 +42,11 @@ def mm(v):
 
 
 def draw_link_sketch(sketch, length, sec):
-    """Yerel koordinatta (0,0)-(length,0) arasi uzuv profili: iki cizgi, iki yay, iki delik."""
+    """Yerel koordinatta (0,0)-(length,0) arasi uzuv profili: iki cizgi, iki yay, iki delik.
+    Delik caplari: sec["hole0"] (x=0) ve sec["hole1"] (x=L); yoksa ikisi de sec["hole"]."""
     r = sec["width"] / 2.0
-    hole_r = sec["hole"] / 2.0
+    r0 = sec.get("hole0", sec["hole"]) / 2.0
+    r1 = sec.get("hole1", sec["hole"]) / 2.0
     P = adsk.core.Point3D.create
     lines = sketch.sketchCurves.sketchLines
     arcs = sketch.sketchCurves.sketchArcs
@@ -52,8 +55,8 @@ def draw_link_sketch(sketch, length, sec):
     bottom = lines.addByTwoPoints(P(mm(length), mm(-r), 0), P(0, mm(-r), 0))
     arcs.addByCenterStartSweep(P(mm(length), 0, 0), bottom.startSketchPoint, math.pi)
     arcs.addByCenterStartSweep(P(0, 0, 0), top.startSketchPoint, math.pi)
-    circles.addByCenterRadius(P(0, 0, 0), mm(hole_r))
-    circles.addByCenterRadius(P(mm(length), 0, 0), mm(hole_r))
+    circles.addByCenterRadius(P(0, 0, 0), mm(r0))
+    circles.addByCenterRadius(P(mm(length), 0, 0), mm(r1))
 
 
 def make_link(root, name, p_start, p_end, z_mm, sec):
@@ -84,11 +87,12 @@ def make_link(root, name, p_start, p_end, z_mm, sec):
 def hole_edge(occ, local_x_mm, sec):
     """Uzvun yerel x konumundaki deligin ust dairesel kenari (montaj baglaminda)."""
     body = occ.component.bRepBodies.item(0)
+    d = sec.get("hole0" if local_x_mm < 1e-9 else "hole1", sec["hole"])
     for edge in body.edges:
         geo = edge.geometry
         # Kisa uzuvlarda Fusion delik kenarini tam daire yerine yaylara bolebiliyor
         if isinstance(geo, (adsk.core.Circle3D, adsk.core.Arc3D)) \
-                and abs(geo.radius - mm(sec["hole"] / 2)) < 1e-3 \
+                and abs(geo.radius - mm(d / 2)) < 1e-3 \
                 and abs(geo.center.x - mm(local_x_mm)) < 1e-3 \
                 and abs(geo.center.y) < 1e-3 \
                 and abs(geo.center.z - mm(sec["thickness"])) < 1e-3:
@@ -137,7 +141,14 @@ def build(mech, reuse=True):
     root = design.rootComponent
     pts = mech["points_mm"]
     section = mech.get("section_mm") or DEFAULT_SECTION
-    secs = {n: dict(section["links"][n], hole=section["hole"]) for n in LINKS}
+    d_pin = section["hole"]
+    d_shaft = section.get("shaft", d_pin)
+
+    def hole_at(p):
+        return d_shaft if p in SHAFT_POINTS else d_pin
+
+    secs = {n: dict(section["links"][n], hole=d_pin, hole0=hole_at(s), hole1=hole_at(e))
+            for n, (s, e, _) in LINKS.items()}
 
     occs, lengths, z = {}, {}, 0.0
     for name, (s, e, _) in sorted(LINKS.items(), key=lambda kv: kv[1][2]):   # katman sirasiyla

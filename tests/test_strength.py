@@ -109,13 +109,32 @@ def test_sized_links_pass_and_each_is_minimal(mech30):
     sec, checks = strength.size_links(forces, lengths, PLA)
     assert sec is not None
     assert all(c["util"] <= 1.0 for c in checks)
-    d = sec["hole"]
+    d, ds = sec["hole"], sec["shaft"]
     for name, s in sec["links"].items():
         w, t = s["width"], s["thickness"]
-        if w - 1 >= max(math.ceil(2.5 * d), 8):   # 1 mm daha dar: en az bir kontrol kalmali
+        d_big = max(strength.link_holes(name, d, ds))
+        if w - 1 >= max(math.ceil(2.5 * d_big), 8):   # 1 mm daha dar: en az bir kontrol kalmali
             narrower = strength.check_link(name, forces, lengths[strength.LINK_KEYS[name]],
-                                           PLA, w - 1, t, d)
+                                           PLA, w - 1, t, d, ds)
             assert max(c["util"] for c in narrower) > 1.0
+
+
+def test_shaft_and_pin_are_separate(mech30):
+    """B7h: tork tasiyan mil (O2, O4) pimden (A, B) kalin olabilir; biyel sadece pim tasir."""
+    m, frames, lengths = mech30
+    sec, checks = strength.size_links(strength.analyze_forces(m, frames, 50.0), lengths, PLA)
+    assert sec["shaft"] >= sec["hole"]
+    assert strength.link_holes("Biyel", sec["hole"], sec["shaft"]) == (sec["hole"], sec["hole"])
+    assert strength.link_holes("Sabit", sec["hole"], sec["shaft"]) == (sec["shaft"], sec["shaft"])
+    assert any(c["name"].startswith("Mil (çelik)") for c in checks)
+
+
+def test_shaft_torsion_hand_calculation():
+    """Celik mil: tau = 16 T / (pi d^3) + 4 F / (pi d^2), izin 0.5 * 235 / 2."""
+    forces = {"F_ab_max": 100.0, "M_crank_max": 2000.0, "M_rocker": 3000.0}
+    tau = 16 * 3000 / (math.pi * 8 ** 3) + 4 * 100 / (math.pi * 8 ** 2)
+    c = strength.check_shaft(forces, PLA, 8)
+    assert c["util"] == pytest.approx(tau / (0.5 * 235 / 2))
 
 
 def test_governing_checks_match_load_type(mech30):
