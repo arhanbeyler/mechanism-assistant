@@ -74,12 +74,15 @@ def _spring_body(comp, geo, compression):
 
 
 def build(geo, root, design=None):
+    """geo["show_plates"]: taban ve basma plakasi da cizilsin mi (varsayilan: sadece yay)."""
     R_plate = max(geo["D1"], geo["D2"]) / 2 + geo["d"] + 4
+    plates = bool(geo.get("show_plates"))
 
-    base = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-    base.component.name = "Taban"
-    _plate(base.component, R_plate, -PLATE_T, PLATE_T, "Taban")
-    base.isGrounded = True
+    if plates:
+        base = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+        base.component.name = "Taban"
+        _plate(base.component, R_plate, -PLATE_T, PLATE_T, "Taban")
+        base.isGrounded = True
 
     frames = []
     for k in range(FRAMES):
@@ -87,7 +90,8 @@ def build(geo, root, design=None):
         occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
         occ.component.name = f"Yay {k} ({delta:.1f} mm)"
         _, z_top = _spring_body(occ.component, geo, delta)
-        _plate(occ.component, R_plate, z_top, PLATE_T, "Basma plakası")
+        if plates:
+            _plate(occ.component, R_plate, z_top, PLATE_T, "Basma plakası")
         occ.isGrounded = True
         occ.isLightBulbOn = (k == 0)
         frames.append(occ)

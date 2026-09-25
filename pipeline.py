@@ -40,6 +40,8 @@ MODULES = {
              "default": 1.0, "one_label": "silindirik"},
             {"key": "outer_diameter_max_mm", "label": "Dış çap sınırı", "unit": "mm", "min": 0, "max": 100, "step": 1,
              "default": 0, "zero_label": "serbest"},
+            {"key": "show_plates", "label": "Fusion görünümü", "default": "no",
+             "options": [["no", "Sadece yay"], ["yes", "Plakalarla (sıkışma)"]]},
         ],
     },
     "cam": {
@@ -151,7 +153,7 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        gear_ratio=None, torque_Nm=None, speed_rpm=None,
                        spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None,
                        cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None,
-                       bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None):
+                       bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None):
     """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim.
     kind: "fourbar", "spur_gear", "spring" ya da "cam" (C0: modul secimi).
     input_swing_deg >= 360: giris tam tur (krank-kol); daha az: sinirli acida giris kolu (B9)."""
@@ -166,7 +168,8 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     if kind == "spring":
         return design_from_spec({"mechanism_type": "spring", "spring_force_N": spring_force_N,
                                  "spring_deflection_mm": spring_deflection_mm, "spring_taper": spring_taper,
-                                 "outer_diameter_max_mm": outer_diameter_max_mm or None, "material": material})
+                                 "outer_diameter_max_mm": outer_diameter_max_mm or None, "material": material,
+                                 "show_plates": show_plates})
     if kind == "spur_gear":
         return design_from_spec({"mechanism_type": "spur_gear", "gear_ratio": gear_ratio,
                                  "torque_Nm": torque_Nm, "speed_rpm": speed_rpm or None, "material": material})
@@ -325,7 +328,7 @@ def _spring(result, spec, say):
     kind = "konik" if taper < 1 else "silindirik"
     result.update(
         spring=dict(geo, material=mat["name"]),
-        fusion={"type": "spring", "passed_checks": True, **geo},
+        fusion={"type": "spring", "passed_checks": True, **geo, "show_plates": spec.get("show_plates") == "yes"},
         status="ok",
         message=" ".join(notes + [
             f"Tasarım tüm kontrollerden geçti ({kind}, {mat['name']}). Tel Ø{geo['d']:g} mm, ortalama çap "
