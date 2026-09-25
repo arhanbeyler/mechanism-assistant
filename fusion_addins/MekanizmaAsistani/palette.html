@@ -108,9 +108,13 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
 
   <section class="card knobs">
     <h3>Ayarlar <span style="font-weight:400;color:var(--muted)">(anında hesaplanır)</span></h3>
-    <div class="knob"><label>Krank uzunluğu <b id="v-a"></b></label>
-      <input type="range" id="k-a" min="5" max="200" step="1" value="30"></div>
-    <div class="knob"><label>Salınım açısı <b id="v-psi"></b></label>
+    <div class="row">
+      <div class="knob"><label>Giriş kolu <b id="v-a"></b></label>
+        <input type="range" id="k-a" min="5" max="200" step="1" value="30"></div>
+      <div class="knob"><label title="Sağ uç: tam tur (krank-kol). Sola çekince giriş kolu sınırlı açıda döner.">Giriş hareketi <b id="v-in"></b></label>
+        <input type="range" id="k-in" min="10" max="360" step="5" value="360"></div>
+    </div>
+    <div class="knob"><label id="l-psi">Salınım açısı <b id="v-psi"></b></label>
       <input type="range" id="k-psi" min="5" max="175" step="1" value="60">
       <div class="legend"><span><i style="background:var(--ok)"></i>uygun</span>
         <span><i style="background:var(--warn)"></i>sınırda / büyük</span>
@@ -170,14 +174,19 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     c.addEventListener("click", () => { $("text").value = c.textContent; $("text").focus(); }));
 
   // ------------------------------------------------------------ kaydiricilar
+  const limited = () => +$("k-in").value < 360;      // sinirli acili giris (B9)
   function params() {
     const F = +$("k-f").value;
     return { crank_length_mm: +$("k-a").value, output_swing_deg: +$("k-psi").value,
-             time_ratio: +$("k-q").value, max_load_N: F > 0 ? F : null, material: $("k-mat").value };
+             time_ratio: limited() ? 1 : +$("k-q").value, max_load_N: F > 0 ? F : null,
+             material: $("k-mat").value, input_swing_deg: +$("k-in").value };
   }
   function labels() {
     const p = params();
     $("v-a").textContent = p.crank_length_mm + " mm";
+    $("v-in").textContent = limited() ? p.input_swing_deg + "°" : "tam tur";
+    $("l-psi").firstChild.textContent = limited() ? "Çıkış dönmesi " : "Salınım açısı ";
+    $("k-q").disabled = limited();
     $("v-psi").textContent = p.output_swing_deg + "°";
     $("v-q").textContent = p.time_ratio > 1 ? p.time_ratio.toFixed(2) : "1 (yok)";
     $("v-f").textContent = p.max_load_N ? p.max_load_N + " N (≈" + (p.max_load_N / 9.81).toFixed(1) + " kg)" : "yok";
@@ -192,10 +201,15 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (!ready()) return;
     req += 1;
     adsk.fusionSendData("preview", JSON.stringify({ req, params: params() }));
+    if (limited()) {                     // renkli bolge sadece tam tur (krank-kol) icin hesaplaniyor
+      lastQ = null;
+      $("k-psi").style.background = "var(--line)";
+      return;
+    }
     const Q = +$("k-q").value;
     if (Q !== lastQ) { lastQ = Q; bandReq += 1; adsk.fusionSendData("band", JSON.stringify({ req: bandReq, Q })); }
   }
-  ["k-a", "k-psi", "k-q", "k-f"].forEach((id) => $(id).addEventListener("input", schedulePreview));
+  ["k-a", "k-in", "k-psi", "k-q", "k-f"].forEach((id) => $(id).addEventListener("input", schedulePreview));
   $("k-mat").addEventListener("change", schedulePreview);
   $("draw").addEventListener("click", () => {
     if (!ready() || !lastPreview || lastPreview.status !== "ok") return;
@@ -240,6 +254,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (s.crank_length_mm) $("k-a").value = Math.round(s.crank_length_mm);
     if (s.output_swing_deg) $("k-psi").value = Math.round(s.output_swing_deg);
     $("k-q").value = (d.target && d.target.Q) || 1;
+    $("k-in").value = (d.target && d.target.input_swing) || 360;
     $("k-f").value = Math.round(s.max_load_N || 0);
     if (s.material) $("k-mat").value = s.material;
     labels();
@@ -314,7 +329,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
           <table>${rows}</table><div class="extra">${extra}</div>
           <h3 style="margin-top:8px">Kontroller</h3>${checks}</div>
         <div class="col"><h3>Mekanizma</h3>${mechSvg(d.fusion.points_mm)}</div>
-        <div class="col"><h3>İletim açısı μ</h3>${muSvg(d.mu_curve)}</div>
+        <div class="col"><h3>İletim açısı μ</h3>${muSvg(d.mu_curve, d.mu_axis)}</div>
       </div>`;
   }
 
@@ -336,16 +351,18 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       <text class="lbl" x="${X(p.O4) + 6}" y="${Y(p.O4) + 12}">O4</text></svg>`;
   }
 
-  function muSvg(curve) {
+  function muSvg(curve, axis) {
+    const [x0, x1] = axis || [0, 360];                 // krank-kol: 0-360; sinirli: 0-giris acisi
     const W = 220, H = 150, l = 26, r = 6, t = 8, b = 20;
-    const X = (th) => l + th / 360 * (W - l - r), Y = (mu) => t + (180 - mu) / 180 * (H - t - b);
+    const X = (th) => l + (th - x0) / ((x1 - x0) || 1) * (W - l - r), Y = (mu) => t + (180 - mu) / 180 * (H - t - b);
     const line = curve.map(([th, mu]) => `${X(th).toFixed(1)},${Y(mu).toFixed(1)}`).join(" ");
+    const ticks = [x0, (x0 + x1) / 2, x1].map((v) => Math.round(v));
     return `<svg viewBox="0 0 ${W} ${H}">
-      <rect x="${X(0)}" y="${Y(140)}" width="${X(360) - X(0)}" height="${Y(40) - Y(140)}" fill="var(--ok)" opacity=".12"/>
-      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(360)}" y2="${Y(0)}"/>
-      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(180)}"/>
+      <rect x="${X(x0)}" y="${Y(140)}" width="${X(x1) - X(x0)}" height="${Y(40) - Y(140)}" fill="var(--ok)" opacity=".12"/>
+      <line class="axis" x1="${X(x0)}" y1="${Y(0)}" x2="${X(x1)}" y2="${Y(0)}"/>
+      <line class="axis" x1="${X(x0)}" y1="${Y(0)}" x2="${X(x0)}" y2="${Y(180)}"/>
       ${[40, 90, 140].map((v) => `<text class="lbl" x="${l - 4}" y="${Y(v) + 3}" text-anchor="end">${v}°</text>`).join("")}
-      ${[0, 180, 360].map((v) => `<text class="lbl" x="${X(v)}" y="${H - 6}" text-anchor="middle">${v}°</text>`).join("")}
+      ${ticks.map((v) => `<text class="lbl" x="${X(v)}" y="${H - 6}" text-anchor="middle">${v}°</text>`).join("")}
       <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
   }
 

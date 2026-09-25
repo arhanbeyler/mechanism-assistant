@@ -247,17 +247,50 @@ def rotate(mode):
         return
     anim["running"] = True
     send_to_palette("anim", {"running": True, "mode": mode})
-    total = 360 if mode == "turn" else float("inf")
+
+    # Sinirli acili mekanizma (B9): mafsalin sinirlari varsa tam tur yerine sinirlar arasinda salinim
+    motion0 = crank_motion()
+    lim = motion0.rotationLimits
+    if lim.isMinimumValueEnabled and lim.isMaximumValueEnabled:
+        lo, hi, start = lim.minimumValue, lim.maximumValue, motion0.rotationValue
+        # "1 tur" = baslangic -> ust sinir -> alt sinir -> baslangic; surekli = ust <-> alt
+        targets = [hi, lo, start] if mode == "turn" else None
+    else:
+        lo = hi = None
+        targets = None
 
     def worker():
-        done = 0
-        while anim["running"] and done < total:
+        done, goal_i, going_up = 0, 0, True
+        step_rad = math.radians(STEP_DEG)
+        while anim["running"]:
+            if lo is None:                        # tam tur donebilen mekanizma
+                if mode == "turn" and done >= 360:
+                    break
+                delta = step_rad
+                done += STEP_DEG
+            else:
+                box = {}
+                ev = threading.Event()
+                run_on_main(lambda: (box.__setitem__("v", crank_motion().rotationValue), ev.set()))
+                ev.wait(2.0)
+                cur = box.get("v", 0.0)
+                goal = targets[goal_i] if targets else (hi if going_up else lo)
+                if abs(goal - cur) <= step_rad:
+                    delta = goal - cur
+                    if targets:
+                        goal_i += 1
+                        if goal_i >= len(targets):
+                            anim["running"] = False
+                    else:
+                        going_up = not going_up
+                else:
+                    delta = step_rad if goal > cur else -step_rad
             stepped = threading.Event()
 
-            def step():
+            def step(delta=delta):
                 try:
                     motion = crank_motion()
-                    motion.rotationValue = motion.rotationValue + math.radians(STEP_DEG)
+                    motion.rotationValue = motion.rotationValue + delta
                 except Exception:
                     anim["running"] = False       # belge kapandi vb.
                 finally:
@@ -266,7 +299,6 @@ def rotate(mode):
             run_on_main(step)
             stepped.wait(2.0)
             time.sleep(STEP_PAUSE)
-            done += STEP_DEG
         anim["running"] = False
         run_on_main(lambda: send_to_palette("anim", {"running": False}))
 

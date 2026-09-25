@@ -184,5 +184,32 @@ def build(mech, reuse=True):
         joint = root.asBuiltJoints.add(ji)
         joint.name = f"{l1}-{l2} ({p})"
 
+    if mech.get("input_range_deg"):
+        _limit_input_joint(root, occs["Krank"], mech["input_range_deg"])
     app.activeViewport.fit()
     return design
+
+
+def _occ_angle(occ):
+    t = occ.transform2
+    return math.atan2(t.getCell(1, 0), t.getCell(0, 0))
+
+
+def _limit_input_joint(root, crank_occ, range_deg):
+    """Sinirli acili mekanizma (B9): giris mafsalina donme siniri koy. range_deg, cizilen konuma gore
+    giris acisi araligi (theta artisi = saat yonu tersi). Mafsalin pozitif yonu kucuk bir deneme
+    donusuyle olculur, sinirlar ona gore yerlestirilir."""
+    joint = [j for j in root.asBuiltJoints if j.name.startswith("Sabit-Krank")][0]
+    motion = adsk.fusion.RevoluteJointMotion.cast(joint.jointMotion)
+    a0 = _occ_angle(crank_occ)
+    motion.rotationValue = math.radians(2)
+    turned = (_occ_angle(crank_occ) - a0 + math.pi) % (2 * math.pi) - math.pi
+    motion.rotationValue = 0.0
+    sign = 1.0 if turned > 0 else -1.0
+    lo, hi = sorted(sign * math.radians(v) for v in range_deg)
+    limits = motion.rotationLimits
+    limits.isMinimumValueEnabled = True
+    limits.minimumValue = lo
+    limits.isMaximumValueEnabled = True
+    limits.maximumValue = hi
+    joint.name = "Sabit-Krank (O2, sinirli)"

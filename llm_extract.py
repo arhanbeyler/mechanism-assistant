@@ -20,15 +20,16 @@ MODEL = "qwen3.5:9b"
 SPEC_SCHEMA = {
     "type": "object",
     "properties": {
-        "mechanism_type": {"type": "string", "enum": ["crank_rocker", "unknown"]},
+        "mechanism_type": {"type": "string", "enum": ["crank_rocker", "rocker_rocker", "unknown"]},
         "crank_length_mm": {"type": ["number", "null"]},
+        "input_swing_deg": {"type": ["number", "null"]},
         "output_swing_deg": {"type": ["number", "null"]},
         "quick_return": {"type": "boolean"},
         "time_ratio": {"type": ["number", "null"]},
         "max_load_N": {"type": ["number", "null"]},
         "material": {"type": ["string", "null"], "enum": ["PLA", "PETG", "aluminum", "steel", None]},
     },
-    "required": ["mechanism_type", "crank_length_mm", "output_swing_deg",
+    "required": ["mechanism_type", "crank_length_mm", "input_swing_deg", "output_swing_deg",
                  "quick_return", "time_ratio", "max_load_N", "material"],
     "additionalProperties": False,
 }
@@ -37,8 +38,16 @@ SYSTEM_PROMPT = (
     "You extract mechanism design requirements from the user's text (usually Turkish) into JSON. "
     "Only use values the user explicitly states. Never invent or estimate numbers; "
     "use null when a value is not given. Convert units to mm, degrees and newtons (1 kg = 9.81 N). "
-    "For a four-bar mechanism, an angle the user gives without saying what it is "
-    "(e.g. '50 derece', '50°') is the output rocker swing (output_swing_deg). "
+    "mechanism_type: 'crank_rocker' when the input (crank) rotates continuously / full turns "
+    "(default when the input motion is not described); 'rocker_rocker' when the INPUT link only turns "
+    "through a limited angle (e.g. 'giriş kolu 60 derece dönünce çıkış 90 derece dönsün', "
+    "'kolu 45 derece çevirince', 'kapı gibi açılıp kapansın'). "
+    "input_swing_deg: the input link's rotation angle, only for rocker_rocker and only if given as a number. "
+    "crank_length_mm: the length of the INPUT link — the link that is driven/turned by the user or motor; "
+    "it may be called 'krank', 'giriş kolu', or simply the 'kol' that is 'çevrilen'/'döndürülen' "
+    "(e.g. '4 cm kolu 45 derece çevirince' -> 40). "
+    "For a four-bar mechanism, a single angle the user gives without saying what it is "
+    "(e.g. '50 derece', '50°') is the output swing (output_swing_deg). "
     "quick_return: true only if the user asks for a quick-return motion "
     "(e.g. 'hızlı dönüşlü', 'geri dönüşü daha hızlı', 'zaman oranı'), otherwise false. "
     "time_ratio: the time ratio Q only if the user gives a number for it "

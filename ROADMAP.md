@@ -29,7 +29,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B8a. Yerel göbek (boss).** Delikler kendi göbeğinde (D = 2.5·d), gövde kontrollerin gerektirdiği kadar ince; göbek ve gövde kesitleri ayrı kontrol; Fusion'da dolu extrude + delik kesme. PETG hacim −%29, Al −%59
 - [x] **B8b. Katman çakışması.** Ara katmandan geçen milin, hareketli uzuvlardan (gövde + göbek) çevrim boyunca en az 1 mm uzak kalması; gerekirse katman sırası değişir, olmazsa tasarım reddedilir
 - [ ] **B8c. Pimler ve boşluk (print-in-place).** Pim/başlık geometrisi, radyal ve eksenel boşluk (baskı zamanı, D12 ile birlikte)
-- [ ] **B9. Tam tur atmayan dört çubuklar.** Çift kol (double-rocker) ve Grashof olmayan (üçlü kol) sentezi; Fusion'da sınırlı açıda salınım
+- [x] **B9. Tam tur atmayan dört çubuklar.** Freudenstein fonksiyon üreteci (3 Chebyshev hassas noktası, θ₀/φ₀ taraması, yapısal hata ≤ 1°); mukavemet + çakışmadan geçen ilk aday; LLM "rocker_rocker"; panelde "Giriş hareketi"; Fusion'da mafsal sınırı ve ileri-geri salınım
 
 ## C. Yeni modüller
 - [ ] **C0. Modüle özel kaydırıcılar.** Her modül kendi parametrelerini (ad, birim, aralık) tanımlar, panel kaydırıcıları otomatik kurar (yay seçiliyse yay kaydırıcıları). İlk yeni modülle birlikte
@@ -69,3 +69,6 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
   ayrı düşünülmeli. PETG örneği (mil Ø12, pim Ø4): FEA ile model sehimi %24–35 güvenli tarafta, gerilme %6–11 uyumlu.
 - **Göbekli geometri FEA'sı:** Model sehimi FEA'nın %24–54 üstünde (göbek, mil çevresini rijitleştiriyor; model güvenli tarafta),
   gerilme %1–12 uyumlu. Kalın mil sadece kendi göbeğini büyütüyor: PETG biyel ve sabit uzuv 6 mm gövdeye indi.
+- **Fonksiyon üreteci (Freudenstein):** 40 mm giriş kolu, 60° giriş → 90° çıkış: simülasyon 89.0°, Fusion çözücüsü 89.4°
+  (yapısal hata < 1°, hassas noktalarda sıfır). Çıkan mekanizmalar çoğunlukla Grashof değil (üçlü kol): giriş tam tur atmıyor.
+  "En kompakt" seçimi göbeklerin sığmayacağı kısa uzuvlar üretti; seçim ölçütü "dengeli oran" yapıldı.
