@@ -15,7 +15,7 @@ import adsk.core
 import adsk.fusion
 import adsk.sim
 
-from fusion_lib.fourbar import draw_link_sketch, mm
+from fusion_lib.fourbar import build_link_body, mm
 
 
 def hand_calc(L, w, t, d, F, E_mpa, nu):
@@ -68,12 +68,7 @@ def setup_cantilever(L, w, t, d, F, material_name="Aluminum 6061"):
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
 
-    sketch = root.sketches.add(root.xYConstructionPlane)
-    draw_link_sketch(sketch, L, {"width": w, "hole": d})
-    prof = max(sketch.profiles, key=lambda p: p.areaProperties().area)
-    body = root.features.extrudeFeatures.addSimple(
-        prof, adsk.core.ValueInput.createByReal(mm(t)),
-        adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
+    body = build_link_body(root, L, {"width": w, "thickness": t, "hole": d})
     body.name = "Kol"
 
     mat = app.materialLibraries.itemByName("Fusion Material Library").materials.itemByName(material_name)

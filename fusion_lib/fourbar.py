@@ -41,22 +41,39 @@ def mm(v):
     return v / 10.0
 
 
-def draw_link_sketch(sketch, length, sec):
-    """Yerel koordinatta (0,0)-(length,0) arasi uzuv profili: iki cizgi, iki yay, iki delik.
-    Delik caplari: sec["hole0"] (x=0) ve sec["hole1"] (x=L); yoksa ikisi de sec["hole"]."""
-    r = sec["width"] / 2.0
-    r0 = sec.get("hole0", sec["hole"]) / 2.0
-    r1 = sec.get("hole1", sec["hole"]) / 2.0
+def build_link_body(comp, length, sec):
+    """Bilesende uzuv govdesi: once dolu dis hat (w genisliginde govde + uclarda gobek, cap
+    sec["boss0"]/["boss1"], yoksa w) extrude, sonra delikler (sec["hole0"]/["hole1"], yoksa
+    sec["hole"]) ayri cizimden kesilir. (Govde delikten dar olunca tek cizimde bolge ayiklamak
+    guvenilir degildi.) Dondurur: BRepBody."""
+    w, t = sec["width"], sec["thickness"]
+    d0 = sec.get("hole0", sec["hole"])
+    d1 = sec.get("hole1", sec["hole"])
+    R0 = max(w, sec.get("boss0", w)) / 2.0
+    R1 = max(w, sec.get("boss1", w)) / 2.0
     P = adsk.core.Point3D.create
-    lines = sketch.sketchCurves.sketchLines
-    arcs = sketch.sketchCurves.sketchArcs
-    circles = sketch.sketchCurves.sketchCircles
-    top = lines.addByTwoPoints(P(0, mm(r), 0), P(mm(length), mm(r), 0))
-    bottom = lines.addByTwoPoints(P(mm(length), mm(-r), 0), P(0, mm(-r), 0))
-    arcs.addByCenterStartSweep(P(mm(length), 0, 0), bottom.startSketchPoint, math.pi)
-    arcs.addByCenterStartSweep(P(0, 0, 0), top.startSketchPoint, math.pi)
-    circles.addByCenterRadius(P(0, 0, 0), mm(r0))
-    circles.addByCenterRadius(P(mm(length), 0, 0), mm(r1))
+    dist = adsk.core.ValueInput.createByReal(mm(t))
+    extrudes = comp.features.extrudeFeatures
+
+    outline = comp.sketches.add(comp.xYConstructionPlane)
+    outline.name = "Dis hat"
+    outline.sketchCurves.sketchLines.addTwoPointRectangle(P(0, mm(-w / 2), 0), P(mm(length), mm(w / 2), 0))
+    outline.sketchCurves.sketchCircles.addByCenterRadius(P(0, 0, 0), mm(R0))
+    outline.sketchCurves.sketchCircles.addByCenterRadius(P(mm(length), 0, 0), mm(R1))
+    solid = adsk.core.ObjectCollection.create()
+    for prof in outline.profiles:
+        solid.add(prof)
+    body = extrudes.addSimple(solid, dist, adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
+
+    holes = comp.sketches.add(comp.xYConstructionPlane)
+    holes.name = "Delikler"
+    holes.sketchCurves.sketchCircles.addByCenterRadius(P(0, 0, 0), mm(d0 / 2))
+    holes.sketchCurves.sketchCircles.addByCenterRadius(P(mm(length), 0, 0), mm(d1 / 2))
+    cut = adsk.core.ObjectCollection.create()
+    for prof in holes.profiles:
+        cut.add(prof)
+    extrudes.addSimple(cut, dist, adsk.fusion.FeatureOperations.CutFeatureOperation)
+    return body
 
 
 def make_link(root, name, p_start, p_end, z_mm, sec):
@@ -74,13 +91,7 @@ def make_link(root, name, p_start, p_end, z_mm, sec):
     comp = occ.component
     comp.name = name
 
-    sketch = comp.sketches.add(comp.xYConstructionPlane)
-    draw_link_sketch(sketch, length, sec)
-    prof = max(sketch.profiles, key=lambda p: p.areaProperties().area)
-    ext = comp.features.extrudeFeatures.addSimple(
-        prof, adsk.core.ValueInput.createByReal(mm(sec["thickness"])),
-        adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-    ext.bodies.item(0).name = name
+    build_link_body(comp, length, sec).name = name
     return occ, length
 
 

@@ -20,9 +20,10 @@ import tempfile
 import numpy as np
 
 
-def mesh_link(L, w, t, d, h, d1=None):
-    """gmsh ile uzuv geometrisi (yuvarlak uclu cubuk + iki delik) ve tetrahedral ag. Dondurur: msh yolu.
-    d: x=0'daki delik (mil), d1: x=L'deki delik (pim; verilmezse d)."""
+def mesh_link(L, w, t, d, h, d1=None, D0=None, D1=None):
+    """gmsh ile uzuv geometrisi (iki uc gobegi + govde + iki delik) ve tetrahedral ag. Dondurur: msh yolu.
+    d: x=0'daki delik (mil), d1: x=L'deki delik (pim; verilmezse d).
+    D0, D1: gobek caplari (verilmezse w: klasik yuvarlak uclu cubuk)."""
     import gmsh
     gmsh.initialize()
     try:
@@ -30,8 +31,8 @@ def mesh_link(L, w, t, d, h, d1=None):
         gmsh.model.add("link")
         occ = gmsh.model.occ
         body = occ.addBox(0, -w / 2, 0, L, w, t)
-        end0 = occ.addCylinder(0, 0, 0, 0, 0, t, w / 2)
-        end1 = occ.addCylinder(L, 0, 0, 0, 0, t, w / 2)
+        end0 = occ.addCylinder(0, 0, 0, 0, 0, t, (D0 or w) / 2)
+        end1 = occ.addCylinder(L, 0, 0, 0, 0, t, (D1 or w) / 2)
         fused, _ = occ.fuse([(3, body)], [(3, end0), (3, end1)])
         hole0 = occ.addCylinder(0, 0, 0, 0, 0, t, d / 2)
         hole1 = occ.addCylinder(L, 0, 0, 0, 0, t, (d1 or d) / 2)
@@ -59,16 +60,16 @@ def hand_calc(L, w, t, d, F, E, nu, x0=None):
             "sigma_mid": F * (L - x0) * (w / 2) / I, "x0": x0}
 
 
-def solve_cantilever(L, w, t, d, F, E, nu, h=None, d_load=None):
-    """P2 dogrusal elastik cozum. d: sabit (mil) deligi, d_load: yuklu (pim) deligi.
-    Dondurur: uc sehimi, orta kesit gerilmesi, en buyuk von Mises, ag bilgisi."""
+def solve_cantilever(L, w, t, d, F, E, nu, h=None, d_load=None, D0=None, D1=None):
+    """P2 dogrusal elastik cozum. d: sabit (mil) deligi, d_load: yuklu (pim) deligi,
+    D0/D1: gobek caplari. Dondurur: uc sehimi, orta kesit gerilmesi, en buyuk von Mises, ag bilgisi."""
     import skfem
     from scipy.sparse.linalg import spsolve
     from skfem.models.elasticity import lame_parameters, linear_elasticity
 
     d_load = d_load or d
-    h = h or min(t / 1.5, min(d, d_load) / 2)
-    msh = mesh_link(L, w, t, d, h, d_load)
+    h = h or min(t / 1.5, min(d, d_load) / 2, w / 3)
+    msh = mesh_link(L, w, t, d, h, d_load, D0, D1)
     mesh = skfem.MeshTet.load(msh)
     os.remove(msh)
 
@@ -128,8 +129,8 @@ def solve_cantilever(L, w, t, d, F, E, nu, h=None, d_load=None):
             "h": float(h)}
 
 
-def compare(L, w, t, d, F, E, nu, h=None, d_load=None):
-    fea = solve_cantilever(L, w, t, d, F, E, nu, h, d_load)
+def compare(L, w, t, d, F, E, nu, h=None, d_load=None, D0=None, D1=None):
+    fea = solve_cantilever(L, w, t, d, F, E, nu, h, d_load, D0, D1)
     hand = hand_calc(L, w, t, d, F, E, nu)
     return {"fea": fea, "hand": hand,
             "err_delta_pct": 100 * (fea["tip_delta"] - hand["delta"]) / hand["delta"],
@@ -145,17 +146,19 @@ def verify_design(lengths, section, load, material, crank_torque=None):
     cases = {"Kol": (lengths["c"], load)}
     if crank_torque:
         cases["Krank"] = (lengths["a"], crank_torque / lengths["a"])   # uctaki dik kuvvet
-    from strength import HUB_C
+    from strength import HUB_C, section_with_bosses
+    section = section_with_bosses(section)
     for name, (L, F) in cases.items():
         s = section["links"][name]
         d_pin = section["hole"]
         d = section.get("shaft", d_pin)          # krank ve kol milden (O2, O4) tutulur
-        r = compare(L, s["width"], s["thickness"], d, F, material["E"], material["nu"], d_load=d_pin)
+        r = compare(L, s["width"], s["thickness"], d, F, material["E"], material["nu"], d_load=d_pin,
+                    D0=s["boss0"], D1=s["boss1"])
         # Tasarim modeli (strength.py ile ayni): egilme + kayma + gobek (mil) donmesi
         d_hub = F * L ** 2 / (HUB_C * material["E"] * s["thickness"] * (d / 2) ** 2)
         model = r["hand"]["delta"] + d_hub
         out[name] = {"L": L, "F": F, "width": s["width"], "thickness": s["thickness"], "hole": d_pin,
-                     "shaft": d,
+                     "shaft": d, "boss0": s["boss0"], "boss1": s["boss1"],
                      "fea_delta": r["fea"]["tip_delta"], "hand_delta": model,
                      "beam_only_delta": r["hand"]["delta"],
                      "fea_sigma_mid": r["fea"]["sigma_mid"], "hand_sigma_mid": r["hand"]["sigma_mid"],

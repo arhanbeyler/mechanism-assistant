@@ -26,7 +26,8 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B7f. Yerel, otomatik FEA.** gmsh + scikit-fem (tamamen yerel); kol ve krank için FEA ile el hesabı karşılaştırması; panelde "FEA" düğmesi (Fusion içinde deneme bekliyor)
 - [x] **B7g. Göbek esnekliği.** Model δ_göbek = P·L²/(C·E·t·r²), C FEA ile kalibre (21 geometri, C = 6–9, L'den bağımsız); güvenli taraf için C = 6
 - [x] **B7h. Mil ve pim çaplarını ayırmak.** O2/O4 çelik mil (burulma + kayma kontrolü), A/B pim; Fusion her uçta doğru deliği çiziyor. PETG 5 kg: biyel 25→13 mm, hacim −%12
-- [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık; mil çevresinde yerel göbek (boss) ile uzvun geri kalanını inceltmek
+- [x] **B8a. Yerel göbek (boss).** Delikler kendi göbeğinde (D = 2.5·d), gövde kontrollerin gerektirdiği kadar ince; göbek ve gövde kesitleri ayrı kontrol; Fusion'da dolu extrude + delik kesme. PETG hacim −%29, Al −%59
+- [ ] **B8b. Pimler, boşluk ve katman çakışması.** Print-in-place pim/boşluk geometrisi; O2/O4 milinin ara katmanlardan geçerken hareketli uzuvlarla çakışma kontrolü
 
 ## C. Yeni modüller
 - [ ] **C0. Modüle özel kaydırıcılar.** Her modül kendi parametrelerini (ad, birim, aralık) tanımlar, panel kaydırıcıları otomatik kurar (yay seçiliyse yay kaydırıcıları). İlk yeni modülle birlikte
@@ -64,3 +65,5 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - **Gizli güvensizlik yakalandı:** Mil burulma kontrolü eklenince, önceki alüminyum tasarımdaki Ø3 ortak pimin
   2.94 N·m çıkış torkunda τ ≈ 555 MPa'ya çıkacağı görüldü (çelik bile kopar). Tork taşıyan mafsal ile serbest pim
   ayrı düşünülmeli. PETG örneği (mil Ø12, pim Ø4): FEA ile model sehimi %24–35 güvenli tarafta, gerilme %6–11 uyumlu.
+- **Göbekli geometri FEA'sı:** Model sehimi FEA'nın %24–54 üstünde (göbek, mil çevresini rijitleştiriyor; model güvenli tarafta),
+  gerilme %1–12 uyumlu. Kalın mil sadece kendi göbeğini büyütüyor: PETG biyel ve sabit uzuv 6 mm gövdeye indi.

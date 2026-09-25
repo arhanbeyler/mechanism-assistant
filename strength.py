@@ -82,6 +82,17 @@ DEFAULT_SECTION = {"hole": 4.0, "shaft": 4.0,
 PIN_DIAMETERS = [3, 4, 5, 6, 8, 10, 12]
 THICKNESSES = [3, 4, 5, 6, 8, 10, 12, 15, 20]
 MAX_WIDTH = 60
+W_MIN = 6            # en ince govde (baski icin)
+
+# B8a: yerel gobek (boss). Her delik kendi dairesel gobeginin icinde: D = max(w, 2.5 d).
+# Uzuv = iki uc gobegi + aralarinda w genisliginde govde. Kenar mesafesi kurali artik
+# sadece gobekte gecerli; govde, kontrollerin gerektirdigi kadar ince olabilir.
+BOSS_RATIO = 2.5
+
+
+def boss_diameters(name, w, d_pin, d_shaft):
+    """(baslangic, bitis) gobek caplari."""
+    return tuple(max(w, BOSS_RATIO * h) for h in link_holes(name, d_pin, d_shaft))
 
 
 def _cross2(u, v):
@@ -112,22 +123,30 @@ def check_link(name, forces, length, mat, w, t, d, d_shaft=None):
     n, sy, E = mat["n"], mat["sy"], mat["E"]
     allow = sy / n
     F_ab = forces["F_ab_max"]
-    holes = link_holes(name, d, d if d_shaft is None else d_shaft)
-    d_big, d_small, d_root = max(holes), min(holes), holes[0]   # kok = milli uc (krank, kol)
-    A_net = (w - d_big) * t                             # en buyuk delikteki net kesit
-    S_net = t * (w ** 3 - d_root ** 3) / (6 * w)        # moment kokte (mil ucunda) en buyuk
+    d_shaft = d if d_shaft is None else d_shaft
+    holes = link_holes(name, d, d_shaft)
+    bosses = boss_diameters(name, w, d, d_shaft)
+    d_small, d_root, D_root = min(holes), holes[0], bosses[0]   # kok = milli uc (krank, kol)
+    # Gobek kesiti (delikten gecen): en kucuk net alanli uc
+    i_net = min(range(2), key=lambda i: (bosses[i] - holes[i]) * t)
+    d_net, D_net = holes[i_net], bosses[i_net]
+    A_net = (D_net - d_net) * t
+    S_hub = t * (D_root ** 3 - d_root ** 3) / (6 * D_root)       # kokte (mil gobegi) egilme
+    # Govde kesiti (gobegin hemen disi): delik yok
+    S_web, A_web = t * w ** 2 / 6.0, w * t
     I_min = min(w * t ** 3, t * w ** 3) / 12.0
-    d = d_big                                           # Kt icin
 
     P_cr = math.pi ** 2 * E * I_min / length ** 2
     checks = [{"group": "Burkulma", "name": f"{name} burkulması", "util": F_ab * n / P_cr,
                "detail": f"F_AB = {F_ab:.0f} N, P_kr = {P_cr:.0f} N"}]
     moment = {"Krank": forces["M_crank_max"], "Kol": forces["M_rocker"]}.get(name, 0.0)
-    kt = kt_hole_tension(d, w) if mat.get("brittle") else 1.0
-    sigma = moment / S_net + kt * F_ab / A_net
+    kt = kt_hole_tension(d_net, D_net) if mat.get("brittle") else 1.0
+    s_hub = moment / S_hub + kt * F_ab / A_net
+    s_web = moment / S_web + F_ab / A_web            # ihtiyatli: gobek kenarindaki moment ~ M
+    sigma, where = (s_hub, "göbek") if s_hub >= s_web else (s_web, "gövde")
     label = f"{name} eğilme + eksenel" if moment else f"{name} net kesit"
     checks.append({"group": "Gerilme", "name": label, "util": sigma / allow,
-                   "detail": f"σ = {sigma:.1f} MPa" + (f" (Kt = {kt:.2f})" if kt > 1 else "")})
+                   "detail": f"σ = {sigma:.1f} MPa ({where})" + (f", Kt = {kt:.2f}" if kt > 1 and where == "göbek" else "")})
 
     # Rijitlik: krank ve kol uctan yuklu konsol (duzlem ici), digerleri eksenel uzama
     limit = length / DEFLECTION_RATIO
@@ -173,10 +192,9 @@ def check_shaft(forces, mat, d):
 def _lightest_link(name, forces, length, mat, d, d_shaft=None):
     """Verilen pim/mil caplari icin bu uzvun en hafif (w * t en kucuk) gecen kesiti."""
     d_shaft = d if d_shaft is None else d_shaft
-    d_big = max(link_holes(name, d, d_shaft))
     best = None
     for t in THICKNESSES:
-        for w in range(max(math.ceil(2.5 * d_big), 8), MAX_WIDTH + 1):  # kenar mesafesi
+        for w in range(W_MIN, MAX_WIDTH + 1):          # kenar mesafesini gobek sagliyor
             checks = check_link(name, forces, length, mat, w, t, d, d_shaft)
             if max(c["util"] for c in checks) <= 1.0:
                 if best is None or w * t < best[0] * best[1]:
@@ -205,9 +223,11 @@ def size_links(forces, lengths, mat):
                 if found is None:
                     break
                 w, t, c = found
-                links[name] = {"width": float(w), "thickness": float(t)}
+                b0, b1 = boss_diameters(name, w, d, ds)
+                links[name] = {"width": float(w), "thickness": float(t),
+                               "boss0": float(b0), "boss1": float(b1)}
                 checks += c
-                volume += w * t * lengths[key]
+                volume += t * (w * lengths[key] + math.pi * (b0 ** 2 + b1 ** 2) / 8)  # govde + gobek yarilari
             else:
                 if best is None or volume < best[2] - 1e-9:
                     best = ({"hole": float(d), "shaft": float(ds), "links": links}, checks, volume)
@@ -219,3 +239,13 @@ def size_links(forces, lengths, mat):
     for name, key in LINK_KEYS.items():
         fail += check_link(name, forces, lengths[key], mat, w, t, d, d)
     return None, fail
+
+
+def section_with_bosses(section):
+    """Eski/varsayilan kesite gobek caplarini ekler (Fusion ve FEA icin)."""
+    d, ds = section["hole"], section.get("shaft", section["hole"])
+    links = {}
+    for name, s in section["links"].items():
+        b0, b1 = boss_diameters(name, s["width"], d, ds)
+        links[name] = dict(s, boss0=s.get("boss0", b0), boss1=s.get("boss1", b1))
+    return dict(section, shaft=ds, links=links)
