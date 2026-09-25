@@ -13,6 +13,7 @@ import function_gen
 import gears
 import interference
 import kinematics as kin
+import shafts
 import springs
 import strength
 from llm_extract import extract_spec
@@ -50,6 +51,19 @@ MODULES = {
             {"key": "return_deg", "label": "Dönüş açısı", "unit": "°", "min": 20, "max": 200, "step": 5, "default": 120},
             {"key": "motion_law", "label": "Hareket yasası", "default": "cycloidal",
              "options": [["cycloidal", "Sikloidal"], ["harmonic", "Basit harmonik"], ["poly345", "3-4-5 polinom"]]},
+        ],
+    },
+    "shaft": {
+        "title": "Mil (yorulma)",
+        "params": [
+            {"key": "torque_Nm", "label": "Tork", "unit": "N·m", "min": 1, "max": 500, "step": 1, "default": 100},
+            {"key": "bending_moment_Nm", "label": "Eğilme momenti", "unit": "N·m", "min": 0, "max": 500, "step": 1, "default": 60},
+            {"key": "feature", "label": "Gerilme yığılması", "default": "keyseat",
+             "options": [["keyseat", "Kama yuvası"], ["sharp_shoulder", "Keskin omuz"], ["round_shoulder", "Yuvarlatılmış omuz"],
+                         ["ring_groove", "Segman kanalı"], ["plain", "Düz mil"]]},
+            {"key": "shaft_material", "label": "Çelik", "default": "1045",
+             "options": [["1045", "AISI 1045 CD"], ["1020", "AISI 1020 CD"]]},
+            {"key": "safety_n", "label": "Yorulma emniyeti", "unit": "", "min": 1.2, "max": 4, "step": 0.1, "default": 2},
         ],
     },
 }
@@ -136,10 +150,15 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        max_load_N=None, material=None, input_swing_deg=360, kind="fourbar",
                        gear_ratio=None, torque_Nm=None, speed_rpm=None,
                        spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None,
-                       cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None):
+                       cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None,
+                       bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None):
     """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim.
     kind: "fourbar", "spur_gear", "spring" ya da "cam" (C0: modul secimi).
     input_swing_deg >= 360: giris tam tur (krank-kol); daha az: sinirli acida giris kolu (B9)."""
+    if kind == "shaft":
+        return design_from_spec({"mechanism_type": "shaft", "torque_Nm": torque_Nm,
+                                 "bending_moment_Nm": bending_moment_Nm, "feature": feature,
+                                 "shaft_material": shaft_material, "safety_n": safety_n})
     if kind == "cam":
         return design_from_spec({"mechanism_type": "cam", "cam_rise_mm": cam_rise_mm, "rise_deg": rise_deg,
                                  "dwell_top_deg": dwell_top_deg, "return_deg": return_deg,
@@ -172,6 +191,8 @@ def design_from_spec(spec, on_status=None):
         return _spring(result, spec, say)
     if mtype == "cam":
         return _cam(result, spec, say)
+    if mtype == "shaft":
+        return _shaft(result, spec, say)
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Şu an sadece dört çubuk mekanizmaları destekleniyor "
@@ -310,6 +331,45 @@ def _spring(result, spec, say):
             f"Tasarım tüm kontrollerden geçti ({kind}, {mat['name']}). Tel Ø{geo['d']:g} mm, ortalama çap "
             + (f"{geo['D1']:.1f} → {geo['D2']:.1f}" if taper < 1 else f"{geo['D1']:.1f}")
             + f" mm, {geo['Na']:g} aktif + 2 uç sarım, serbest boy {geo['L0']:.1f} mm, k = {geo['k']:.2f} N/mm."]))
+    return result
+
+
+def _shaft(result, spec, say):
+    """C11b: donen mil, DE-Goodman. Gerekli: tork; egilme momenti ya da (radyal kuvvet + yatak araligi)."""
+    result["mechanism_type"] = "shaft"
+    notes = []
+    T = spec.get("torque_Nm")
+    M = spec.get("bending_moment_Nm")
+    if M is None and spec.get("radial_force_N") is not None and spec.get("span_mm") is not None:
+        M = spec["radial_force_N"] * spec["span_mm"] / 1000.0 / 4.0
+        notes.append(f"Eğilme momenti, iki yataklı milin ortasına etkiyen kuvvetten hesaplandı: "
+                     f"M = F·L/4 = {M:.1f} N·m (basit mesnetli kiriş varsayımı).")
+    missing = [n for v, n in ((T, "tork (N·m)"), (M, "eğilme momenti ya da kuvvet + yatak aralığı")) if v is None]
+    if missing:
+        return dict(result, status="missing", message=f"Mil tasarımı için eksik bilgi: {', '.join(missing)}.")
+    feature = spec.get("feature") or "keyseat"
+    if not spec.get("feature"):
+        notes.append("Gerilme yığılması belirtilmediği için kama yuvası varsayıldı (K_f = 2.14, K_fs = 3.0).")
+    mat = spec.get("shaft_material") or "1045"
+    if not spec.get("shaft_material"):
+        notes.append("Çelik belirtilmediği için AISI 1045 soğuk çekilmiş varsayıldı.")
+    n = float(spec.get("safety_n") or 2.0)
+    say("Mil tasarımı (DE-Goodman yorulma)...")
+    g, s_checks = shafts.design(float(M) * 1000.0, float(T) * 1000.0, mat, feature, n)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0, "detail": c["detail"]} for c in s_checks]
+    result.update(checks=checks, notes=notes,
+                  target={"torque_Nm": float(T), "bending_moment_Nm": float(M), "n": n})
+    if g is None:
+        return dict(result, status="failed", message=" ".join(notes + [
+            "Standart çaplar içinde uygun mil yok. Öneri: yükü azaltın ya da daha dayanıklı çelik seçin."]))
+    g["span_mm"] = spec.get("span_mm")
+    fname = shafts.FEATURES[feature][0]
+    result.update(
+        shaft=g, fusion={"type": "shaft", "passed_checks": True, **g},
+        status="ok",
+        message=" ".join(notes + [
+            f"Tasarım tüm kontrollerden geçti. Gereken çap Ø{g['d_min']:.2f} mm → standart Ø{g['d']:g} mm "
+            f"({g['material']}, {fname}). Yorulma emniyeti n_f = {g['nf']:.2f}, akma emniyeti n_y = {g['ny']:.2f}."]))
     return result
 
 

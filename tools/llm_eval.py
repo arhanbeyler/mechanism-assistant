@@ -43,6 +43,10 @@ CASES = [
      dict(mechanism_type="cam", cam_rise_mm=20, rise_deg=120, dwell_top_deg=60, return_deg=120)),
     ("15 mm stroklu sikloidal kam, 90° yükselme", dict(mechanism_type="cam", cam_rise_mm=15, rise_deg=90,
                                                        motion_law="cycloidal")),
+    ("100 Nm tork ve 60 Nm eğilme taşıyan kama yuvalı mil çapı", dict(mechanism_type="shaft", torque_Nm=100,
+                                                                       bending_moment_Nm=60, feature="keyseat")),
+    ("yataklar arası 200 mm, ortadan 2 kN kuvvet gelen, 50 Nm tork ileten 1020 çelik mil",
+     dict(mechanism_type="shaft", radial_force_N=2000, span_mm=200, torque_Nm=50, shaft_material="1020")),
 ]
 
 

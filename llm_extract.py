@@ -34,9 +34,11 @@ def _schema(props):
 
 
 # ---------------------------------------------------------------- 1) yonlendirici
-ROUTER_SCHEMA = _schema({"kind": {"type": "string", "enum": ["fourbar", "spur_gear", "spring", "cam", "unknown"]}})
+ROUTER_SCHEMA = _schema({"kind": {"type": "string",
+                                   "enum": ["fourbar", "spur_gear", "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
+    "'shaft': sizing a rotating shaft / axle (mil, şaft, aks, 'mil çapı', torque and bending on a shaft, yorulma). "
     "'cam': a cam and follower (kam, eksantrik, itici, 'X mm kaldırsın', yükselme/bekleme/dönüş açıları). "
     "'spring': a spring (yay, basma yayı, konik yay). "
     "'spur_gear': gears or a speed reducer (dişli, dişli çifti, redüktör, çevrim oranı, 'X kat yavaşlatsın'). "
@@ -105,14 +107,31 @@ CAM = (_schema({
     "return/fall ('120 derecede insin'). motion_law: 'cycloidal' (sikloidal), 'harmonic' (basit harmonik), "
     "'poly345' (3-4-5 polinom) only if named. roller_radius_mm: roller radius if given."))
 
-MODULE_EXTRACTORS = {"fourbar": FOURBAR, "spur_gear": GEAR, "spring": SPRING, "cam": CAM}
+SHAFT = (_schema({
+    "torque_Nm": {"type": ["number", "null"]},
+    "bending_moment_Nm": {"type": ["number", "null"]},
+    "radial_force_N": {"type": ["number", "null"]},
+    "span_mm": {"type": ["number", "null"]},
+    "feature": {"type": ["string", "null"],
+                "enum": ["keyseat", "sharp_shoulder", "round_shoulder", "ring_groove", "plain", None]},
+    "shaft_material": {"type": ["string", "null"], "enum": ["1020", "1045", None]},
+    "safety_n": {"type": ["number", "null"]},
+}), COMMON + (
+    "The user wants to size a rotating shaft. torque_Nm: transmitted torque in N·m. bending_moment_Nm: "
+    "bending moment in N·m if given. radial_force_N: a transverse force on the shaft ('2 kN' -> 2000) and "
+    "span_mm: bearing distance ('yataklar arası 200 mm') if given. feature: 'keyseat' (kama, kama yuvası), "
+    "'sharp_shoulder' (keskin omuz), 'round_shoulder' (radyuslu/yuvarlatılmış omuz), 'ring_groove' (segman), "
+    "'plain' (düz) only if named. shaft_material: '1020' or '1045' only if named. safety_n: required safety "
+    "factor if given ('emniyet katsayısı 2.5')."))
+
+MODULE_EXTRACTORS = {"fourbar": FOURBAR, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # Tum alanlar (pipeline tek bir sozluk bekler; modulde olmayanlar None)
 ALL_FIELDS = {"mechanism_type": "unknown", "quick_return": False}
 for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
-KIND_TO_TYPE = {"spur_gear": "spur_gear", "spring": "spring", "cam": "cam"}   # fourbar: cikarici tur secer
+KIND_TO_TYPE = {"spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: cikarici secer
 
 
 def _chat(system, user_text, schema, name):
