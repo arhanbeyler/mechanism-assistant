@@ -19,6 +19,16 @@ def max_feasible_swing(a, psi_start):
     return None
 
 
+def max_feasible_q(a, psi, q_max=1.5, step=0.05):
+    """Iletim acisi tasarim hedefini (45-135) saglayan en buyuk zaman orani. Yoksa None."""
+    q = q_max
+    while q > 1.0 + 1e-9:
+        if kin.synthesize_quick_return(a, psi, q)["worst_dev"] <= 45.0:
+            return round(q, 2)
+        q -= step
+    return None
+
+
 def design_from_text(text, on_status=None):
     """
     Dondurur: dict(status, message, spec, ...)
@@ -47,37 +57,73 @@ def design_from_text(text, on_status=None):
         return dict(result, status="missing",
                     message=f"Salınım açısı 0-180° arasında olmalı (verilen: {psi:g}°).")
 
+    # Zaman orani Q: kullanici verdiyse o; "hizli donus" deyip vermediyse MOTOR secer
+    # (LLM asla sayi uydurmaz); hic bahsetmediyse Q = 1.
+    notes = []
+    Q = spec.get("time_ratio")
+    if Q is not None:
+        if not 1.0 <= Q <= 3.0:
+            return dict(result, status="missing",
+                        message=f"Zaman oranı Q, 1 ile 3 arasında olmalı (verilen: {Q:g}).")
+    elif spec.get("quick_return"):
+        say("Uygun zaman oranı (Q) aranıyor...")
+        Q = max_feasible_q(a, psi)
+        if Q:
+            notes.append(f"Q belirtilmediği için, iletim açısını 45°–135° içinde tutan "
+                         f"en büyük değer seçildi: Q = {Q:g}.")
+        else:
+            Q = 1.0
+            notes.append(f"{psi:g}° salınımda hızlı dönüş iletim açısını bozuyor; "
+                         f"hızlı dönüşsüz (Q = 1) tasarlandı.")
+    else:
+        Q = 1.0
+
     say("Kinematik sentez ve kontroller...")
-    mech = kin.synthesize_crank_rocker(a, psi)
+    mech = kin.synthesize_quick_return(a, psi, Q)
     frames = kin.simulate(mech)
     meas = kin.measure(frames)
     grashof_ok, grashof_kind = kin.grashof(mech["a"], mech["b"], mech["c"], mech["d"])
     mu_ok = kin.MU_MIN_DEG <= meas["mu_min"] and meas["mu_max"] <= kin.MU_MAX_DEG
-    passed = grashof_ok and mu_ok
+    swing_ok = abs(meas["swing"] - psi) < 0.5
+    q_ok = abs(meas["Q"] - Q) < 0.03
+    passed = grashof_ok and mu_ok and swing_ok and q_ok
+
+    checks = [
+        {"name": "Grashof", "ok": grashof_ok, "detail": grashof_kind},
+        {"name": "Salınım (simülasyon)", "ok": swing_ok,
+         "detail": f"{meas['swing']:.2f}° (hedef {psi:g}°)"},
+        {"name": "İletim açısı", "ok": mu_ok,
+         "detail": f"{meas['mu_min']:.1f}° – {meas['mu_max']:.1f}° "
+                   f"(sınır {kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°)"},
+    ]
+    if Q > 1.0:
+        checks.append({"name": "Zaman oranı Q (simülasyon)", "ok": q_ok,
+                       "detail": f"{meas['Q']:.2f} (hedef {Q:g})"})
 
     result.update(
         lengths={k: mech[k] for k in "abcd"},
-        target={"swing": psi, "Q": mech.get("Q", 1.0)},
+        target={"swing": psi, "Q": Q},
         measured=meas,
-        checks=[
-            {"name": "Grashof", "ok": grashof_ok, "detail": grashof_kind},
-            {"name": "Salınım (simülasyon)", "ok": abs(meas["swing"] - psi) < 0.5,
-             "detail": f"{meas['swing']:.2f}° (hedef {psi:g}°)"},
-            {"name": "İletim açısı", "ok": mu_ok,
-             "detail": f"{meas['mu_min']:.1f}° – {meas['mu_max']:.1f}° "
-                       f"(sınır {kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°)"},
-        ],
+        checks=checks,
+        notes=notes,
         mu_curve=sorted((round(f["theta"], 1), round(f["mu"], 2)) for f in frames[::3]),
         fusion=kin.to_fusion_dict(mech, frames, passed),
     )
 
     if passed:
-        result.update(status="ok", message="Tasarım tüm kontrollerden geçti.")
+        msg = "Tasarım tüm kontrollerden geçti."
     else:
-        best = max_feasible_swing(a, psi)
-        msg = (f"{psi:g}° salınım, iletim açısı sınırlarıyla "
-               f"({kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°) sağlanamıyor.")
-        if best:
-            msg += f" Öneri: salınımı en fazla {best}° yapın."
-        result.update(status="failed", message=msg, suggestion_swing=best)
+        msg = (f"{psi:g}° salınım" + (f", Q = {Q:g}" if Q > 1 else "") +
+               f" ile iletim açısı sınırları ({kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°) sağlanamıyor.")
+        if Q > 1:
+            q_best = max_feasible_q(a, psi)
+            msg += (f" Öneri: Q'yu en fazla {q_best:g} yapın." if q_best
+                    else " Öneri: hızlı dönüşten vazgeçin (Q = 1).")
+        else:
+            best = max_feasible_swing(a, psi)
+            if best:
+                msg += f" Öneri: salınımı en fazla {best}° yapın."
+                result["suggestion_swing"] = best
+    result.update(status="ok" if passed else "failed",
+                  message=" ".join(notes + [msg]))
     return result

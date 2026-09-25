@@ -16,8 +16,8 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **A4. Fusion paneli ve köprü.** Alt panelde sohbet + sonuç kartı; köprü ile Claude Fusion'da kod çalıştırıp ekran görüntüsü alabiliyor
 
 ## B. Dört çubuğu bitirmek
-- [ ] **B5. Q'yu cümleye bağlamak.** "Hızlı dönüşlü olsun" dendiğinde anlasın
-- [ ] **B6. LLM şemasını sıkılaştırmak.** Gereksiz "eksik bilgi" uyarılarını kesmek
+- [x] **B5. Q'yu cümleye bağlamak.** "Hızlı dönüşlü olsun" dendiğinde anlasın
+- [x] **B6. LLM şemasını sıkılaştırmak.** Gereksiz "eksik bilgi" uyarılarını kesmek
 - [ ] **B7. Mukavemet.** Yük ve malzemeye göre uzuv kesiti, emniyet katsayısı
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
 
