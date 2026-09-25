@@ -196,17 +196,25 @@ def simulate(m, n=360):
 
 # ---------------------------------------------------------------- rapor
 
-def report(m, frames, psi_target):
-    ok, kind = grashof(m["a"], m["b"], m["c"], m["d"])
+def measure(frames):
+    """Simulasyondan olculen degerler: salinim, zaman orani, iletim acisi araligi."""
     rock = [f["rocker"] for f in frames]
     mus = [f["mu"] for f in frames]
-    swing = max(rock) - min(rock)
-    mu_ok = MU_MIN_DEG <= min(mus) and max(mus) <= MU_MAX_DEG
     # Zaman orani: kolun iki uc konumu arasindaki krank donusleri
     n = len(frames)
     i_max, i_min = rock.index(max(rock)), rock.index(min(rock))
     go = ((i_min - i_max) % n) * 360.0 / n
-    q_meas = max(go, 360 - go) / min(go, 360 - go)
+    return dict(swing=max(rock) - min(rock),
+                Q=max(go, 360 - go) / min(go, 360 - go),
+                mu_min=min(mus), mu_max=max(mus))
+
+
+def report(m, frames, psi_target):
+    ok, kind = grashof(m["a"], m["b"], m["c"], m["d"])
+    meas = measure(frames)
+    swing, q_meas = meas["swing"], meas["Q"]
+    mus = (meas["mu_min"], meas["mu_max"])
+    mu_ok = MU_MIN_DEG <= min(mus) and max(mus) <= MU_MAX_DEG
 
     print("=" * 52)
     print(f"  Krank a  = {m['a']:8.2f} mm")
