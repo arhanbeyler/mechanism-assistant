@@ -41,7 +41,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 
 ## D. Dış dünya
 - [ ] **D12. Fiziksel baskı** (arkadaşın yazıcısı)
-- [ ] **D13. README ve demo videosu** (portföy)
+- [ ] **D13. README ve demo videosu** (portföy). README + Fusion görselleri hazır (parçalar panel renklerinde); video çekimi senin: senaryo `docs/demo.md`
 - [ ] **D14. İleride:** FreeCAD/AutoCAD desteği, "serbest mod" (doğrulamasız, etiketli)
 
 ## Bulgular (rapor için)
