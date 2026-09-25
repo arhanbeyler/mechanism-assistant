@@ -22,7 +22,8 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B7b. Uzuv başına ayrı kesit.** Ortak pim çapı, uzuv başına genişlik/kalınlık; tek kesite göre %32 daha az malzeme
 - [x] **B7c. Parametre kaydırıcıları.** Panelde anında hesaplanan kaydırıcılar, salınımda uygun bölge renkleri; Fusion'da "1 tur" ve sürekli döndürme
 - [x] **B7d. Gerilme yığılması (Kt) ve sehim.** Roark Kt (kırılgan malzemede, eksenel gerilmeye); L/200 sehim sınırı (konsol eğilme / eksenel uzama)
-- [ ] **B7e. Fusion FEA ile doğrulama.** Static Stress sonucu el hesabıyla karşılaştırılır (rapor için)
+- [x] **B7e. Fusion FEA ile doğrulama (niteliksel).** Al 6061 kol konsol, 49 N: kökte FEA n = 2–4, el hesabı n ≈ 3.6 ✓. Sim API önizlemede çalışmıyor, çözüm buluta gitti, sonuç sayısal okunamıyor
+- [ ] **B7f. Yerel, otomatik FEA.** gmsh + scikit-fem (tamamen yerel, açık kaynak); sehim/gerilme sayısal karşılaştırma, panelde "FEA ile doğrula"
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
 
 ## C. Yeni modüller
