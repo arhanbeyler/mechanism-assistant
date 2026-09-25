@@ -235,9 +235,22 @@ def crank_motion():
     if not design:
         return None
     for j in design.rootComponent.asBuiltJoints:
-        if j.name.startswith("Sabit-Krank") or j.name == "Sabit-Pinyon":   # dort cubuk ya da disli girisi
+        if j.name.startswith("Sabit-Krank") or j.name in ("Sabit-Pinyon", "Sabit-Kam"):   # giris mafsali
             return adsk.fusion.RevoluteJointMotion.cast(j.jointMotion)
     return None
+
+
+def cam_follower():
+    """Kam tasariminda: (itici kayar mafsali, s tablosu [mm, derece basina], kayma isareti) ya da None."""
+    design = adsk.fusion.Design.cast(app.activeProduct)
+    if not design:
+        return None
+    table = design.attributes.itemByName("MekanizmaAsistani", "cam_table")
+    sign = design.attributes.itemByName("MekanizmaAsistani", "cam_slide_sign")
+    joint = [j for j in design.rootComponent.asBuiltJoints if j.name == "Sabit-Itici"]
+    if not (table and sign and joint):
+        return None
+    return (adsk.fusion.SliderJointMotion.cast(joint[0].jointMotion), json.loads(table.value), float(sign.value))
 
 
 def rotate(mode):
@@ -295,6 +308,11 @@ def rotate(mode):
                 try:
                     motion = crank_motion()
                     motion.rotationValue = motion.rotationValue + delta
+                    cf = cam_follower()                # kam: itici s(theta) tablosundan
+                    if cf:
+                        slider, table, sgn = cf
+                        deg = int(round(math.degrees(motion.rotationValue))) % 360
+                        slider.slideValue = sgn * table[deg * len(table) // 360] / 10.0
                 except Exception:
                     anim["running"] = False       # belge kapandi vb.
                 finally:

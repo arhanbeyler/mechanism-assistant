@@ -8,6 +8,7 @@ Sadece standart kutuphane: Fusion'in kendi Python'unda da calisir.
 
 import re
 
+import cams
 import function_gen
 import gears
 import interference
@@ -38,6 +39,17 @@ MODULES = {
              "default": 1.0, "one_label": "silindirik"},
             {"key": "outer_diameter_max_mm", "label": "Dış çap sınırı", "unit": "mm", "min": 0, "max": 100, "step": 1,
              "default": 0, "zero_label": "serbest"},
+        ],
+    },
+    "cam": {
+        "title": "Kam (makaralı itici)",
+        "params": [
+            {"key": "cam_rise_mm", "label": "Kalkma (strok)", "unit": "mm", "min": 2, "max": 60, "step": 1, "default": 20},
+            {"key": "rise_deg", "label": "Yükselme açısı", "unit": "°", "min": 20, "max": 200, "step": 5, "default": 120},
+            {"key": "dwell_top_deg", "label": "Üstte bekleme", "unit": "°", "min": 0, "max": 180, "step": 5, "default": 60},
+            {"key": "return_deg", "label": "Dönüş açısı", "unit": "°", "min": 20, "max": 200, "step": 5, "default": 120},
+            {"key": "motion_law", "label": "Hareket yasası", "default": "cycloidal",
+             "options": [["cycloidal", "Sikloidal"], ["harmonic", "Basit harmonik"], ["poly345", "3-4-5 polinom"]]},
         ],
     },
 }
@@ -123,10 +135,15 @@ def design_from_text(text, on_status=None):
 def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        max_load_N=None, material=None, input_swing_deg=360, kind="fourbar",
                        gear_ratio=None, torque_Nm=None, speed_rpm=None,
-                       spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None):
+                       spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None,
+                       cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None):
     """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim.
-    kind: "fourbar", "spur_gear" ya da "spring" (C0: modul secimi).
+    kind: "fourbar", "spur_gear", "spring" ya da "cam" (C0: modul secimi).
     input_swing_deg >= 360: giris tam tur (krank-kol); daha az: sinirli acida giris kolu (B9)."""
+    if kind == "cam":
+        return design_from_spec({"mechanism_type": "cam", "cam_rise_mm": cam_rise_mm, "rise_deg": rise_deg,
+                                 "dwell_top_deg": dwell_top_deg, "return_deg": return_deg,
+                                 "motion_law": motion_law or "cycloidal", "roller_radius_mm": None})
     if kind == "spring":
         return design_from_spec({"mechanism_type": "spring", "spring_force_N": spring_force_N,
                                  "spring_deflection_mm": spring_deflection_mm, "spring_taper": spring_taper,
@@ -153,6 +170,8 @@ def design_from_spec(spec, on_status=None):
         return _spur_gear(result, spec, say)
     if mtype == "spring":
         return _spring(result, spec, say)
+    if mtype == "cam":
+        return _cam(result, spec, say)
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Şu an sadece dört çubuk mekanizmaları destekleniyor "
@@ -291,6 +310,47 @@ def _spring(result, spec, say):
             f"Tasarım tüm kontrollerden geçti ({kind}, {mat['name']}). Tel Ø{geo['d']:g} mm, ortalama çap "
             + (f"{geo['D1']:.1f} → {geo['D2']:.1f}" if taper < 1 else f"{geo['D1']:.1f}")
             + f" mm, {geo['Na']:g} aktif + 2 uç sarım, serbest boy {geo['L0']:.1f} mm, k = {geo['k']:.2f} N/mm."]))
+    return result
+
+
+LAW_NAMES = {"cycloidal": "sikloidal", "harmonic": "basit harmonik", "poly345": "3-4-5 polinom"}
+
+
+def _cam(result, spec, say):
+    """C11a: disk kam + makarali itici. Gerekli: kalkma ve yukselme acisi (uydurulmaz)."""
+    result["mechanism_type"] = "cam"
+    missing = [name for key, name in (("cam_rise_mm", "kalkma (strok, mm)"), ("rise_deg", "yükselme açısı"))
+               if spec.get(key) is None]
+    if missing:
+        return dict(result, status="missing", message=f"Kam tasarımı için eksik bilgi: {', '.join(missing)}.")
+    notes = []
+    h, b1 = float(spec["cam_rise_mm"]), float(spec["rise_deg"])
+    b3 = spec.get("return_deg")
+    if b3 is None:
+        b3 = b1
+        notes.append(f"Dönüş açısı belirtilmediği için yükselmeyle aynı alındı ({b1:g}°).")
+    b2 = float(spec.get("dwell_top_deg") or 0.0)
+    law_ = spec.get("motion_law") or "cycloidal"
+    if not spec.get("motion_law"):
+        notes.append("Hareket yasası belirtilmediği için sikloidal seçildi (sonsuz sarsıntı yok).")
+    say("Kam sentezi (basınç açısı, eğrilik)...")
+    d, c_checks = cams.design(h, b1, b2, float(b3), law_, spec.get("roller_radius_mm"))
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": c["detail"]} for c in c_checks]
+    result.update(checks=checks, notes=notes,
+                  target={"rise": h, "rise_deg": b1, "dwell_top_deg": b2, "return_deg": float(b3), "law": law_})
+    if d is None:
+        return dict(result, status="failed", message=" ".join(notes + [
+            "Uygun kam bulunamadı. Öneri: yükselme/dönüş açılarını büyütün ya da açıların toplamını 360°'nin altında tutun."]))
+    table = cams.svaj(h, b1, b2, float(b3), law_, n=360)
+    result.update(
+        cam=d, cam_curve=[(round(t, 1), round(s, 3)) for t, s, _, _ in table[::2]],
+        fusion={"type": "cam", "passed_checks": True, **d, "s_table": [round(s, 4) for _, s, _, _ in table]},
+        status="ok",
+        message=" ".join(notes + [
+            f"Tasarım tüm kontrollerden geçti ({LAW_NAMES[law_]}). Temel daire R_b = {d['Rb']:g} mm, makara "
+            f"R = {d['Rf']:g} mm, kalkma {h:g} mm: {b1:g}° yükselme, {b2:g}° bekleme, {float(b3):g}° dönüş, "
+            f"{d['dwell_bottom']:g}° altta bekleme."]))
     return result
 
 

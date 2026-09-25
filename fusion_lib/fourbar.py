@@ -162,6 +162,14 @@ def build(mech, reuse=True):
         spring.build(mech, root)
         app.activeViewport.fit()
         return design
+    old_table = design.attributes.itemByName(MARK_GROUP, "cam_table")
+    if old_table and mech.get("type") != "cam":
+        old_table.deleteMe()                  # onceki kam tasariminin tablosu kalmasin
+    if mech.get("type") == "cam":             # C11a: kam + itici
+        import fusion_lib.cam as cam
+        cam.build(mech, root, design)
+        app.activeViewport.fit()
+        return design
     pts = mech["points_mm"]
     section = mech.get("section_mm") or DEFAULT_SECTION
     d_pin = section["hole"]

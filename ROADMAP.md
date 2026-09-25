@@ -36,7 +36,8 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **C9. Düz dişli.** Lewis eğilme, kavrama oranı, alttan kesme, Hertz (bilgi), çelik mil ve göbek; Fusion'da evolvent dişler, dairesel çoklama, motion link (diş kesişimi 0, oran doğrulandı)
 - [x] **C10. Helis ve konik yay.** Shigley: Bergsträsser, S_ut = A/dᵐ, tam sıkışmada akma yok, burkulma; konik k = G·d⁴/(16·Nₐ(R₁+R₂)(R₁²+R₂²)); Fusion'da helis sweep + taşlanmış uçlar
 - [x] **L1. İki aşamalı LLM.** Yönlendirici (tür) + modüle özel kısa çıkarıcı; tek uzun istem 9B modelde ayrıntı kaçırıyordu; llm_eval 16/16
-- [ ] **C11. Mil, kam**
+- [x] **C11a. Kam.** Sikloidal / harmonik / 3-4-5; basınç açısı ≤ 30°, alttan kesme yok, ρ ≥ 2·R_makara; en küçük temel daire; Fusion'da kam + makaralı itici + s(θ) animasyonu (8 açıda temas boşluğu 0, kesişim 0)
+- [ ] **C11b. Mil.** Shigley 7. bölüm, DE-Goodman yorulma
 
 ## D. Dış dünya
 - [ ] **D12. Fiziksel baskı** (arkadaşın yazıcısı)
@@ -80,3 +81,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
   sarım sarım sayısal integralle doğrulandı (test).
 - **Tek uzun LLM istemi ölçeklenmiyor:** Yay alanları eklenince eski bir dört çubuk cümlesi bozuldu (15/16).
   İki aşamalı yapı (yönlendirici + modül çıkarıcısı) hem 16/16 verdi hem de istemleri kısalttığı için ~6 s'de kaldı.
+- **Kam doğrulaması (Fusion):** 20 mm kalkma, 120/60/120° sikloidal → R_b hesaplandı; kam 8 farklı açıya döndürülüp itici
+  s(θ) tablosundan konumlandırıldığında makara-kam arası en kısa mesafe 0.000 mm ve kesişim 0.00 mm³ (tam temas).
+  Ters yönde döndürünce 1.8–15.5 mm boşluk / 640 mm³ kesişim: test ayırt edici. Yolda bulunan hata: kayar mafsalda
+  özel yön (kök ekseni) verilince Fusion onu yok sayıp z yönünde kaydırıyordu; itici hiç hareket etmiyor görünüyordu.

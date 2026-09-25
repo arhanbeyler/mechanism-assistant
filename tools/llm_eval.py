@@ -39,6 +39,10 @@ CASES = [
     ("5 kg taşıyan, 15 mm çöken konik yay", dict(mechanism_type="spring", spring_shape="conical", spring_deflection_mm=15)),
     ("dış çapı en fazla 12 mm olan yay, 30 N'da 10 mm sıkışsın",
      dict(mechanism_type="spring", spring_force_N=30, spring_deflection_mm=10, outer_diameter_max_mm=12)),
+    ("iticiyi 20 mm kaldıran bir kam, 120 derecede yükselsin, 60 derece beklesin, 120 derecede insin",
+     dict(mechanism_type="cam", cam_rise_mm=20, rise_deg=120, dwell_top_deg=60, return_deg=120)),
+    ("15 mm stroklu sikloidal kam, 90° yükselme", dict(mechanism_type="cam", cam_rise_mm=15, rise_deg=90,
+                                                       motion_law="cycloidal")),
 ]
 
 

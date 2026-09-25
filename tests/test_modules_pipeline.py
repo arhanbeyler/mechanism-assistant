@@ -51,6 +51,9 @@ def test_plastic_spring_note(monkeypatch):
 def test_modules_params_are_complete():
     for key, mod in pipeline.MODULES.items():
         for p in mod["params"]:
+            if "options" in p:                      # secim listesi (orn. kam hareket yasasi)
+                assert p["default"] in [o[0] for o in p["options"]]
+                continue
             assert {"key", "label", "min", "max", "step", "default"} <= set(p)
             assert p["min"] <= p["default"] <= p["max"]
         # kaydirici degerleriyle tasarim cagrilabilmeli

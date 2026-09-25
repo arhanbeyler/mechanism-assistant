@@ -195,10 +195,12 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   }
   function buildGenKnobs() {                          // secilen modulun kaydiricilari (tanimdan)
     const m = MODULES[kind()];
-    $("gen-knobs").innerHTML = m.params.map((p) =>
-      `<div class="knob"><label>${p.label} <b id="v-${p.key}"></b></label>
+    $("gen-knobs").innerHTML = m.params.map((p) => p.options
+      ? `<div class="knob"><label>${p.label}</label><select id="k-${p.key}">${p.options.map(([v, t]) =>
+           `<option value="${v}"${v === p.default ? " selected" : ""}>${t}</option>`).join("")}</select></div>`
+      : `<div class="knob"><label>${p.label} <b id="v-${p.key}"></b></label>
        <input type="range" id="k-${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.default}"></div>`).join("");
-    m.params.forEach((p) => $("k-" + p.key).addEventListener("input", schedulePreview));
+    m.params.forEach((p) => $("k-" + p.key).addEventListener(p.options ? "change" : "input", schedulePreview));
   }
   function applyKind() {
     $("fb-knobs").hidden = !isFourbar();
@@ -214,6 +216,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (!isFourbar()) {
       const out = { kind: kind(), material: $("k-mat").value };
       for (const p of MODULES[kind()].params) {
+        if (p.options) { out[p.key] = $("k-" + p.key).value; continue; }
         const v = +$("k-" + p.key).value;
         out[p.key] = (p.zero_label && v === 0) ? null : v;
       }
@@ -227,6 +230,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   function labels() {
     if (!isFourbar()) {
       for (const p of MODULES[kind()].params) {
+        if (p.options) continue;
         const v = +$("k-" + p.key).value;
         $("v-" + p.key).textContent = (p.zero_label && v === 0) ? p.zero_label
           : (p.one_label && v === 1) ? p.one_label : `${v}${p.unit ? " " + p.unit : ""}`;
@@ -360,7 +364,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (d.status === "ok" && d.drawn) text += "\nMekanizma Fusion'da çizildi.";
     if (d.status === "failed") text += "\nBu tasarım çizilmedi. Kaydırıcılarla uygun değeri arayabilirsin.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -369,7 +373,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // tamami: fareyle ustune gelince
-    if (d.lengths || d.gear || d.spring) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam) renderCard(d);
   }
 
   // ------------------------------------------------------------ sonuc karti
@@ -441,9 +445,39 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       stroke-width="${Math.max(1, s.d * sc)}" stroke-linejoin="round"/></svg>`;
   }
 
+  function renderCamCard(d) {                // C11a: kam + makarali itici
+    const c = d.cam;
+    if (!c) { $("result").innerHTML = `<h3>Kontroller</h3>${checksHtml(d.checks)}`; return; }
+    const law = { cycloidal: "sikloidal", harmonic: "basit harmonik", poly345: "3-4-5 polinom" }[c.motion];
+    const rows = [["Temel daire R_b", `${f(c.Rb)} mm`], ["Makara R", `${f(c.Rf)} mm`], ["Kalkma", `${f(c.h)} mm`],
+                  ["Açılar", `${c.rise}° / ${c.dwell_top}° / ${c.return}° / ${f(c.dwell_bottom, 0)}°`],
+                  ["Hareket yasası", law], ["Mil deliği", `Ø${f(c.bore, 0)} mm`]]
+      .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Kam</h3><table>${rows}</table></div>
+        <div class="col"><h3>Kontroller</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Yer değiştirme s(θ)</h3>${camSvg(d.cam_curve, c.h)}</div>
+      </div>`;
+  }
+
+  function camSvg(curve, h) {                // yer degistirme diyagrami
+    const W = 220, H = 150, l = 26, r = 6, t = 8, b = 20;
+    const X = (th) => l + th / 360 * (W - l - r), Y = (s) => t + (1 - s / (h || 1)) * (H - t - b);
+    const line = curve.map(([th, s]) => `${X(th).toFixed(1)},${Y(s).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(360)}" y2="${Y(0)}"/>
+      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(h)}"/>
+      <text class="lbl" x="${l - 4}" y="${Y(h) + 3}" text-anchor="end">${h}</text>
+      <text class="lbl" x="${l - 4}" y="${Y(0) + 3}" text-anchor="end">0</text>
+      ${[0, 180, 360].map((v) => `<text class="lbl" x="${X(v)}" y="${H - 6}" text-anchor="middle">${v}°</text>`).join("")}
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
+  }
+
   function renderCard(d) {
     if (d.mechanism_type === "spur_gear") return renderGearCard(d);
     if (d.mechanism_type === "spring") return renderSpringCard(d);
+    if (d.mechanism_type === "cam") return renderCamCard(d);
     const L = d.lengths, sec = (d.section_mm && d.section_mm.links) || {};
     const rows = [["Krank", "a", "--crank"], ["Biyel", "b", "--coupler"], ["Kol", "c", "--rocker"], ["Sabit", "d", "--ground"]]
       .map(([n, k, c]) => `<tr><td><span class="sw" style="background:var(${c})"></span>${n}</td>

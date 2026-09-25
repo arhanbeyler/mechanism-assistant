@@ -34,9 +34,10 @@ def _schema(props):
 
 
 # ---------------------------------------------------------------- 1) yonlendirici
-ROUTER_SCHEMA = _schema({"kind": {"type": "string", "enum": ["fourbar", "spur_gear", "spring", "unknown"]}})
+ROUTER_SCHEMA = _schema({"kind": {"type": "string", "enum": ["fourbar", "spur_gear", "spring", "cam", "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
+    "'cam': a cam and follower (kam, eksantrik, itici, 'X mm kaldırsın', yükselme/bekleme/dönüş açıları). "
     "'spring': a spring (yay, basma yayı, konik yay). "
     "'spur_gear': gears or a speed reducer (dişli, dişli çifti, redüktör, çevrim oranı, 'X kat yavaşlatsın'). "
     "'fourbar': a linkage / mechanism with links, crank, lever or swinging arm (krank, kol, biyel, dört çubuk, "
@@ -90,14 +91,28 @@ SPRING = (_schema({
     "spring_shape: 'conical' if konik/conical, else 'helical'. spring_taper: small/large diameter ratio only "
     "if given. outer_diameter_max_mm: max outer diameter if given ('dış çapı en fazla 12 mm', 'Ø20 deliğe girsin')."))
 
-MODULE_EXTRACTORS = {"fourbar": FOURBAR, "spur_gear": GEAR, "spring": SPRING}
+CAM = (_schema({
+    "cam_rise_mm": {"type": ["number", "null"]},
+    "rise_deg": {"type": ["number", "null"]},
+    "dwell_top_deg": {"type": ["number", "null"]},
+    "return_deg": {"type": ["number", "null"]},
+    "motion_law": {"type": ["string", "null"], "enum": ["cycloidal", "harmonic", "poly345", None]},
+    "roller_radius_mm": {"type": ["number", "null"]},
+}), COMMON + (
+    "The user wants a disk cam with a translating roller follower. cam_rise_mm: follower lift/stroke "
+    "('20 mm kaldırsın', 'strok 20'). rise_deg: cam angle for the rise ('120 derecede yükselsin'). "
+    "dwell_top_deg: dwell at the top ('60 derece beklesin', 'üstte 60° bekleme'). return_deg: cam angle for the "
+    "return/fall ('120 derecede insin'). motion_law: 'cycloidal' (sikloidal), 'harmonic' (basit harmonik), "
+    "'poly345' (3-4-5 polinom) only if named. roller_radius_mm: roller radius if given."))
+
+MODULE_EXTRACTORS = {"fourbar": FOURBAR, "spur_gear": GEAR, "spring": SPRING, "cam": CAM}
 
 # Tum alanlar (pipeline tek bir sozluk bekler; modulde olmayanlar None)
 ALL_FIELDS = {"mechanism_type": "unknown", "quick_return": False}
 for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
-KIND_TO_TYPE = {"spur_gear": "spur_gear", "spring": "spring"}   # fourbar: cikarici tur secer
+KIND_TO_TYPE = {"spur_gear": "spur_gear", "spring": "spring", "cam": "cam"}   # fourbar: cikarici tur secer
 
 
 def _chat(system, user_text, schema, name):
