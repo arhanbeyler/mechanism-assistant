@@ -166,6 +166,15 @@ class PaletteHTMLHandler(adsk.core.HTMLEventHandler):
             log("panel hata:\n" + traceback.format_exc())
 
 
+class StartupCompletedHandler(adsk.core.ApplicationEventHandler):
+    """Fusion acilisini bitirince paneli ac (erken acilan panel arayuz yuklenirken kayboluyor)."""
+    def notify(self, args):
+        try:
+            show_palette()
+        except Exception:
+            log("acilis paneli hata:\n" + traceback.format_exc())
+
+
 class CommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
     def notify(self, args):
         on_execute = CommandExecuteHandler()
@@ -320,7 +329,12 @@ def run(context):
 
         start_bridge()
         warm_up_llm()
-        show_palette()
+        if app.isStartupComplete:
+            show_palette()            # elle Run'a basildi: hemen ac
+        else:
+            on_startup = StartupCompletedHandler()   # Fusion aciliyor: bitmesini bekle
+            app.startupCompleted.add(on_startup)
+            handlers.append(on_startup)
     except Exception:
         log("run hata:\n" + traceback.format_exc())
         if ui:
