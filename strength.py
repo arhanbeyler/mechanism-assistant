@@ -36,10 +36,10 @@ import math
 # Tipik degerler (3B baski icin %100 doluluk, katmanlar uzuv duzleminde varsayildi).
 # Dogrulanmali: baski yonu ve dolulukla plastiklerin dayanimi belirgin degisir.
 MATERIALS = {
-    "PLA":      {"name": "PLA (3B baskı)",      "sy": 40.0,  "E": 2500.0,   "n": 3.0, "brittle": True},
-    "PETG":     {"name": "PETG (3B baskı)",     "sy": 35.0,  "E": 2000.0,   "n": 3.0, "brittle": True},
-    "aluminum": {"name": "Alüminyum 6061-T6",  "sy": 276.0, "E": 69000.0,  "n": 2.0, "brittle": False},
-    "steel":    {"name": "Çelik S235",          "sy": 235.0, "E": 200000.0, "n": 2.0, "brittle": False},
+    "PLA":      {"name": "PLA (3B baskı)",      "sy": 40.0,  "E": 2500.0,   "nu": 0.36, "n": 3.0, "brittle": True},
+    "PETG":     {"name": "PETG (3B baskı)",     "sy": 35.0,  "E": 2000.0,   "nu": 0.38, "n": 3.0, "brittle": True},
+    "aluminum": {"name": "Alüminyum 6061-T6",  "sy": 276.0, "E": 69000.0,  "nu": 0.33, "n": 2.0, "brittle": False},
+    "steel":    {"name": "Çelik S235",          "sy": 235.0, "E": 200000.0, "nu": 0.30, "n": 2.0, "brittle": False},
 }
 
 DEFLECTION_RATIO = 200     # izin verilen sehim: L / 200

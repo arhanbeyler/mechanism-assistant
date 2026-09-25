@@ -24,6 +24,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B7d. Gerilme yığılması (Kt) ve sehim.** Roark Kt (kırılgan malzemede, eksenel gerilmeye); L/200 sehim sınırı (konsol eğilme / eksenel uzama)
 - [x] **B7e. Fusion FEA ile doğrulama (niteliksel).** Al 6061 kol konsol, 49 N: kökte FEA n = 2–4, el hesabı n ≈ 3.6 ✓. Sim API önizlemede çalışmıyor, çözüm buluta gitti, sonuç sayısal okunamıyor
 - [ ] **B7f. Yerel, otomatik FEA.** gmsh + scikit-fem (tamamen yerel, açık kaynak); sehim/gerilme sayısal karşılaştırma, panelde "FEA ile doğrula"
+- [ ] **B7g. Göbek esnekliği.** FEA: geniş uzuv küçük pimden tutulunca sehim el hesabının 3–4 katı. Mil bağlantılı mafsallarda (O2, O4) göbek/pim çapı kuralı ya da FEA'dan kalibre edilmiş düzeltme
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
 
 ## C. Yeni modüller
@@ -53,3 +54,6 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
   5 kg / PETG örneği: Krank 21×3, Biyel 13×3, Kol 24×3, Sabit 11×4 mm.
 - **Alüminyumda rijitlik belirleyici:** 5 kg örneğinde kolda gerilme kullanımı %57 iken sehim kullanımı %94.
   Metalde parçayı kırılma değil esneme sınırı boyutlandırıyor. PETG'de sehim sınırı kolu 24'ten 29 mm genişliğe çıkardı.
+- **Yerel FEA (gmsh + scikit-fem, P2 tetra) doğrulaması:** Orta kesit gerilmesi el hesabıyla %0.1–5 uyumlu
+  (kiriş teorisi doğrulandı). Sehim ise ideal ankastre varsayımından büyük: Al 9×3 kol +%13, PETG 29×3 kol +%311.
+  Sebep: geniş ve rijit uzuv, küçük (Ø4) delik çevresinde dönüyor (göbek esnekliği). Ağ yakınsaması kontrol edildi.

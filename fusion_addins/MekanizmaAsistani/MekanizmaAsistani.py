@@ -139,6 +139,47 @@ def start_band(Q, req):
     threading.Thread(target=worker, daemon=True).start()
 
 
+def start_fea(params):
+    """Yerel FEA (gmsh + scikit-fem) ile kol ve krank icin el hesabini dogrula.
+    FEA, Fusion'in Python'unda degil bu bilgisayarin normal Python'unda calisir (.local_python)."""
+    import subprocess
+    pipeline = sys.modules.get("pipeline") or reload_modules()[0]
+
+    def status(s):
+        run_on_main(lambda: send_to_palette("status", {"text": s}))
+
+    def worker():
+        try:
+            r = pipeline.design_from_params(**params)
+            st = r.get("strength")
+            if r.get("status") != "ok" or not st:
+                out = {"ok": False, "message": "FEA için önce kontrollerden geçen ve yükü verilmiş bir tasarım gerekli "
+                                              "(Uçtaki yük kaydırıcısını 0'dan büyük yap)."}
+            else:
+                import strength
+                mat = strength.MATERIALS[params.get("material") or "PLA"]
+                req = {"lengths": r["lengths"], "section": r["section_mm"], "load": st["load_N"],
+                       "material": {"E": mat["E"], "nu": mat["nu"]},
+                       "crank_torque": st["input_torque_max_Nmm"]}
+                with open(os.path.join(ROOT, ".local_python"), encoding="utf-8") as fh:
+                    py = fh.read().strip()
+                status("Yerel FEA çalışıyor (ağ oluşturma + çözüm)...")
+                proc = subprocess.run([py, os.path.join(ROOT, "fea_local.py"), "--json"],
+                                      input=json.dumps(req), capture_output=True, text=True,
+                                      timeout=300, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                if proc.returncode != 0:
+                    log("FEA hata:\n" + proc.stderr[-3000:])
+                    out = {"ok": False, "message": "FEA çalışmadı (ayrıntı: output/addin.log)."}
+                else:
+                    out = {"ok": True, "links": json.loads(proc.stdout), "material": mat["name"]}
+        except Exception as e:
+            log("FEA hata:\n" + traceback.format_exc())
+            out = {"ok": False, "message": f"FEA hatası: {e}"}
+        run_on_main(lambda: send_to_palette("fea", out))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
 def start_design(text=None, params=None):
     """Cumleden (LLM ile) ya da kaydirici degerlerinden tasarla ve Fusion'da ciz."""
     pipeline, fourbar = reload_modules()
@@ -267,6 +308,9 @@ class PaletteHTMLHandler(adsk.core.HTMLEventHandler):
             elif html_args.action == "draw":
                 anim["running"] = False           # cizmeden once donmeyi durdur
                 start_design(params=data["params"])
+                html_args.returnData = "started"
+            elif html_args.action == "fea":
+                start_fea(data["params"])
                 html_args.returnData = "started"
             elif html_args.action == "rotate":
                 rotate(data.get("mode", "turn"))

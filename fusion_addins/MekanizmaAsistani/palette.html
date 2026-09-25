@@ -131,6 +131,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       <button class="primary" id="draw" disabled>Fusion'da çiz</button>
       <button class="ghost" id="turn" title="Krankı bir tam tur döndür">⟳ 1 tur</button>
       <button class="ghost" id="loop" title="Sürekli döndür / durdur">▶ Sürekli</button>
+      <button class="ghost" id="fea" title="Kol ve krankı yerel sonlu eleman analiziyle (FEA) doğrula">FEA</button>
     </div>
   </section>
 
@@ -205,6 +206,26 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
 
   $("turn").addEventListener("click", () => ready() && adsk.fusionSendData("rotate", JSON.stringify({ mode: "turn" })));
   $("loop").addEventListener("click", () => ready() && adsk.fusionSendData("rotate", JSON.stringify({ mode: "toggle" })));
+  $("fea").addEventListener("click", () => {
+    if (!ready()) return;
+    $("fea").disabled = true;
+    $("status").textContent = "FEA başlatılıyor...";
+    adsk.fusionSendData("fea", JSON.stringify({ params: params() }));
+  });
+  function showFea(d) {
+    $("fea").disabled = false;
+    $("status").textContent = "";
+    if (!d.ok) { addMsg("ai", d.message, "info"); return; }
+    const lines = Object.entries(d.links).map(([n, r]) =>
+      `${n} (${r.width}×${r.thickness} mm):\n` +
+      `  gerilme (orta kesit): FEA ${r.fea_sigma_mid.toFixed(1)} MPa · el ${r.hand_sigma_mid.toFixed(1)} MPa (${r.err_sigma_pct >= 0 ? "+" : ""}${r.err_sigma_pct.toFixed(1)}%)\n` +
+      `  uç sehimi: FEA ${r.fea_delta.toFixed(3)} mm · el ${r.hand_delta.toFixed(3)} mm (${r.err_delta_pct >= 0 ? "+" : ""}${r.err_delta_pct.toFixed(0)}%)`);
+    const worst = Math.max(...Object.values(d.links).map((r) => r.err_delta_pct));
+    const note = worst > 25
+      ? "\n⚠ Sehim el hesabından belirgin büyük: uzuv, küçük pim deliği çevresinde esniyor (göbek esnekliği). Pim/göbek büyütmeyi düşün."
+      : "\n✓ El hesabı ile FEA uyumlu.";
+    addMsg("ai", `Yerel FEA (${d.material}, bu bilgisayarda çözüldü):\n` + lines.join("\n") + note, worst > 25 ? "info" : "ok");
+  }
   function setAnim(d) {
     const looping = d.running && d.mode === "toggle";
     $("loop").classList.toggle("on", looping);
@@ -244,6 +265,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
         if (action === "preview" && d.req === req) showPreview(d);
         if (action === "band" && d.req === bandReq) paintBand(d.band);
         if (action === "anim") setAnim(d);
+        if (action === "fea") showFea(d);
       } catch (e) { console.log(e); }
       return "OK";
     }
