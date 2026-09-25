@@ -150,6 +150,8 @@ def start_fea(params):
 
     def worker():
         try:
+            if params.get("kind", "fourbar") != "fourbar":
+                raise ValueError("FEA doğrulaması şimdilik sadece dört çubuk uzuvları için var.")
             r = pipeline.design_from_params(**params)
             st = r.get("strength")
             if r.get("status") != "ok" or not st:
@@ -172,6 +174,8 @@ def start_fea(params):
                     out = {"ok": False, "message": "FEA çalışmadı (ayrıntı: output/addin.log)."}
                 else:
                     out = {"ok": True, "links": json.loads(proc.stdout), "material": mat["name"]}
+        except ValueError as e:
+            out = {"ok": False, "message": str(e)}
         except Exception as e:
             log("FEA hata:\n" + traceback.format_exc())
             out = {"ok": False, "message": f"FEA hatası: {e}"}
@@ -231,7 +235,7 @@ def crank_motion():
     if not design:
         return None
     for j in design.rootComponent.asBuiltJoints:
-        if j.name.startswith("Sabit-Krank"):
+        if j.name.startswith("Sabit-Krank") or j.name == "Sabit-Pinyon":   # dort cubuk ya da disli girisi
             return adsk.fusion.RevoluteJointMotion.cast(j.jointMotion)
     return None
 
@@ -348,7 +352,8 @@ class PaletteHTMLHandler(adsk.core.HTMLEventHandler):
                 rotate(data.get("mode", "turn"))
                 html_args.returnData = "ok"
             elif html_args.action == "ready":
-                html_args.returnData = "ok"
+                pipeline, _ = reload_modules()
+                html_args.returnData = json.dumps(pipeline.MODULES, ensure_ascii=False)   # C0
         except Exception:
             log("panel hata:\n" + traceback.format_exc())
 

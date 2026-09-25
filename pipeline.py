@@ -16,6 +16,21 @@ import strength
 from llm_extract import extract_spec
 
 
+# C0: moduller kendi kaydiricilarini tanimlar; panel bunlardan otomatik kurar.
+# (Dort cubuk panelde ozel kaydiricilarla gelir: renkli salinim bolgesi, giris hareketi vb.)
+MODULES = {
+    "spur_gear": {
+        "title": "Düz dişli",
+        "params": [
+            {"key": "gear_ratio", "label": "Çevrim oranı", "unit": "", "min": 1, "max": 8, "step": 0.1, "default": 3},
+            {"key": "torque_Nm", "label": "Giriş torku", "unit": "N·m", "min": 0.1, "max": 50, "step": 0.1, "default": 2},
+            {"key": "speed_rpm", "label": "Giriş devri", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
+             "zero_label": "belirtilmedi"},
+        ],
+    },
+}
+
+
 def max_feasible_swing(a, psi_start):
     """Istenen salinim saglanamiyorsa, tasarim hedefini (45-135, kompakt) gecen en buyuk salinim."""
     for psi in range(int(psi_start) - 1, 0, -1):

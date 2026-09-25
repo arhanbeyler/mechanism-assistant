@@ -107,29 +107,35 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   </section>
 
   <section class="card knobs">
-    <h3>Ayarlar <span style="font-weight:400;color:var(--muted)">(anında hesaplanır)</span></h3>
     <div class="row">
-      <div class="knob"><label>Giriş kolu <b id="v-a"></b></label>
-        <input type="range" id="k-a" min="5" max="200" step="1" value="30"></div>
-      <div class="knob"><label title="Sağ uç: tam tur (krank-kol). Sola çekince giriş kolu sınırlı açıda döner.">Giriş hareketi <b id="v-in"></b></label>
-        <input type="range" id="k-in" min="10" max="360" step="5" value="360"></div>
-    </div>
-    <div class="knob"><label id="l-psi">Salınım açısı <b id="v-psi"></b></label>
-      <input type="range" id="k-psi" min="5" max="175" step="1" value="60">
-      <div class="legend"><span><i style="background:var(--ok)"></i>uygun</span>
-        <span><i style="background:var(--warn)"></i>sınırda / büyük</span>
-        <span><i style="background:var(--bad)"></i>olmaz</span></div></div>
-    <div class="row">
-      <div class="knob"><label title="Zaman oranı: ileri / geri strok süresi">Q <b id="v-q"></b></label>
-        <input type="range" id="k-q" min="1" max="2" step="0.05" value="1"></div>
+      <div class="knob"><label>Tür</label>
+        <select id="k-kind"><option value="fourbar">Dört çubuk</option></select></div>
       <div class="knob"><label>Malzeme</label>
         <select id="k-mat">
           <option value="PLA">PLA (3B baskı)</option><option value="PETG">PETG (3B baskı)</option>
           <option value="aluminum">Alüminyum 6061-T6</option><option value="steel">Çelik S235</option>
         </select></div>
     </div>
-    <div class="knob"><label>Uçtaki yük <b id="v-f"></b></label>
-      <input type="range" id="k-f" min="0" max="500" step="1" value="0"></div>
+    <div id="fb-knobs">
+      <div class="row">
+        <div class="knob"><label>Giriş kolu <b id="v-a"></b></label>
+          <input type="range" id="k-a" min="5" max="200" step="1" value="30"></div>
+        <div class="knob"><label title="Sağ uç: tam tur (krank-kol). Sola çekince giriş kolu sınırlı açıda döner.">Giriş hareketi <b id="v-in"></b></label>
+          <input type="range" id="k-in" min="10" max="360" step="5" value="360"></div>
+      </div>
+      <div class="knob"><label id="l-psi">Salınım açısı <b id="v-psi"></b></label>
+        <input type="range" id="k-psi" min="5" max="175" step="1" value="60">
+        <div class="legend"><span><i style="background:var(--ok)"></i>uygun</span>
+          <span><i style="background:var(--warn)"></i>sınırda / büyük</span>
+          <span><i style="background:var(--bad)"></i>olmaz</span></div></div>
+      <div class="row">
+        <div class="knob"><label title="Zaman oranı: ileri / geri strok süresi">Q <b id="v-q"></b></label>
+          <input type="range" id="k-q" min="1" max="2" step="0.05" value="1"></div>
+        <div class="knob"><label>Uçtaki yük <b id="v-f"></b></label>
+          <input type="range" id="k-f" min="0" max="500" step="1" value="0"></div>
+      </div>
+    </div>
+    <div id="gen-knobs" hidden></div>
     <div class="verdict" id="verdict"></div>
     <div class="actions">
       <button class="primary" id="draw" disabled>Fusion'da çiz</button>
@@ -175,13 +181,57 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
 
   // ------------------------------------------------------------ kaydiricilar
   const limited = () => +$("k-in").value < 360;      // sinirli acili giris (B9)
+  let MODULES = {};                                   // C0: eklentiden gelir (pipeline.MODULES)
+  const kind = () => $("k-kind").value;
+  const isFourbar = () => kind() === "fourbar";
+
+  function buildModules(mods) {                       // Tur seciciye modulleri ekle
+    MODULES = mods || {};
+    for (const [key, m] of Object.entries(MODULES)) {
+      const o = document.createElement("option");
+      o.value = key; o.textContent = m.title;
+      $("k-kind").appendChild(o);
+    }
+  }
+  function buildGenKnobs() {                          // secilen modulun kaydiricilari (tanimdan)
+    const m = MODULES[kind()];
+    $("gen-knobs").innerHTML = m.params.map((p) =>
+      `<div class="knob"><label>${p.label} <b id="v-${p.key}"></b></label>
+       <input type="range" id="k-${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.default}"></div>`).join("");
+    m.params.forEach((p) => $("k-" + p.key).addEventListener("input", schedulePreview));
+  }
+  function applyKind() {
+    $("fb-knobs").hidden = !isFourbar();
+    $("gen-knobs").hidden = isFourbar();
+    if (!isFourbar()) buildGenKnobs();
+    $("fea").disabled = !isFourbar();                 // FEA simdilik dort cubuk uzuvlari icin
+    lastQ = null;
+    schedulePreview();
+  }
+  $("k-kind").addEventListener("change", applyKind);
+
   function params() {
+    if (!isFourbar()) {
+      const out = { kind: kind(), material: $("k-mat").value };
+      for (const p of MODULES[kind()].params) {
+        const v = +$("k-" + p.key).value;
+        out[p.key] = (p.zero_label && v === 0) ? null : v;
+      }
+      return out;
+    }
     const F = +$("k-f").value;
-    return { crank_length_mm: +$("k-a").value, output_swing_deg: +$("k-psi").value,
+    return { kind: "fourbar", crank_length_mm: +$("k-a").value, output_swing_deg: +$("k-psi").value,
              time_ratio: limited() ? 1 : +$("k-q").value, max_load_N: F > 0 ? F : null,
              material: $("k-mat").value, input_swing_deg: +$("k-in").value };
   }
   function labels() {
+    if (!isFourbar()) {
+      for (const p of MODULES[kind()].params) {
+        const v = +$("k-" + p.key).value;
+        $("v-" + p.key).textContent = (p.zero_label && v === 0) ? p.zero_label : `${v}${p.unit ? " " + p.unit : ""}`;
+      }
+      return;
+    }
     const p = params();
     $("v-a").textContent = p.crank_length_mm + " mm";
     $("v-in").textContent = limited() ? p.input_swing_deg + "°" : "tam tur";
@@ -201,6 +251,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (!ready()) return;
     req += 1;
     adsk.fusionSendData("preview", JSON.stringify({ req, params: params() }));
+    if (!isFourbar()) return;
     if (limited()) {                     // renkli bolge sadece tam tur (krank-kol) icin hesaplaniyor
       lastQ = null;
       $("k-psi").style.background = "var(--line)";
@@ -251,6 +302,17 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
 
   function setKnobs(d) {                 // cumleden gelen tasarimla kaydiricilari doldur
     const s = d.spec || {};
+    if (s.material) $("k-mat").value = s.material;
+    if (MODULES[d.mechanism_type]) {     // modul (C0): tanimli parametreler
+      $("k-kind").value = d.mechanism_type;
+      applyKind();
+      for (const p of MODULES[d.mechanism_type].params)
+        if (s[p.key] != null) $("k-" + p.key).value = s[p.key];
+      labels();
+      requestPreview();
+      return;
+    }
+    if ($("k-kind").value !== "fourbar") { $("k-kind").value = "fourbar"; applyKind(); }
     if (s.crank_length_mm) $("k-a").value = Math.round(s.crank_length_mm);
     if (s.output_swing_deg) $("k-psi").value = Math.round(s.output_swing_deg);
     $("k-q").value = (d.target && d.target.Q) || 1;
@@ -296,7 +358,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (d.status === "ok" && d.drawn) text += "\nMekanizma Fusion'da çizildi.";
     if (d.status === "failed") text += "\nBu tasarım çizilmedi. Kaydırıcılarla uygun değeri arayabilirsin.";
     addMsg("ai", text, tone);
-    if (d.lengths) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -305,13 +367,49 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // tamami: fareyle ustune gelince
-    if (d.lengths) renderCard(d);
+    if (d.lengths || d.gear) renderCard(d);
   }
 
   // ------------------------------------------------------------ sonuc karti
   const f = (x, n = 1) => Number(x).toFixed(n);
+  const checksHtml = (list) => (list || []).map((c) =>
+    `<div class="check"><span class="i ${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"}</span>
+     <span>${c.name}<br><span class="d">${c.detail}</span></span></div>`).join("");
+
+  function renderGearCard(d) {               // C9: disli cifti
+    const g = d.gear;
+    if (!g) { $("result").innerHTML = `<h3>Kontroller</h3>${checksHtml(d.checks)}`; return; }
+    const rows = [["Modül", f(g.module, 2)], ["Diş sayıları", `${g.z1} / ${g.z2}`], ["Oran", f(g.ratio, 3)],
+                  ["Diş genişliği", f(g.face_width) + " mm"], ["Eksen mesafesi", f(g.center_distance) + " mm"],
+                  ["Miller (çelik)", `Ø${f(g.bore1, 0)} / Ø${f(g.bore2, 0)} mm`]]
+      .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Dişli çifti</h3><table>${rows}</table></div>
+        <div class="col"><h3>Kontroller</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Görünüm</h3>${gearSvg(g)}</div>
+      </div>`;
+  }
+
+  function gearSvg(g) {                      // hatve daireleri + dis uclari (olcekli)
+    const W = 220, H = 150, r1 = g.d1 / 2, r2 = g.d2 / 2, m = g.module;
+    const s = Math.min((W - 16) / (g.center_distance + r1 + r2 + 2 * m), (H - 16) / (2 * (r2 + m)));
+    const cx1 = 8 + (r1 + m) * s, cx2 = cx1 + g.center_distance * s, cy = H / 2;
+    const teeth = (cx, r, z, phase, col) => Array.from({ length: z }, (_, k) => {
+      const a = phase + 2 * Math.PI * k / z;
+      return `<line x1="${cx + (r - 1.25 * m) * s * Math.cos(a)}" y1="${cy + (r - 1.25 * m) * s * Math.sin(a)}"
+        x2="${cx + (r + m) * s * Math.cos(a)}" y2="${cy + (r + m) * s * Math.sin(a)}" stroke="${col}" stroke-width="${Math.max(1, m * s * 1.2)}"/>`;
+    }).join("");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <circle cx="${cx1}" cy="${cy}" r="${r1 * s}" fill="none" stroke="var(--crank)" stroke-dasharray="3 2"/>
+      <circle cx="${cx2}" cy="${cy}" r="${r2 * s}" fill="none" stroke="var(--rocker)" stroke-dasharray="3 2"/>
+      ${teeth(cx1, r1, g.z1, 0, "var(--crank)")}${teeth(cx2, r2, g.z2, g.z2 % 2 === 0 ? Math.PI / g.z2 : 0, "var(--rocker)")}
+      <circle cx="${cx1}" cy="${cy}" r="${g.bore1 / 2 * s}" fill="var(--panel)" stroke="var(--text)"/>
+      <circle cx="${cx2}" cy="${cy}" r="${g.bore2 / 2 * s}" fill="var(--panel)" stroke="var(--text)"/></svg>`;
+  }
 
   function renderCard(d) {
+    if (d.mechanism_type === "spur_gear") return renderGearCard(d);
     const L = d.lengths, sec = (d.section_mm && d.section_mm.links) || {};
     const rows = [["Krank", "a", "--crank"], ["Biyel", "b", "--coupler"], ["Kol", "c", "--rocker"], ["Sabit", "d", "--ground"]]
       .map(([n, k, c]) => `<tr><td><span class="sw" style="background:var(${c})"></span>${n}</td>
@@ -369,7 +467,13 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   // ------------------------------------------------------------ baslangic
   labels();
   (function waitForAdsk() {
-    if (ready()) { adsk.fusionSendData("ready", ""); requestPreview(); }
+    if (ready()) {
+      // C0: eklenti modul tanimlarini dondurur (pipeline.MODULES) -> Tur secicisi dolar
+      Promise.resolve(adsk.fusionSendData("ready", "")).then((r) => {
+        try { buildModules(JSON.parse(r)); } catch (e) { console.log("moduller alinamadi", e); }
+      });
+      requestPreview();
+    }
     else setTimeout(waitForAdsk, 100);
   })();
 </script>

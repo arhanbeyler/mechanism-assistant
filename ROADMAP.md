@@ -32,8 +32,8 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B9. Tam tur atmayan dört çubuklar.** Freudenstein fonksiyon üreteci (3 Chebyshev hassas noktası, θ₀/φ₀ taraması, yapısal hata ≤ 1°); mukavemet + çakışmadan geçen ilk aday; LLM "rocker_rocker"; panelde "Giriş hareketi"; Fusion'da mafsal sınırı ve ileri-geri salınım
 
 ## C. Yeni modüller
-- [ ] **C0. Modüle özel kaydırıcılar.** Her modül kendi parametrelerini (ad, birim, aralık) tanımlar, panel kaydırıcıları otomatik kurar (yay seçiliyse yay kaydırıcıları). İlk yeni modülle birlikte
-- [ ] **C9. Düz dişli.** Dört çubuk + dişli kademesi ile büyük salınım
+- [x] **C0. Modüle özel kaydırıcılar.** pipeline.MODULES (ad, birim, aralık); panel "Tür" seçicisi ve kaydırıcıları tanımdan kuruyor; sohbetten gelen tasarım doğru modüle geçiyor
+- [x] **C9. Düz dişli.** Lewis eğilme, kavrama oranı, alttan kesme, Hertz (bilgi), çelik mil ve göbek; Fusion'da evolvent dişler, dairesel çoklama, motion link (diş kesişimi 0, oran doğrulandı)
 - [ ] **C10. Helis ve konik yay**
 - [ ] **C11. Mil, kam**
 
@@ -72,3 +72,5 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - **Fonksiyon üreteci (Freudenstein):** 40 mm giriş kolu, 60° giriş → 90° çıkış: simülasyon 89.0°, Fusion çözücüsü 89.4°
   (yapısal hata < 1°, hassas noktalarda sıfır). Çıkan mekanizmalar çoğunlukla Grashof değil (üçlü kol): giriş tam tur atmıyor.
   "En kompakt" seçimi göbeklerin sığmayacağı kısa uzuvlar üretti; seçim ölçütü "dengeli oran" yapıldı.
+- **Dişli doğrulaması (Fusion):** Oran 3 / 2 N·m / PLA → m = 2, z = 18/54, b = 16 mm. Beş dönüş konumunda pinyon ile çark
+  arasındaki kesişim hacmi 0 mm³ (evolvent fazı doğru); pinyon 90° → çark −30° (oran ve yön doğru).
