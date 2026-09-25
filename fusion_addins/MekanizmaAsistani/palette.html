@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Mekanizma Asistanı</title>
+<style>
+  :root {
+    --bg: #1f232b; --panel: #272c36; --line: #3a404c; --text: #e6e8ec; --muted: #9aa1ad;
+    --accent: #3d8bfd; --ok: #3fb950; --bad: #f85149; --warn: #d29922;
+    --crank: #f0625d; --coupler: #4a9eff; --rocker: #3fb950; --ground: #9aa1ad;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f5f7; --panel: #ffffff; --line: #d7dbe2; --text: #1d2129; --muted: #5f6673; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif; }
+  .wrap { display: flex; height: 100%; gap: 10px; padding: 10px; }
+
+  /* sohbet */
+  .chat { flex: 1 1 42%; display: flex; flex-direction: column; min-width: 0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .log { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 85%; padding: 7px 10px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
+  .msg.ai { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
+  .msg.ai.ok { border-left: 3px solid var(--ok); }
+  .msg.ai.bad { border-left: 3px solid var(--bad); }
+  .msg.ai.info { border-left: 3px solid var(--warn); }
+  .status { color: var(--muted); font-style: italic; padding: 0 12px 6px; min-height: 20px; }
+  .examples { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 12px 8px; }
+  .chip { border: 1px solid var(--line); background: transparent; color: var(--muted);
+    border-radius: 12px; padding: 2px 10px; cursor: pointer; font: inherit; font-size: 12px; }
+  .chip:hover { color: var(--text); border-color: var(--accent); }
+  .input { display: flex; gap: 8px; padding: 8px; border-top: 1px solid var(--line); }
+  textarea { flex: 1; resize: none; height: 38px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  button.send { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: 0 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.send:disabled { opacity: .5; cursor: default; }
+
+  /* sonuc karti */
+  .result { flex: 1 1 58%; min-width: 0; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; overflow-y: auto; }
+  .result h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .empty { color: var(--muted); height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; }
+  .grid { display: flex; gap: 14px; }
+  .col { flex: 1 1 0; min-width: 0; }
+  .col svg { max-height: 190px; }
+  /* dar panel (ornegin yana yaslandiginda): alt alta */
+  @media (max-width: 700px) { .wrap { flex-direction: column; } .grid { flex-wrap: wrap; } .col { flex-basis: 180px; } }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  td { padding: 2px 4px; border-bottom: 1px solid var(--line); }
+  td:last-child { text-align: right; }
+  .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .check { display: flex; gap: 6px; padding: 2px 0; }
+  .check .i { width: 14px; font-weight: 700; }
+  .check .ok { color: var(--ok); } .check .bad { color: var(--bad); }
+  .check .d { color: var(--muted); }
+  svg { width: 100%; height: auto; display: block; }
+  .axis { stroke: var(--line); stroke-width: 1; }
+  .lbl { fill: var(--muted); font-size: 9px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="chat">
+    <div class="log" id="log">
+      <div class="msg ai">Merhaba! İstediğin mekanizmayı tarif et. Örneğin krank uzunluğu ve çıkış kolunun salınım açısı.
+Hesaplar ve doğrulama bilgisayarında, yerel yapay zekâ ile yapılır.</div>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="examples">
+      <button class="chip">4 cm krank, 50° salınım, PLA</button>
+      <button class="chip">30 mm krank, 60 derece sallansın</button>
+      <button class="chip">25 mm krank, 110° salınım</button>
+    </div>
+    <div class="input">
+      <textarea id="text" placeholder="Mekanizmayı tarif et... (Enter: gönder, Shift+Enter: yeni satır)"></textarea>
+      <button class="send" id="send">Gönder</button>
+    </div>
+  </section>
+
+  <section class="result" id="result">
+    <div class="empty">Tasarım sonucu burada görünecek:<br>ölçüler, kontroller, mekanizma ve iletim açısı grafiği.</div>
+  </section>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let busy = false;
+
+  function addMsg(kind, text, tone) {
+    const el = document.createElement("div");
+    el.className = "msg " + kind + (tone ? " " + tone : "");
+    el.textContent = text;
+    $("log").appendChild(el);
+    $("log").scrollTop = $("log").scrollHeight;
+  }
+
+  function setBusy(b, statusText) {
+    busy = b;
+    $("send").disabled = b;
+    $("status").textContent = statusText || "";
+  }
+
+  function send() {
+    const text = $("text").value.trim();
+    if (!text || busy) return;
+    if (!(window.adsk && adsk.fusionSendData)) {
+      addMsg("ai", "Fusion bağlantısı henüz hazır değil, bir saniye sonra tekrar dene.", "info");
+      return;
+    }
+    addMsg("user", text);
+    $("text").value = "";
+    setBusy(true, "Gönderiliyor...");
+    adsk.fusionSendData("design", JSON.stringify({ text }));
+  }
+
+  $("send").addEventListener("click", send);
+  $("text").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  document.querySelectorAll(".chip").forEach((c) =>
+    c.addEventListener("click", () => { $("text").value = c.textContent; $("text").focus(); }));
+
+  // Fusion -> panel
+  window.fusionJavaScriptHandler = {
+    handle: function (action, data) {
+      try {
+        const d = JSON.parse(data);
+        if (action === "status") $("status").textContent = d.text;
+        if (action === "result") showResult(d);
+      } catch (e) { console.log(e); }
+      return "OK";
+    }
+  };
+
+  function showResult(d) {
+    setBusy(false);
+    const tone = { ok: "ok", failed: "bad", error: "bad" }[d.status] || "info";
+    let text = d.message;
+    if (d.status === "ok") text += d.drawn ? "\nMekanizma Fusion'da çizildi. Krankı sürükleyerek deneyebilirsin." : "";
+    if (d.status === "failed") text += "\nBu tasarım çizilmedi.";
+    addMsg("ai", text, tone);
+    if (d.lengths) renderCard(d);
+  }
+
+  function f(x, n = 2) { return Number(x).toFixed(n); }
+
+  function renderCard(d) {
+    const L = d.lengths;
+    const rows = [["Krank a", L.a, "--crank"], ["Biyel b", L.b, "--coupler"],
+                  ["Kol c", L.c, "--rocker"], ["Sabit d", L.d, "--ground"]]
+      .map(([n, v, c]) => `<tr><td><span class="sw" style="background:var(${c})"></span>${n}</td><td>${f(v)} mm</td></tr>`).join("");
+    const checks = d.checks.map((c) =>
+      `<div class="check"><span class="i ${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"}</span>
+       <span>${c.name}<br><span class="d">${c.detail}</span></span></div>`).join("");
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Ölçüler</h3><table>${rows}</table>
+          <h3 style="margin-top:10px">Kontroller</h3>${checks}</div>
+        <div class="col"><h3>Mekanizma</h3>${mechSvg(d.fusion.points_mm)}</div>
+        <div class="col"><h3>İletim açısı μ</h3>${muSvg(d.mu_curve)}</div>
+      </div>`;
+  }
+
+  function mechSvg(p) {
+    const pts = [p.O2, p.O4, p.A, p.B];
+    const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const W = 220, H = 150, pad = 14;
+    const s = Math.min((W - 2 * pad) / (maxX - minX || 1), (H - 2 * pad) / (maxY - minY || 1));
+    const X = (q) => pad + (q[0] - minX) * s, Y = (q) => H - pad - (q[1] - minY) * s;
+    const seg = (a, b, c, dash) =>
+      `<line x1="${X(a)}" y1="${Y(a)}" x2="${X(b)}" y2="${Y(b)}" stroke="var(${c})" stroke-width="${dash ? 1.5 : 4}"
+        stroke-linecap="round" ${dash ? 'stroke-dasharray="4 3"' : ""}/>`;
+    const dot = (q) => `<circle cx="${X(q)}" cy="${Y(q)}" r="3.5" fill="var(--panel)" stroke="var(--text)" stroke-width="1.5"/>`;
+    return `<svg viewBox="0 0 ${W} ${H}">
+      ${seg(p.O2, p.O4, "--ground", true)}${seg(p.O2, p.A, "--crank")}${seg(p.A, p.B, "--coupler")}${seg(p.O4, p.B, "--rocker")}
+      ${[p.O2, p.O4, p.A, p.B].map(dot).join("")}
+      <text class="lbl" x="${X(p.O2) + 6}" y="${Y(p.O2) + 12}">O2</text>
+      <text class="lbl" x="${X(p.O4) + 6}" y="${Y(p.O4) + 12}">O4</text></svg>`;
+  }
+
+  function muSvg(curve) {
+    const W = 220, H = 150, l = 26, r = 6, t = 8, b = 20;
+    const X = (th) => l + th / 360 * (W - l - r), Y = (mu) => t + (180 - mu) / 180 * (H - t - b);
+    const line = curve.map(([th, mu]) => `${X(th).toFixed(1)},${Y(mu).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <rect x="${X(0)}" y="${Y(140)}" width="${X(360) - X(0)}" height="${Y(40) - Y(140)}" fill="var(--ok)" opacity=".12"/>
+      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(360)}" y2="${Y(0)}"/>
+      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(180)}"/>
+      ${[40, 90, 140].map((v) => `<text class="lbl" x="${l - 4}" y="${Y(v) + 3}" text-anchor="end">${v}°</text>`).join("")}
+      ${[0, 180, 360].map((v) => `<text class="lbl" x="${X(v)}" y="${H - 6}" text-anchor="middle">${v}°</text>`).join("")}
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
+  }
+
+  // Fusion baglantisi hazir olunca eklentiye haber ver
+  (function waitForAdsk() {
+    if (window.adsk && adsk.fusionSendData) adsk.fusionSendData("ready", "");
+    else setTimeout(waitForAdsk, 100);
+  })();
+</script>
+</body>
+</html>

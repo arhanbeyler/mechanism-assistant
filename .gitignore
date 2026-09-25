@@ -4,3 +4,6 @@ __pycache__/
 
 # Uretilen ciktilar (her calistirmada yeniden olusur)
 output/
+
+# Fusion koprusu gizli anahtari
+.bridge_token

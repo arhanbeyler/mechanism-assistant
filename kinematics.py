@@ -263,16 +263,11 @@ def report(m, frames, psi_target):
     return ok and mu_ok
 
 
-def export_json(m, frames, passed, path=None):
-    """Fusion script'inin okuyacagi dosya: uzuv boylari + baslangic konumu (theta=0)."""
-    import json
-    import os
-
-    if path is None:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output", "mechanism.json")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    f0 = frames[0]
-    data = {
+def to_fusion_dict(m, frames, passed):
+    """Fusion cizicisinin kullandigi veri: uzuv boylari + baslangic konumu.
+    Baslangic: uzanmis konumdan 45 derece ileri (tam dogrusal konum gorselde anlasilmiyor)."""
+    f0 = frames[len(frames) // 8]
+    return {
         "type": "crank_rocker",
         "passed_checks": passed,
         "lengths_mm": {k: round(m[k], 3) for k in ("a", "b", "c", "d")},
@@ -283,6 +278,17 @@ def export_json(m, frames, passed, path=None):
             "B": [round(float(v), 3) for v in f0["B"]],
         },
     }
+
+
+def export_json(m, frames, passed, path=None):
+    """Fusion script'inin okuyacagi dosya (output/mechanism.json)."""
+    import json
+    import os
+
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output", "mechanism.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    data = to_fusion_dict(m, frames, passed)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2)
     print(f"  Kaydedildi: {path}")
