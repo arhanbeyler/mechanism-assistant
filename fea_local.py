@@ -143,13 +143,20 @@ def verify_design(lengths, section, load, material, crank_torque=None):
     cases = {"Kol": (lengths["c"], load)}
     if crank_torque:
         cases["Krank"] = (lengths["a"], crank_torque / lengths["a"])   # uctaki dik kuvvet
+    from strength import HUB_C
     for name, (L, F) in cases.items():
         s = section["links"][name]
-        r = compare(L, s["width"], s["thickness"], section["hole"], F, material["E"], material["nu"])
-        out[name] = {"L": L, "F": F, "width": s["width"], "thickness": s["thickness"],
-                     "fea_delta": r["fea"]["tip_delta"], "hand_delta": r["hand"]["delta"],
+        d = section["hole"]
+        r = compare(L, s["width"], s["thickness"], d, F, material["E"], material["nu"])
+        # Tasarim modeli (strength.py ile ayni): egilme + kayma + gobek donmesi
+        d_hub = F * L ** 2 / (HUB_C * material["E"] * s["thickness"] * (d / 2) ** 2)
+        model = r["hand"]["delta"] + d_hub
+        out[name] = {"L": L, "F": F, "width": s["width"], "thickness": s["thickness"], "hole": d,
+                     "fea_delta": r["fea"]["tip_delta"], "hand_delta": model,
+                     "beam_only_delta": r["hand"]["delta"],
                      "fea_sigma_mid": r["fea"]["sigma_mid"], "hand_sigma_mid": r["hand"]["sigma_mid"],
-                     "err_delta_pct": r["err_delta_pct"], "err_sigma_pct": r["err_sigma_pct"],
+                     "err_delta_pct": 100 * (r["fea"]["tip_delta"] - model) / model,
+                     "err_sigma_pct": r["err_sigma_pct"],
                      "vm_max_far": r["fea"]["vm_max_far"], "dofs": r["fea"]["dofs"]}
     return out
 
