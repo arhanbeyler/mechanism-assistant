@@ -20,7 +20,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B6. LLM şemasını sıkılaştırmak.** Gereksiz "eksik bilgi" uyarılarını kesmek
 - [x] **B7. Mukavemet.** Yük ve malzemeye göre kesit (burkulma, net kesit, eğilme, pim kayma/ezilme), emniyet katsayısı, tahrik torku
 - [x] **B7b. Uzuv başına ayrı kesit.** Ortak pim çapı, uzuv başına genişlik/kalınlık; tek kesite göre %32 daha az malzeme
-- [ ] **B7c. Parametre kaydırıcıları.** Panelde kaydırıcılarla değerleri değiştirip farkı anında görmek
+- [x] **B7c. Parametre kaydırıcıları.** Panelde anında hesaplanan kaydırıcılar, salınımda uygun bölge renkleri; Fusion'da "1 tur" ve sürekli döndürme
 - [ ] **B7d. Gerilme yığılması (Kt) ve sehim.** Delik kenarında tepe gerilme (PLA kırılgan, yorulma); uzuvların esnemesi
 - [ ] **B7e. Fusion FEA ile doğrulama.** Static Stress sonucu el hesabıyla karşılaştırılır (rapor için)
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
