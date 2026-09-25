@@ -19,7 +19,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B5. Q'yu cümleye bağlamak.** "Hızlı dönüşlü olsun" dendiğinde anlasın
 - [x] **B6. LLM şemasını sıkılaştırmak.** Gereksiz "eksik bilgi" uyarılarını kesmek
 - [x] **B7. Mukavemet.** Yük ve malzemeye göre kesit (burkulma, net kesit, eğilme, pim kayma/ezilme), emniyet katsayısı, tahrik torku
-- [ ] **B7b. Uzuv başına ayrı kesit.** Şu an tek kesit tüm uzuvlarda; kısa krank gereksiz iri çıkıyor
+- [x] **B7b. Uzuv başına ayrı kesit.** Ortak pim çapı, uzuv başına genişlik/kalınlık; tek kesite göre %32 daha az malzeme
 - [ ] **B7c. Parametre kaydırıcıları.** Panelde kaydırıcılarla değerleri değiştirip farkı anında görmek
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
 
@@ -44,3 +44,6 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
   Fusion'ın montaj çözücüsü (krank mafsalı köprüyle döndürüldü, 54.99°) aynı sonucu veriyor.
 - **Biyel kuvveti F_AB = F / sin μ:** İletim açısı düştükçe biyel ve pim yükü artıyor (μ = 45° → 1.41F).
   Mukavemet hesabı, iletim açısı kontrolünün neden gerekli olduğunu sayısal olarak gösteriyor.
+- **Yanlış sezgi, doğru motor:** "Kısa krank daha küçük kesit almalı" varsayımı yanlış çıktı. Krank tahrik torkuyla
+  eğilmeye çalışıyor (genişlik ister), sabit uzuv ise sadece eksenel yük taşıyor (burkulma, kalınlık ister).
+  5 kg / PETG örneği: Krank 21×3, Biyel 13×3, Kol 24×3, Sabit 11×4 mm.

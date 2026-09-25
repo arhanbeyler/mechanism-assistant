@@ -10,14 +10,17 @@ Yuk modeli (yari-statik, atalet ihmal):
     Kolun O4 pimi: F_AB'nin kola dik bileseni F'yi dengeler, kalan
     eksenel bilesen F_AB*|cos mu| <= F_AB. Tum pimler en fazla F_AB tasir.
 
-Kontroller (n: emniyet katsayisi, kullanim orani <= 1 olmali):
-    Burkulma (her uzuv, mafsalli-mafsalli, zayif eksen): F_AB * n <= pi^2 E I_min / L^2
-    Biyel net kesit:   F_AB / ((w-d) t)                    <= sy / n
-    Krank:             M_krank / S_net + F_AB / A_net      <= sy / n
-    Kol:               F c / S_net + F_AB / A_net          <= sy / n
-    Pim kaymasi (tek tesirli): 4 F_AB / (pi d^2)           <= 0.5 sy / n  (Tresca)
-    Pim ezilmesi:      F_AB / (d t)                        <= sy / n
-Kesit butun uzuvlarda ayni (ayni plaka kalinligi, ayni pimler: uretimi kolay).
+Kontroller (n: emniyet katsayisi, kullanim orani <= 1 olmali), her uzuv icin:
+    Burkulma (mafsalli-mafsalli, zayif eksen): F_AB * n <= pi^2 E I_min / L^2
+    Net kesit (eksenel):   F_AB / ((w-d) t)                   <= sy / n
+    Krank ek olarak:       M_krank / S_net + F_AB / A_net     <= sy / n
+    Kol ek olarak:         F c / S_net + F_AB / A_net         <= sy / n
+    Pim ezilmesi:          F_AB / (d t)                        <= sy / n
+Pim (tum mafsallarda ayni cap):
+    Kayma (tek tesirli):   4 F_AB / (pi d^2)                   <= 0.5 sy / n  (Tresca)
+
+Boyutlandirma: pim capi ortak; her uzvun genislik ve kalinligi ayri secilir.
+Hedef: toplam hacim (sum w * t * L) en kucuk.
 """
 
 import math
@@ -31,7 +34,11 @@ MATERIALS = {
     "steel":    {"name": "Çelik S235",          "sy": 235.0, "E": 200000.0, "n": 2.0},
 }
 
-DEFAULT_SECTION = {"width": 10.0, "thickness": 4.0, "hole": 4.0}  # yuk verilmediginde
+LINK_KEYS = {"Krank": "a", "Biyel": "b", "Kol": "c", "Sabit": "d"}
+
+# Yuk verilmediginde kullanilan kesit
+DEFAULT_SECTION = {"hole": 4.0,
+                   "links": {name: {"width": 10.0, "thickness": 4.0} for name in LINK_KEYS}}
 
 PIN_DIAMETERS = [3, 4, 5, 6, 8, 10, 12]
 THICKNESSES = [3, 4, 5, 6, 8, 10, 12, 15, 20]
@@ -60,8 +67,8 @@ def analyze_forces(mech, frames, F):
             "M_rocker": F * mech["c"]}
 
 
-def check_section(forces, lengths, mat, w, t, d):
-    """Verilen kesit icin tum kontrollerin kullanim oranlari (<= 1 gecer)."""
+def check_link(name, forces, length, mat, w, t, d):
+    """Tek uzvun kontrolleri (kullanim oranlari, <= 1 gecer)."""
     n, sy, E = mat["n"], mat["sy"], mat["E"]
     allow = sy / n
     F_ab = forces["F_ab_max"]
@@ -69,48 +76,66 @@ def check_section(forces, lengths, mat, w, t, d):
     S_net = t * (w ** 3 - d ** 3) / (6 * w)          # delikli kesit, duzlem ici egilme
     I_min = min(w * t ** 3, t * w ** 3) / 12.0
 
-    checks = []
-    for name, key in (("Krank", "a"), ("Biyel", "b"), ("Kol", "c"), ("Sabit", "d")):
-        P_cr = math.pi ** 2 * E * I_min / lengths[key] ** 2
-        checks.append({"group": "Burkulma", "name": f"{name} burkulması",
-                       "util": F_ab * n / P_cr,
-                       "detail": f"F_AB = {F_ab:.0f} N, P_kr = {P_cr:.0f} N"})
-    checks.append({"group": "Gerilme", "name": "Biyel net kesit",
-                   "util": (F_ab / A_net) / allow,
-                   "detail": f"σ = {F_ab / A_net:.1f} MPa"})
-    s_crank = forces["M_crank_max"] / S_net + F_ab / A_net
-    checks.append({"group": "Gerilme", "name": "Krank eğilme + eksenel",
-                   "util": s_crank / allow, "detail": f"σ = {s_crank:.1f} MPa"})
-    s_rocker = forces["M_rocker"] / S_net + F_ab / A_net
-    checks.append({"group": "Gerilme", "name": "Kol eğilme + eksenel",
-                   "util": s_rocker / allow, "detail": f"σ = {s_rocker:.1f} MPa"})
-    tau = 4 * F_ab / (math.pi * d ** 2)
-    checks.append({"group": "Pim", "name": "Pim kayması",
-                   "util": tau / (0.5 * allow), "detail": f"τ = {tau:.1f} MPa"})
+    P_cr = math.pi ** 2 * E * I_min / length ** 2
+    checks = [{"group": "Burkulma", "name": f"{name} burkulması", "util": F_ab * n / P_cr,
+               "detail": f"F_AB = {F_ab:.0f} N, P_kr = {P_cr:.0f} N"}]
+    moment = {"Krank": forces["M_crank_max"], "Kol": forces["M_rocker"]}.get(name, 0.0)
+    sigma = moment / S_net + F_ab / A_net
+    label = f"{name} eğilme + eksenel" if moment else f"{name} net kesit"
+    checks.append({"group": "Gerilme", "name": label, "util": sigma / allow,
+                   "detail": f"σ = {sigma:.1f} MPa"})
     s_br = F_ab / (d * t)
-    checks.append({"group": "Pim", "name": "Pim ezilmesi",
-                   "util": s_br / allow, "detail": f"σ_ez = {s_br:.1f} MPa"})
+    checks.append({"group": "Pim", "name": f"{name} pim ezilmesi", "util": s_br / allow,
+                   "detail": f"σ_ez = {s_br:.1f} MPa"})
     return checks
 
 
-def size_section(forces, lengths, mat):
+def check_pin(forces, mat, d):
+    tau = 4 * forces["F_ab_max"] / (math.pi * d ** 2)
+    return {"group": "Pim", "name": "Pim kayması", "util": tau / (0.5 * mat["sy"] / mat["n"]),
+            "detail": f"τ = {tau:.1f} MPa"}
+
+
+def _lightest_link(name, forces, length, mat, d):
+    """Verilen pim capi icin bu uzvun en hafif (w * t en kucuk) gecen kesiti."""
+    best = None
+    for t in THICKNESSES:
+        for w in range(max(math.ceil(2.5 * d), 8), MAX_WIDTH + 1):  # kenar mesafesi
+            checks = check_link(name, forces, length, mat, w, t, d)
+            if max(c["util"] for c in checks) <= 1.0:
+                if best is None or w * t < best[0] * best[1]:
+                    best = (w, t, checks)
+                break          # butun kullanim oranlari w ile azalir: daha genisi agirlastirir
+    return best
+
+
+def size_links(forces, lengths, mat):
     """
-    Butun kontrolleri gecen EN HAFIF kesit (w * t en kucuk).
-    Dondurur: (kesit, kontroller) ya da hicbiri gecmezse (None, en iyi aday kontrolleri).
+    Ortak pim capi + uzuv basina en hafif kesit; toplam hacim en kucuk.
+    Dondurur: (kesit, kontroller). Uygun kesit yoksa (None, en zor kontroller).
     """
-    best = best_any = None
+    best = None
     for d in PIN_DIAMETERS:
-        for t in THICKNESSES:
-            for w in range(max(math.ceil(2.5 * d), 8), MAX_WIDTH + 1):  # kenar mesafesi
-                checks = check_section(forces, lengths, mat, w, t, d)
-                worst = max(c["util"] for c in checks)
-                cand = ({"width": float(w), "thickness": float(t), "hole": float(d)}, checks, worst)
-                if worst <= 1.0:
-                    if best is None or w * t < best[0]["width"] * best[0]["thickness"]:
-                        best = cand
-                    break          # bu (d, t) icin daha genisi sadece agirlastirir
-                if best_any is None or worst < best_any[2]:
-                    best_any = cand
+        pin = check_pin(forces, mat, d)
+        if pin["util"] > 1.0:
+            continue
+        links, checks, volume = {}, [pin], 0.0
+        for name, key in LINK_KEYS.items():
+            found = _lightest_link(name, forces, lengths[key], mat, d)
+            if found is None:
+                break
+            w, t, c = found
+            links[name] = {"width": float(w), "thickness": float(t)}
+            checks += c
+            volume += w * t * lengths[key]
+        else:
+            if best is None or volume < best[2]:
+                best = ({"hole": float(d), "links": links}, checks, volume)
     if best:
         return best[0], best[1]
-    return None, best_any[1]
+    # Hicbiri gecmedi: en buyuk kesitteki kontroller neyin yetmedigini gosterir
+    d, w, t = PIN_DIAMETERS[-1], MAX_WIDTH, THICKNESSES[-1]
+    fail = [check_pin(forces, mat, d)]
+    for name, key in LINK_KEYS.items():
+        fail += check_link(name, forces, lengths[key], mat, w, t, d)
+    return None, fail

@@ -12,8 +12,10 @@ import math
 import adsk.core
 import adsk.fusion
 
-# Varsayilan kesit (mech['section_mm'] yoksa). Yuk verildiyse strength.py hesaplar.
-DEFAULT_SECTION = {"width": 10.0, "thickness": 4.0, "hole": 4.0}
+# Varsayilan kesit (mech['section_mm'] yoksa). Yuk verildiyse strength.py hesaplar:
+# ortak pim capi + uzuv basina genislik/kalinlik.
+DEFAULT_SECTION = {"hole": 4.0, "links": {n: {"width": 10.0, "thickness": 4.0}
+                                          for n in ("Sabit", "Krank", "Biyel", "Kol")}}
 GAP = 0.5          # mm, katmanlar arasi bosluk
 
 # uzuv adi: (baslangic noktasi, bitis noktasi, katman)
@@ -54,15 +56,16 @@ def draw_link_sketch(sketch, length, sec):
     circles.addByCenterRadius(P(mm(length), 0, 0), mm(hole_r))
 
 
-def make_link(root, name, p_start, p_end, layer, sec):
-    """Bir uzvu yeni bilesen olarak olusturur ve yerine koyar."""
+def make_link(root, name, p_start, p_end, z_mm, sec):
+    """Bir uzvu yeni bilesen olarak olusturur ve z_mm yuksekligine yerlestirir.
+    sec: {"width", "thickness", "hole"} (bu uzvun kesiti)."""
     dx, dy = p_end[0] - p_start[0], p_end[1] - p_start[1]
     length = math.hypot(dx, dy)
     angle = math.atan2(dy, dx)
 
     m = adsk.core.Matrix3D.create()
     m.setToRotation(angle, adsk.core.Vector3D.create(0, 0, 1), adsk.core.Point3D.create(0, 0, 0))
-    m.translation = adsk.core.Vector3D.create(mm(p_start[0]), mm(p_start[1]), mm(layer * (sec["thickness"] + GAP)))
+    m.translation = adsk.core.Vector3D.create(mm(p_start[0]), mm(p_start[1]), mm(z_mm))
 
     occ = root.occurrences.addNewComponent(m)
     comp = occ.component
@@ -100,11 +103,13 @@ def build(mech, new_document=True):
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
     pts = mech["points_mm"]
-    sec = mech.get("section_mm") or DEFAULT_SECTION
+    section = mech.get("section_mm") or DEFAULT_SECTION
+    secs = {n: dict(section["links"][n], hole=section["hole"]) for n in LINKS}
 
-    occs, lengths = {}, {}
-    for name, (s, e, layer) in LINKS.items():
-        occs[name], lengths[name] = make_link(root, name, pts[s], pts[e], layer, sec)
+    occs, lengths, z = {}, {}, 0.0
+    for name, (s, e, _) in sorted(LINKS.items(), key=lambda kv: kv[1][2]):   # katman sirasiyla
+        occs[name], lengths[name] = make_link(root, name, pts[s], pts[e], z, secs[name])
+        z += secs[name]["thickness"] + GAP
     occs["Sabit"].isGrounded = True
 
     # Her uzvun hangi ucu hangi noktada: baslangic -> x=0, bitis -> x=L
@@ -114,7 +119,7 @@ def build(mech, new_document=True):
 
     for l1, l2, p in JOINTS:
         geo = adsk.fusion.JointGeometry.createByCurve(
-            hole_edge(occs[l1], local_x(l1, p), sec),
+            hole_edge(occs[l1], local_x(l1, p), secs[l1]),
             adsk.fusion.JointKeyPointTypes.CenterKeyPoint)
         ji = root.asBuiltJoints.createInput(occs[l1], occs[l2], geo)
         ji.setAsRevoluteJointMotion(adsk.fusion.JointDirections.ZAxisJointDirection)

@@ -102,7 +102,7 @@ def design_from_text(text, on_status=None):
                        "detail": f"{meas['Q']:.2f} (hedef {Q:g})"})
 
     # ---- mukavemet: yuk verildiyse kesit boyutlandirilir, verilmediyse uydurulmaz
-    section, strength_ok = dict(strength.DEFAULT_SECTION), True
+    section, strength_ok = strength.DEFAULT_SECTION, True
     F, mat_key = spec.get("max_load_N"), spec.get("material")
     if passed and F:
         if mat_key not in strength.MATERIALS:
@@ -111,7 +111,7 @@ def design_from_text(text, on_status=None):
         mat = strength.MATERIALS[mat_key]
         say("Mukavemet hesabı ve kesit boyutlandırma...")
         forces = strength.analyze_forces(mech, frames, F)
-        sec, s_checks = strength.size_section(forces, {k: mech[k] for k in "abcd"}, mat)
+        sec, s_checks = strength.size_links(forces, {k: mech[k] for k in "abcd"}, mat)
         strength_ok = sec is not None
         if sec:
             section = sec
@@ -152,9 +152,10 @@ def design_from_text(text, on_status=None):
     elif passed:
         msg = "Tasarım tüm kontrollerden geçti."
         if "strength" in result:
-            s = section
-            msg += (f" Kesit {s['width']:g}×{s['thickness']:g} mm, pim Ø{s['hole']:g} mm; "
-                    f"en büyük tahrik torku {result['strength']['input_torque_max_Nmm'] / 1000:.2f} N·m.")
+            parts = ", ".join(f"{n} {s['width']:g}×{s['thickness']:g}"
+                              for n, s in section["links"].items())
+            msg += (f" Kesitler (mm): {parts}; pim Ø{section['hole']:g} mm. "
+                    f"En büyük tahrik torku {result['strength']['input_torque_max_Nmm'] / 1000:.2f} N·m.")
     else:
         msg = (f"{psi:g}° salınım" + (f", Q = {Q:g}" if Q > 1 else "") +
                f" ile iletim açısı sınırları ({kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°) sağlanamıyor.")

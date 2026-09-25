@@ -36,49 +36,79 @@ def test_input_torque_bounded_by_crank_length(mech30):
     assert 0 < f["M_crank_max"] <= f["F_ab_max"] * m["a"] + 1e-9
 
 
-def test_check_section_hand_calculation():
+def test_check_link_hand_calculation():
     """Elle hesap: w=20, t=4, d=4, F_AB=100 N, PLA (izin verilen 40/3 MPa)."""
     forces = {"F_ab_max": 100.0, "M_crank_max": 1000.0, "M_rocker": 2000.0}
-    lengths = {"a": 30.0, "b": 50.0, "c": 60.0, "d": 70.0}
-    c = {x["name"]: x for x in strength.check_section(forces, lengths, PLA, 20, 4, 4)}
     allow = 40.0 / 3.0
-    assert c["Biyel net kesit"]["util"] == pytest.approx((100 / 64) / allow)
-    tau = 4 * 100 / (math.pi * 16)
-    assert c["Pim kayması"]["util"] == pytest.approx(tau / (0.5 * allow))
-    assert c["Pim ezilmesi"]["util"] == pytest.approx((100 / 16) / allow)
     S_net = 4 * (20 ** 3 - 4 ** 3) / (6 * 20)
-    assert c["Kol eğilme + eksenel"]["util"] == pytest.approx((2000 / S_net + 100 / 64) / allow)
     I_min = 20 * 4 ** 3 / 12
-    P_cr = math.pi ** 2 * 2500 * I_min / 70 ** 2
-    assert c["Sabit burkulması"]["util"] == pytest.approx(100 * 3 / P_cr)
+
+    biyel = {x["name"]: x for x in strength.check_link("Biyel", forces, 50.0, PLA, 20, 4, 4)}
+    assert biyel["Biyel net kesit"]["util"] == pytest.approx((100 / 64) / allow)
+    assert biyel["Biyel pim ezilmesi"]["util"] == pytest.approx((100 / 16) / allow)
+    P_cr = math.pi ** 2 * 2500 * I_min / 50 ** 2
+    assert biyel["Biyel burkulması"]["util"] == pytest.approx(100 * 3 / P_cr)
+
+    kol = {x["name"]: x for x in strength.check_link("Kol", forces, 60.0, PLA, 20, 4, 4)}
+    assert kol["Kol eğilme + eksenel"]["util"] == pytest.approx((2000 / S_net + 100 / 64) / allow)
+
+    tau = 4 * 100 / (math.pi * 16)
+    assert strength.check_pin(forces, PLA, 4)["util"] == pytest.approx(tau / (0.5 * allow))
 
 
-def test_sized_section_passes_and_is_minimal(mech30):
+def _volume(sec, lengths):
+    return sum(s["width"] * s["thickness"] * lengths[strength.LINK_KEYS[n]]
+               for n, s in sec["links"].items())
+
+
+def test_sized_links_pass_and_each_is_minimal(mech30):
     m, frames, lengths = mech30
     forces = strength.analyze_forces(m, frames, 50.0)
-    sec, checks = strength.size_section(forces, lengths, PLA)
+    sec, checks = strength.size_links(forces, lengths, PLA)
     assert sec is not None
     assert all(c["util"] <= 1.0 for c in checks)
-    # 1 mm daha dar ayni kesit en az bir kontrolden kalmali (ya da kenar mesafesi siniri)
-    w, t, d = sec["width"], sec["thickness"], sec["hole"]
-    if w - 1 >= max(math.ceil(2.5 * d), 8):
-        narrower = strength.check_section(forces, lengths, PLA, w - 1, t, d)
-        assert max(c["util"] for c in narrower) > 1.0
+    d = sec["hole"]
+    for name, s in sec["links"].items():
+        w, t = s["width"], s["thickness"]
+        if w - 1 >= max(math.ceil(2.5 * d), 8):   # 1 mm daha dar: en az bir kontrol kalmali
+            narrower = strength.check_link(name, forces, lengths[strength.LINK_KEYS[name]],
+                                           PLA, w - 1, t, d)
+            assert max(c["util"] for c in narrower) > 1.0
 
 
-def test_steel_needs_smaller_section_than_pla(mech30):
+def test_governing_checks_match_load_type(mech30):
+    """Krank tahrik torkuyla egilmeye calisir -> kritik kontrolu egilme;
+    sabit uzuv sadece eksenel yuk tasir -> egilme kontrolu yok.
+    (Ilk varsayim 'kisa krank daha kucuk olmali' yanlisti: krank egilme icin genislik ister.)"""
+    m, frames, lengths = mech30
+    forces = strength.analyze_forces(m, frames, 50.0)
+    sec, checks = strength.size_links(forces, lengths, PLA)
+    crank = [c for c in checks if c["name"].startswith("Krank")]
+    assert max(crank, key=lambda c: c["util"])["name"] == "Krank eğilme + eksenel"
+    assert not any("Sabit eğilme" in c["name"] for c in checks)
+
+
+def test_per_link_uses_less_material_than_uniform(mech30):
+    """Uzuv basina kesit, en kotu uzvun kesitini her yere vermekten hafif olmali."""
+    m, frames, lengths = mech30
+    sec, _ = strength.size_links(strength.analyze_forces(m, frames, 50.0), lengths, PLA)
+    worst = max(sec["links"].values(), key=lambda s: s["width"] * s["thickness"])
+    uniform = sum(worst["width"] * worst["thickness"] * L for L in lengths.values())
+    assert _volume(sec, lengths) < uniform
+
+
+def test_steel_needs_less_material_than_pla(mech30):
     m, frames, lengths = mech30
     forces = strength.analyze_forces(m, frames, 200.0)
-    pla, _ = strength.size_section(forces, lengths, PLA)
-    steel, _ = strength.size_section(forces, lengths, strength.MATERIALS["steel"])
-    assert steel["width"] * steel["thickness"] < pla["width"] * pla["thickness"]
+    pla, _ = strength.size_links(forces, lengths, PLA)
+    steel, _ = strength.size_links(forces, lengths, strength.MATERIALS["steel"])
+    assert _volume(steel, lengths) < _volume(pla, lengths)
 
 
 def test_impossible_load_returns_none(mech30):
     m, frames, lengths = mech30
-    forces = strength.analyze_forces(m, frames, 1e6)
-    sec, checks = strength.size_section(forces, lengths, PLA)
-    assert sec is None and checks
+    sec, checks = strength.size_links(strength.analyze_forces(m, frames, 1e6), lengths, PLA)
+    assert sec is None and any(c["util"] > 1.0 for c in checks)
 
 
 # ---------------------------------------------------------------- akis (sahte LLM)
