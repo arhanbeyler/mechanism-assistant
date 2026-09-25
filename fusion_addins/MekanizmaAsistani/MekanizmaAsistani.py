@@ -241,13 +241,27 @@ class BridgeHandler(BaseHTTPRequestHandler):
         pass
 
 
+class BridgeServer(ThreadingHTTPServer):
+    # Windows'ta SO_REUSEADDR ayni portu iki sunucuya actirir (eklenti iki kez
+    # baslatilirsa istekler eski sunucuya gider). Kapali: port doluysa hata verir.
+    allow_reuse_address = False
+    daemon_threads = True
+
+
 def start_bridge():
     global server, TOKEN
-    TOKEN = secrets.token_hex(16)
-    with open(TOKEN_FILE, "w", encoding="utf-8") as fh:
-        fh.write(TOKEN)
+    # Anahtar kalici: eklenti yeniden baslasa da ayni kalir
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", BRIDGE_PORT), BridgeHandler)
+        with open(TOKEN_FILE, encoding="utf-8") as fh:
+            TOKEN = fh.read().strip() or None
+    except OSError:
+        TOKEN = None
+    if not TOKEN:
+        TOKEN = secrets.token_hex(16)
+        with open(TOKEN_FILE, "w", encoding="utf-8") as fh:
+            fh.write(TOKEN)
+    try:
+        server = BridgeServer(("127.0.0.1", BRIDGE_PORT), BridgeHandler)
     except OSError as e:
         log(f"kopru baslatilamadi (port {BRIDGE_PORT}): {e}")
         return
