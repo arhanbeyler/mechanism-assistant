@@ -13,7 +13,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **A1. Git.** Sürüm kontrolü, her adım kayıtlı
 - [x] **A2. Testler.** `python -m pytest`, formüller ve simülasyon otomatik kontrol ediliyor
 - [x] **A3. NumPy'siz motor.** Fusion'ın kendi Python'unda NumPy yok
-- [ ] **A4. Fusion paneli ve köprü.** Fusion içinde sohbet kutusu, Shift+S dönemi biter
+- [x] **A4. Fusion paneli ve köprü.** Alt panelde sohbet + sonuç kartı; köprü ile Claude Fusion'da kod çalıştırıp ekran görüntüsü alabiliyor
 
 ## B. Dört çubuğu bitirmek
 - [ ] **B5. Q'yu cümleye bağlamak.** "Hızlı dönüşlü olsun" dendiğinde anlasın
@@ -38,3 +38,5 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
   Q = 1.1 / 1.2 / 1.3 iken 34° / 30° / 27°. Büyük salınım için çözüm dişli kademesi ya da altı uzuvlu mekanizma.
 - **Sentez tek başına güvenilir değil.** İlk hızlı dönüş sürümü "110° ✓" dedi, simülasyon 47.7° ölçtü
   (uç konumlar farklı montaj kollarına düşmüştü). Bu yüzden her tasarım bağımsız simülasyonla doğrulanıyor.
+- **Üçlü doğrulama:** 35 mm krank, 55° salınım için formül (Norton), bağımsız simülasyon (55.00°) ve
+  Fusion'ın montaj çözücüsü (krank mafsalı köprüyle döndürüldü, 54.99°) aynı sonucu veriyor.
