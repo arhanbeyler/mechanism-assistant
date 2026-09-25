@@ -47,6 +47,8 @@ CASES = [
                                                                        bending_moment_Nm=60, feature="keyseat")),
     ("yataklar arası 200 mm, ortadan 2 kN kuvvet gelen, 50 Nm tork ileten 1020 çelik mil",
      dict(mechanism_type="shaft", radial_force_N=2000, span_mm=200, torque_Nm=50, shaft_material="1020")),
+    ("1450 devirde dönen, 30 Nm tork ve 40 Nm eğilme taşıyan segmanlı mil",
+     dict(mechanism_type="shaft", speed_rpm=1450, torque_Nm=30, bending_moment_Nm=40, feature="ring_groove")),
 ]
 
 

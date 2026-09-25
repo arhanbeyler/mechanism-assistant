@@ -112,6 +112,7 @@ SHAFT = (_schema({
     "bending_moment_Nm": {"type": ["number", "null"]},
     "radial_force_N": {"type": ["number", "null"]},
     "span_mm": {"type": ["number", "null"]},
+    "speed_rpm": {"type": ["number", "null"]},
     "feature": {"type": ["string", "null"],
                 "enum": ["keyseat", "sharp_shoulder", "round_shoulder", "ring_groove", "plain", None]},
     "shaft_material": {"type": ["string", "null"], "enum": ["1020", "1045", None]},
@@ -119,7 +120,8 @@ SHAFT = (_schema({
 }), COMMON + (
     "The user wants to size a rotating shaft. torque_Nm: transmitted torque in N·m. bending_moment_Nm: "
     "bending moment in N·m if given. radial_force_N: a transverse force on the shaft ('2 kN' -> 2000) and "
-    "span_mm: bearing distance ('yataklar arası 200 mm') if given. feature: 'keyseat' (kama, kama yuvası), "
+    "span_mm: bearing distance ('yataklar arası 200 mm') if given. speed_rpm: shaft speed ('1450 devir', "
+    "'1450 d/d', '1450 rpm') if given. feature: 'keyseat' (kama, kama yuvası), "
     "'sharp_shoulder' (keskin omuz), 'round_shoulder' (radyuslu/yuvarlatılmış omuz), 'ring_groove' (segman), "
     "'plain' (düz) only if named. shaft_material: '1020' or '1045' only if named. safety_n: required safety "
     "factor if given ('emniyet katsayısı 2.5')."))

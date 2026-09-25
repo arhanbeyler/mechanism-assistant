@@ -66,6 +66,10 @@ MODULES = {
             {"key": "shaft_material", "label": "Çelik", "default": "1045",
              "options": [["1045", "AISI 1045 CD"], ["1020", "AISI 1020 CD"]]},
             {"key": "safety_n", "label": "Yorulma emniyeti", "unit": "", "min": 1.2, "max": 4, "step": 0.1, "default": 2},
+            {"key": "speed_rpm", "label": "Devir", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 300,
+             "zero_label": "verilmedi"},
+            {"key": "span_mm", "label": "Rulman aralığı", "unit": "mm", "min": 0, "max": 400, "step": 10, "default": 0,
+             "zero_label": "otomatik"},
         ],
     },
 }
@@ -153,14 +157,16 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        gear_ratio=None, torque_Nm=None, speed_rpm=None,
                        spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None,
                        cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None,
-                       bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None):
+                       bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None,
+                       span_mm=None):
     """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim.
     kind: "fourbar", "spur_gear", "spring" ya da "cam" (C0: modul secimi).
     input_swing_deg >= 360: giris tam tur (krank-kol); daha az: sinirli acida giris kolu (B9)."""
     if kind == "shaft":
         return design_from_spec({"mechanism_type": "shaft", "torque_Nm": torque_Nm,
                                  "bending_moment_Nm": bending_moment_Nm, "feature": feature,
-                                 "shaft_material": shaft_material, "safety_n": safety_n})
+                                 "shaft_material": shaft_material, "safety_n": safety_n,
+                                 "speed_rpm": speed_rpm or None, "span_mm": span_mm or None})
     if kind == "cam":
         return design_from_spec({"mechanism_type": "cam", "cam_rise_mm": cam_rise_mm, "rise_deg": rise_deg,
                                  "dwell_top_deg": dwell_top_deg, "return_deg": return_deg,
@@ -357,23 +363,36 @@ def _shaft(result, spec, say):
     if not spec.get("shaft_material"):
         notes.append("Çelik belirtilmediği için AISI 1045 soğuk çekilmiş varsayıldı.")
     n = float(spec.get("safety_n") or 2.0)
-    say("Mil tasarımı (DE-Goodman yorulma)...")
-    g, s_checks = shafts.design(float(M) * 1000.0, float(T) * 1000.0, mat, feature, n)
+    rpm = spec.get("speed_rpm")
+    if not rpm:
+        notes.append("Devir verilmediği için rulman ömrü ve kritik hız kontrol edilmedi.")
+    span = spec.get("span_mm")
+    say("Mil tasarımı (DE-Goodman yorulma, rulman, kama, sehim)...")
+    g, s_checks = shafts.design(float(M) * 1000.0, float(T) * 1000.0, mat, feature, n, span=span,
+                                rpm=float(rpm) if rpm else None)
     checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0, "detail": c["detail"]} for c in s_checks]
     result.update(checks=checks, notes=notes,
                   target={"torque_Nm": float(T), "bending_moment_Nm": float(M), "n": n})
     if g is None:
+        bad = [c["name"] for c in checks if not c["ok"]]
         return dict(result, status="failed", message=" ".join(notes + [
-            "Standart çaplar içinde uygun mil yok. Öneri: yükü azaltın ya da daha dayanıklı çelik seçin."]))
-    g["span_mm"] = spec.get("span_mm")
-    g["layout"] = shafts.layout(g["d"], feature, g["span_mm"])   # kart ve Fusion ayni geometri
+            f"Standart çaplar içinde uygun mil yok (geçmeyen: {', '.join(bad)}). "
+            "Öneri: yükü azaltın, rulman aralığını kısaltın ya da daha dayanıklı çelik seçin."]))
+    g["span_mm"] = span
     fname = shafts.FEATURES[feature][0]
+    if g["raised"]:
+        notes.append(f"Göbek kesiti için Ø{g['d_min']:.2f} mm yeterliydi; daha ince milde geçmeyen kontrol "
+                     f"({', '.join(g['raised_by']).lower()}) yüzünden çap Ø{g['d']:g} mm'ye büyütüldü.")
+    if rpm:
+        notes.append("Kritik hıza sadece milin kütlesi katıldı; göbekteki dişli/kasnak kütlesi dahil değil.")
+    b = g["bearing"]
     result.update(
         shaft=g, fusion={"type": "shaft", "passed_checks": True, **g},
         status="ok",
         message=" ".join(notes + [
-            f"Tasarım tüm kontrollerden geçti. Gereken çap Ø{g['d_min']:.2f} mm → standart Ø{g['d']:g} mm "
-            f"({g['material']}, {fname}). Yorulma emniyeti n_f = {g['nf']:.2f}, akma emniyeti n_y = {g['ny']:.2f}."]))
+            f"Tasarım tüm kontrollerden geçti. Mil Ø{g['d']:g} mm ({g['material']}, {fname}), rulmanlar "
+            f"{b['name']} (Ø{b['bore']}×Ø{b['OD']}×{b['B']}). Yorulma emniyeti n_f = {g['nf']:.2f}, "
+            f"akma emniyeti n_y = {g['ny']:.2f}."]))
     return result
 
 

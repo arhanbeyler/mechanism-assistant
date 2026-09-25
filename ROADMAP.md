@@ -39,6 +39,47 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **C11a. Kam.** Sikloidal / harmonik / 3-4-5; basınç açısı ≤ 30°, alttan kesme yok, ρ ≥ 2·R_makara; en küçük temel daire; Fusion'da kam + makaralı itici + s(θ) animasyonu (8 açıda temas boşluğu 0, kesişim 0)
 - [x] **C11b. Mil.** Shigley 7. bölüm, DE-Goodman yorulma (Marin faktörleri, k_b iterasyonu, Tablo 7-1 K_t), von Mises akma; standart çapa yuvarlama. Fusion'da iki yataklı mil: sadece hesaptaki gerilme yığılması çizilir (DIN 6885 kama + parmak freze yuvası / segman kanalı / D/d = 1.5 omuz, r/d 0.02 veya 0.1). 5 türde boy, çap ve hacim hesapla birebir; mafsalla döner
 
+- [x] **C11c. Mil tamamlama.** Katalogdan rulman (62/63 serisi, omuz kuralı, L10 ≥ 20 000 saat), torku taşıyan oturma kademesi (keskin omuz, DE-Goodman), DIN 6885 kama boyu (kesme + ezilme, ≤ 1.5·d), kademeli milde sayısal sehim/eğim (Tablo 7-2), Rayleigh kritik hız (≥ 2× devir); geçmeyen kontrol olursa bir üst standart çap. Fusion'da oturma kademeleri + katalog ölçülü rulmanlar
+
+## E. Sistemler (modülleri birleştirmek)
+Her sistemde bir modülün çıktısı diğerinin girdisi olur (kuvvetler, çaplar, kütleler elle girilmez).
+- [ ] **E1. Tek kademeli redüktör.** Motor (güç, devir) → dişli çifti → iki mil (dişli kuvvetleri → M, T; dişli kütlesi → kritik hız) → rulmanlar → kamalar → gövde
+- [ ] **E2. Çok kademeli redüktör.** Kademe oranı dağılımı, ara mil
+- [ ] **E3. Kam + yay tertibatı.** İtici yayı kamla birlikte; yüksek hızda kopma (jump) kontrolü
+- [ ] **E4. Pres.** Krank-biyel + volan (tork grafiğinden enerji dalgalanması) + motor
+- [ ] **E5. Katlanır platform** (bitirme projesi adayı). Dört çubuk + dengeleme yayı + kiriş/plaka + pimler
+
+## F. Yeni mekanizmalar (hareket)
+- [ ] **F1. Krank-biyel (piston).** Konum/hız/ivme, Fusion'da kayan piston
+- [ ] **F2. Biyel noktası eğrisi ve yol sentezi.** "Bu nokta şu yoldan geçsin"; Chebyshev/Hoeckens düz çizgi
+- [ ] **F3. Cenevre mekanizması.** Adım adım dönme
+- [ ] **F4. Scotch yoke, Whitworth hızlı dönüş, altı çubuk (Watt/Stephenson)**
+- [ ] **F5. Toggle kelepçe.** Ölü nokta kilitlemesi, kuvvet kazancı
+- [ ] **F6. Mandal-tırnak (ratchet)**
+
+## G. Güç iletimi
+- [ ] **G1. Helis ve konik dişli, sonsuz vida** (kendi kendini kilitleme)
+- [ ] **G2. Planet dişli**
+- [ ] **G3. Kayış-kasnak (V, triger), zincir-dişli**
+- [ ] **G4. Kramayer-pinyon**
+- [ ] **G5. Güç vidası (trapez).** Kaldırma torku, kendi kendini kilitleme, verim
+
+## H. Makine elemanları
+- [ ] **H1. Cıvatalı bağlantı.** Ön yükleme, ayrılma, yorulma (Shigley 8. bölüm)
+- [ ] **H2. Kaynaklı bağlantı**
+- [ ] **H3. Kamalı mil, geçmeler (H7/k6)**
+- [ ] **H4. Burulma, çekme ve disk (Belleville) yayı; yay yorulması (Zimmerli)**
+- [ ] **H5. Kaplin, fren/kavrama, volan**
+
+## I. 3D baskıya özel
+- [ ] **I1. Snap-fit (geçme tırnak)**
+- [ ] **I2. Esnek mafsal (flexure / living hinge)**
+- [ ] Baskıya hazır pim boşlukları (B8c)
+
+## K. Kullanım
+- [ ] **K1. Sohbette düzeltme.** "Biraz daha uzun yap", "alüminyum olsun": önceki tasarımı değiştirir
+- [ ] **K2. Dört çubukta tork grafiği ve dinamik kuvvetler** (volan için de gerekli)
+
 ## D. Dış dünya
 - [ ] **D12. Fiziksel baskı** (arkadaşın yazıcısı)
 - [ ] **D13. README ve demo videosu** (portföy). README + Fusion görselleri hazır (parçalar panel renklerinde); video çekimi senin: senaryo `docs/demo.md`
@@ -85,3 +126,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
   s(θ) tablosundan konumlandırıldığında makara-kam arası en kısa mesafe 0.000 mm ve kesişim 0.00 mm³ (tam temas).
   Ters yönde döndürünce 1.8–15.5 mm boşluk / 640 mm³ kesişim: test ayırt edici. Yolda bulunan hata: kayar mafsalda
   özel yön (kök ekseni) verilince Fusion onu yok sayıp z yönünde kaydırıyordu; itici hiç hareket etmiyor görünüyordu.
+- **Mil: kritik kesit göbek değil, rulman oturması olabiliyor.** 60 N·m eğilme + 100 N·m tork, düz mil: göbek için
+  Ø20.6 mm yeterli, ama torku taşıyan Ø20 rulman oturması (keskin omuz, K_f 2.7/2.2) n_f = 2'yi ancak Ø28 gövdeyle
+  sağlıyor (rulman omzu Ø25.4 ister). Sehim (16 µm) ve eğim (0.35 mrad) sınırların çok altında. Sayısal sehim
+  kapalı çözümle 1e-4 içinde; Rayleigh kritik hızı tam çözümün %0.7 üstünde (beklenen: üst sınır).

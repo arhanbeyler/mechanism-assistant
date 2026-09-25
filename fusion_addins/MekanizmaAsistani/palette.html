@@ -484,7 +484,10 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     const rows = [["Çap", `${f(g.d_min, 2)} → Ø${f(g.d, 0)}`], ["Çelik", g.material.replace("AISI ", "")],
                   ["M / T", `${f(g.M / 1000, 0)} / ${f(g.T / 1000, 0)} N·m`], ["S_e", `${f(g.Se, 0)} MPa`],
                   ["K_f / K_fs", `${g.Kf} / ${g.Kfs}`], ["n_f / n_y", `${f(g.nf, 2)} / ${f(g.ny, 2)}`],
-                  ["Özellik", featTxt], ["Yatak arası", `${f(g.layout.span, 0)} mm`]]
+                  ["Özellik", featTxt], ["Rulman", `${g.bearing.name} (Ø${g.bearing.bore}×Ø${g.bearing.OD})`],
+                  ["Ömür L10", g.bearing.life_h ? `${Math.round(g.bearing.life_h).toLocaleString("tr-TR")} sa` : "devir yok"],
+                  ["Çökme / eğim", `${f(g.beam.y_hub * 1000, 0)} µm / ${f(Math.max(g.beam.slope1, g.beam.slope2) * 1000, 2)} mrad`],
+                  ["Rulman arası", `${f(g.layout.span, 0)} mm`]]
       .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
     $("result").innerHTML = `
       <div class="grid">
@@ -502,8 +505,8 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     const top = lay.segments.map(([x0, x1, r]) => `${X(x0)},${Y(r)} ${X(x1)},${Y(r)}`).join(" ");
     const bot = lay.segments.slice().reverse().map(([x0, x1, r]) => `${X(x1)},${cy + r * sc} ${X(x0)},${cy + r * sc}`).join(" ");
     const brg = lay.bearings.map(([xc, B, Do]) => [1, -1].map((s) =>
-      `<rect x="${X(xc - B / 2)}" y="${s > 0 ? Y(Do / 2) : cy + lay.d / 2 * sc}" width="${B * sc}"
-        height="${(Do - lay.d) / 2 * sc}" fill="var(--line)" stroke="var(--muted)"/>`).join("")).join("");
+      `<rect x="${X(xc - B / 2)}" y="${s > 0 ? Y(Do / 2) : cy + lay.journal / 2 * sc}" width="${B * sc}"
+        height="${(Do - lay.journal) / 2 * sc}" fill="var(--line)" stroke="var(--muted)"/>`).join("")).join("");
     const ft = lay.feature;
     const key = ft.kind === "keyseat"
       ? `<rect x="${X(ft.x - ft.length / 2)}" y="${Y(lay.d / 2 - ft.t1 + ft.h)}" width="${ft.length * sc}" height="${ft.h * sc}"

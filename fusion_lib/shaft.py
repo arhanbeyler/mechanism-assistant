@@ -72,26 +72,26 @@ def _extrude(comp, prof, dist_mm, op, body=None):
 
 
 def _bearings(comp, lay):
-    """Yataklar (gorsel, sabit): x = xc'de genislik B, ic cap d, dis cap Do halkalar."""
+    """Rulmanlar (gorsel, sabit; katalog olculeri): x = xc'de genislik B, delik = oturma capi, dis cap Do."""
     P = adsk.core.Point3D.create
     for i, (xc, B, Do) in enumerate(lay["bearings"], 1):
         pin = comp.constructionPlanes.createInput()
         pin.setByOffset(comp.yZConstructionPlane, adsk.core.ValueInput.createByReal(mm(xc)))
         sk = comp.sketches.add(comp.constructionPlanes.add(pin))
         c = sk.modelToSketchSpace(P(mm(xc), 0, 0))
-        ri = lay["d"] / 2 + 0.05                  # mil ile temas etmesin
+        ri = lay["journal"] / 2 + 0.05            # oturma capi; mil ile temas etmesin
         sk.sketchCurves.sketchCircles.addByCenterRadius(c, mm(Do / 2))
         sk.sketchCurves.sketchCircles.addByCenterRadius(c, mm(ri))
         ring = min(sk.profiles, key=lambda p: abs(p.areaProperties().area - math.pi * (mm(Do / 2) ** 2 - mm(ri) ** 2)))
         ext = comp.features.extrudeFeatures
         inp = ext.createInput(ring, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
         inp.setSymmetricExtent(adsk.core.ValueInput.createByReal(mm(B)), True)   # toplam B, xc'ye simetrik
-        ext.add(inp).bodies.item(0).name = f"Yatak {i}"
+        ext.add(inp).bodies.item(0).name = f"Rulman {i} ({lay['bearing_name']})" if lay["bearing_name"] else f"Yatak {i}"
 
 
 def build(g, root, design=None):
     """g: pipeline'in fusion sozlugu (d, feature, span_mm ...). Dondurur: mil bileseni (Occurrence)."""
-    lay = shafts.layout(g["d"], g["feature"], g.get("span_mm"))
+    lay = g.get("layout") or shafts.layout(g["d"], g["feature"], g.get("span_mm"))   # motorun sectigi rulman/kama
     ident = adsk.core.Matrix3D.create()
 
     ground = root.occurrences.addNewComponent(ident)
