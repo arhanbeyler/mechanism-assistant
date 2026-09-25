@@ -16,19 +16,20 @@
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font: 13px/1.45 "Segoe UI", system-ui, sans-serif; }
   .wrap { display: flex; height: 100%; gap: 10px; padding: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+  h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
 
   /* sohbet */
-  .chat { flex: 1 1 42%; display: flex; flex-direction: column; min-width: 0;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .chat { flex: 1 1 30%; display: flex; flex-direction: column; }
   .log { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-  .msg { max-width: 85%; padding: 7px 10px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg { max-width: 90%; padding: 7px 10px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; }
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
   .msg.ai { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
   .msg.ai.ok { border-left: 3px solid var(--ok); }
   .msg.ai.bad { border-left: 3px solid var(--bad); }
   .msg.ai.info { border-left: 3px solid var(--warn); }
-  .status { color: var(--muted); font-style: italic; padding: 0 12px 6px; min-height: 20px; }
-  .examples { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 12px 8px; }
+  .status { color: var(--muted); font-style: italic; padding: 0 12px 4px; min-height: 18px; }
+  .examples { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 12px 6px; }
   .chip { border: 1px solid var(--line); background: transparent; color: var(--muted);
     border-radius: 12px; padding: 2px 10px; cursor: pointer; font: inherit; font-size: 12px; }
   .chip:hover { color: var(--text); border-color: var(--accent); }
@@ -36,61 +37,114 @@
   textarea { flex: 1; resize: none; height: 38px; background: var(--bg); color: var(--text);
     border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }
   textarea:focus { outline: none; border-color: var(--accent); }
-  button.send { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
     padding: 0 16px; font: inherit; font-weight: 600; cursor: pointer; }
-  button.send:disabled { opacity: .5; cursor: default; }
+  button.primary:disabled { opacity: .45; cursor: default; }
+
+  /* kaydiricilar */
+  .knobs { flex: 1 1 24%; padding: 8px 12px; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; }
+  .knobs h3 { margin-bottom: 2px; }
+  .knobs .row { display: flex; gap: 10px; } .knobs .row > * { flex: 1; min-width: 0; }
+  .knob label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .knob label b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+    border-radius: 3px; background: var(--line); margin: 6px 0 2px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px;
+    border-radius: 50%; background: var(--text); border: 2px solid var(--accent); cursor: pointer; }
+  select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 6px; font: inherit; }
+  .legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 6px; border-radius: 2px; margin-right: 4px; }
+  .verdict { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 17px; }
+  .verdict.ok { color: var(--ok); } .verdict.bad { color: var(--bad); }
+  .actions { display: flex; gap: 6px; margin-top: auto; padding-top: 4px; }
+  .actions button { height: 30px; white-space: nowrap; }
+  #draw { flex: 1.4; padding: 0 8px; }
+  button.ghost { flex: 1; background: transparent; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; font: inherit; cursor: pointer; }
+  button.ghost:hover { border-color: var(--accent); }
+  button.ghost.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
   /* sonuc karti */
-  .result { flex: 1 1 58%; min-width: 0; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 8px; padding: 10px 12px; overflow-y: auto; }
-  .result h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .result { flex: 1 1 46%; padding: 10px 12px; overflow-y: auto; }
   .empty { color: var(--muted); height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; }
   .grid { display: flex; gap: 14px; }
   .col { flex: 1 1 0; min-width: 0; }
-  .col svg { max-height: 190px; }
-  /* dar panel (ornegin yana yaslandiginda): alt alta */
-  @media (max-width: 700px) { .wrap { flex-direction: column; } .grid { flex-wrap: wrap; } .col { flex-basis: 180px; } }
-  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-  td { padding: 2px 4px; border-bottom: 1px solid var(--line); }
-  td:last-child { text-align: right; }
-  .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
-  .check { display: flex; gap: 6px; padding: 2px 0; }
-  .check .i { width: 14px; font-weight: 700; }
+  .col svg { max-height: 180px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 12px; }
+  td { padding: 2px 3px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td.r { text-align: right; } td.m { color: var(--muted); text-align: right; }
+  .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+  .check { display: flex; gap: 6px; padding: 1px 0; font-size: 12px; }
+  .check .i { width: 12px; font-weight: 700; }
   .check .ok { color: var(--ok); } .check .bad { color: var(--bad); }
   .check .d { color: var(--muted); }
+  .extra { color: var(--muted); font-size: 12px; margin-top: 4px; }
   svg { width: 100%; height: auto; display: block; }
   .axis { stroke: var(--line); stroke-width: 1; }
   .lbl { fill: var(--muted); font-size: 9px; }
+
+  @media (max-width: 760px) { .wrap { flex-direction: column; } .grid { flex-wrap: wrap; } .col { flex-basis: 170px; } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <section class="chat">
+  <section class="card chat">
     <div class="log" id="log">
-      <div class="msg ai">Merhaba! İstediğin mekanizmayı tarif et. Örneğin krank uzunluğu ve çıkış kolunun salınım açısı.
-Hesaplar ve doğrulama bilgisayarında, yerel yapay zekâ ile yapılır.</div>
+      <div class="msg ai">Merhaba! İstediğin mekanizmayı tarif et ya da yandaki kaydırıcılarla oyna.
+Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     </div>
     <div class="status" id="status"></div>
     <div class="examples">
-      <button class="chip">4 cm krank, 50° salınım, PLA</button>
-      <button class="chip">30 mm krank, 60 derece sallansın</button>
+      <button class="chip">30 mm krank, 60° salınım, uçta 5 kg, PETG</button>
+      <button class="chip">4 cm krank, 50°, hızlı dönüşlü</button>
       <button class="chip">25 mm krank, 110° salınım</button>
     </div>
     <div class="input">
-      <textarea id="text" placeholder="Mekanizmayı tarif et... (Enter: gönder, Shift+Enter: yeni satır)"></textarea>
-      <button class="send" id="send">Gönder</button>
+      <textarea id="text" placeholder="Mekanizmayı tarif et... (Enter: gönder)"></textarea>
+      <button class="primary" id="send">Gönder</button>
     </div>
   </section>
 
-  <section class="result" id="result">
-    <div class="empty">Tasarım sonucu burada görünecek:<br>ölçüler, kontroller, mekanizma ve iletim açısı grafiği.</div>
+  <section class="card knobs">
+    <h3>Ayarlar <span style="font-weight:400;color:var(--muted)">(anında hesaplanır)</span></h3>
+    <div class="knob"><label>Krank uzunluğu <b id="v-a"></b></label>
+      <input type="range" id="k-a" min="5" max="200" step="1" value="30"></div>
+    <div class="knob"><label>Salınım açısı <b id="v-psi"></b></label>
+      <input type="range" id="k-psi" min="5" max="175" step="1" value="60">
+      <div class="legend"><span><i style="background:var(--ok)"></i>uygun</span>
+        <span><i style="background:var(--warn)"></i>sınırda / büyük</span>
+        <span><i style="background:var(--bad)"></i>olmaz</span></div></div>
+    <div class="row">
+      <div class="knob"><label title="Zaman oranı: ileri / geri strok süresi">Q <b id="v-q"></b></label>
+        <input type="range" id="k-q" min="1" max="2" step="0.05" value="1"></div>
+      <div class="knob"><label>Malzeme</label>
+        <select id="k-mat">
+          <option value="PLA">PLA (3B baskı)</option><option value="PETG">PETG (3B baskı)</option>
+          <option value="aluminum">Alüminyum 6061-T6</option><option value="steel">Çelik S235</option>
+        </select></div>
+    </div>
+    <div class="knob"><label>Uçtaki yük <b id="v-f"></b></label>
+      <input type="range" id="k-f" min="0" max="500" step="1" value="0"></div>
+    <div class="verdict" id="verdict"></div>
+    <div class="actions">
+      <button class="primary" id="draw" disabled>Fusion'da çiz</button>
+      <button class="ghost" id="turn" title="Krankı bir tam tur döndür">⟳ 1 tur</button>
+      <button class="ghost" id="loop" title="Sürekli döndür / durdur">▶ Sürekli</button>
+    </div>
+  </section>
+
+  <section class="card result" id="result">
+    <div class="empty">Tasarım sonucu burada görünecek:<br>ölçüler, kesitler, kontroller, mekanizma ve iletim açısı.</div>
   </section>
 </div>
 
 <script>
   const $ = (id) => document.getElementById(id);
-  let busy = false;
+  const ready = () => window.adsk && adsk.fusionSendData;
+  let busy = false, req = 0, bandReq = 0, lastQ = null, lastPreview = null;
 
+  // ------------------------------------------------------------ sohbet
   function addMsg(kind, text, tone) {
     const el = document.createElement("div");
     el.className = "msg " + kind + (tone ? " " + tone : "");
@@ -98,40 +152,98 @@ Hesaplar ve doğrulama bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     $("log").appendChild(el);
     $("log").scrollTop = $("log").scrollHeight;
   }
-
-  function setBusy(b, statusText) {
-    busy = b;
-    $("send").disabled = b;
-    $("status").textContent = statusText || "";
-  }
+  function setBusy(b, s) { busy = b; $("send").disabled = b; $("status").textContent = s || ""; }
 
   function send() {
     const text = $("text").value.trim();
     if (!text || busy) return;
-    if (!(window.adsk && adsk.fusionSendData)) {
-      addMsg("ai", "Fusion bağlantısı henüz hazır değil, bir saniye sonra tekrar dene.", "info");
-      return;
-    }
+    if (!ready()) { addMsg("ai", "Fusion bağlantısı henüz hazır değil, bir saniye sonra tekrar dene.", "info"); return; }
     addMsg("user", text);
     $("text").value = "";
     setBusy(true, "Gönderiliyor...");
     adsk.fusionSendData("design", JSON.stringify({ text }));
   }
-
   $("send").addEventListener("click", send);
-  $("text").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-  });
+  $("text").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
   document.querySelectorAll(".chip").forEach((c) =>
     c.addEventListener("click", () => { $("text").value = c.textContent; $("text").focus(); }));
 
-  // Fusion -> panel
+  // ------------------------------------------------------------ kaydiricilar
+  function params() {
+    const F = +$("k-f").value;
+    return { crank_length_mm: +$("k-a").value, output_swing_deg: +$("k-psi").value,
+             time_ratio: +$("k-q").value, max_load_N: F > 0 ? F : null, material: $("k-mat").value };
+  }
+  function labels() {
+    const p = params();
+    $("v-a").textContent = p.crank_length_mm + " mm";
+    $("v-psi").textContent = p.output_swing_deg + "°";
+    $("v-q").textContent = p.time_ratio > 1 ? p.time_ratio.toFixed(2) : "1 (yok)";
+    $("v-f").textContent = p.max_load_N ? p.max_load_N + " N (≈" + (p.max_load_N / 9.81).toFixed(1) + " kg)" : "yok";
+  }
+  let timer = null;
+  function schedulePreview() {          // kaydirirken en fazla ~8 istek/s
+    labels();
+    if (timer) return;
+    timer = setTimeout(() => { timer = null; requestPreview(); }, 120);
+  }
+  function requestPreview() {
+    if (!ready()) return;
+    req += 1;
+    adsk.fusionSendData("preview", JSON.stringify({ req, params: params() }));
+    const Q = +$("k-q").value;
+    if (Q !== lastQ) { lastQ = Q; bandReq += 1; adsk.fusionSendData("band", JSON.stringify({ req: bandReq, Q })); }
+  }
+  ["k-a", "k-psi", "k-q", "k-f"].forEach((id) => $(id).addEventListener("input", schedulePreview));
+  $("k-mat").addEventListener("change", schedulePreview);
+  $("draw").addEventListener("click", () => {
+    if (!ready() || !lastPreview || lastPreview.status !== "ok") return;
+    $("draw").disabled = true;
+    $("status").textContent = "Fusion'da çiziliyor...";
+    adsk.fusionSendData("draw", JSON.stringify({ params: params() }));
+  });
+
+  $("turn").addEventListener("click", () => ready() && adsk.fusionSendData("rotate", JSON.stringify({ mode: "turn" })));
+  $("loop").addEventListener("click", () => ready() && adsk.fusionSendData("rotate", JSON.stringify({ mode: "toggle" })));
+  function setAnim(d) {
+    const looping = d.running && d.mode === "toggle";
+    $("loop").classList.toggle("on", looping);
+    $("loop").textContent = looping ? "■ Durdur" : "▶ Sürekli";
+    $("turn").disabled = d.running;
+  }
+
+  function setKnobs(d) {                 // cumleden gelen tasarimla kaydiricilari doldur
+    const s = d.spec || {};
+    if (s.crank_length_mm) $("k-a").value = Math.round(s.crank_length_mm);
+    if (s.output_swing_deg) $("k-psi").value = Math.round(s.output_swing_deg);
+    $("k-q").value = (d.target && d.target.Q) || 1;
+    $("k-f").value = Math.round(s.max_load_N || 0);
+    if (s.material) $("k-mat").value = s.material;
+    labels();
+    requestPreview();
+  }
+
+  function paintBand(band) {             // salinim kaydiricisinin arka plani
+    const col = ["var(--bad)", "var(--warn)", "var(--ok)"];
+    const min = 5, max = 175, pct = (v) => ((v - min) / (max - min) * 100).toFixed(1) + "%";
+    const stops = band.map(([psi, lvl], i) => {
+      const lo = i === 0 ? min : (band[i - 1][0] + psi) / 2;
+      const hi = i === band.length - 1 ? max : (psi + band[i + 1][0]) / 2;
+      return `${col[lvl]} ${pct(lo)} ${pct(hi)}`;
+    });
+    $("k-psi").style.background = `linear-gradient(to right, ${stops.join(", ")})`;
+  }
+
+  // ------------------------------------------------------------ Fusion -> panel
   window.fusionJavaScriptHandler = {
     handle: function (action, data) {
       try {
         const d = JSON.parse(data);
         if (action === "status") $("status").textContent = d.text;
         if (action === "result") showResult(d);
+        if (action === "preview" && d.req === req) showPreview(d);
+        if (action === "band" && d.req === bandReq) paintBand(d.band);
+        if (action === "anim") setAnim(d);
       } catch (e) { console.log(e); }
       return "OK";
     }
@@ -139,28 +251,44 @@ Hesaplar ve doğrulama bilgisayarında, yerel yapay zekâ ile yapılır.</div>
 
   function showResult(d) {
     setBusy(false);
+    $("draw").disabled = !(d.status === "ok");
     const tone = { ok: "ok", failed: "bad", error: "bad" }[d.status] || "info";
     let text = d.message;
-    if (d.status === "ok") text += d.drawn ? "\nMekanizma Fusion'da çizildi. Krankı sürükleyerek deneyebilirsin." : "";
-    if (d.status === "failed") text += "\nBu tasarım çizilmedi.";
+    if (d.status === "ok" && d.drawn) text += "\nMekanizma Fusion'da çizildi.";
+    if (d.status === "failed") text += "\nBu tasarım çizilmedi. Kaydırıcılarla uygun değeri arayabilirsin.";
     addMsg("ai", text, tone);
+    if (d.lengths) { renderCard(d); if (d.spec) setKnobs(d); }
+  }
+
+  function showPreview(d) {
+    lastPreview = d;
+    $("draw").disabled = d.status !== "ok";
+    $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
+    $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
+    $("verdict").title = d.message;          // tamami: fareyle ustune gelince
     if (d.lengths) renderCard(d);
   }
 
-  function f(x, n = 2) { return Number(x).toFixed(n); }
+  // ------------------------------------------------------------ sonuc karti
+  const f = (x, n = 1) => Number(x).toFixed(n);
 
   function renderCard(d) {
-    const L = d.lengths;
-    const rows = [["Krank a", L.a, "--crank"], ["Biyel b", L.b, "--coupler"],
-                  ["Kol c", L.c, "--rocker"], ["Sabit d", L.d, "--ground"]]
-      .map(([n, v, c]) => `<tr><td><span class="sw" style="background:var(${c})"></span>${n}</td><td>${f(v)} mm</td></tr>`).join("");
+    const L = d.lengths, sec = (d.section_mm && d.section_mm.links) || {};
+    const rows = [["Krank", "a", "--crank"], ["Biyel", "b", "--coupler"], ["Kol", "c", "--rocker"], ["Sabit", "d", "--ground"]]
+      .map(([n, k, c]) => `<tr><td><span class="sw" style="background:var(${c})"></span>${n}</td>
+        <td class="r">${f(L[k])} mm</td>
+        <td class="m">${sec[n] ? f(sec[n].width, 0) + "×" + f(sec[n].thickness, 0) : ""}</td></tr>`).join("");
     const checks = d.checks.map((c) =>
       `<div class="check"><span class="i ${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"}</span>
        <span>${c.name}<br><span class="d">${c.detail}</span></span></div>`).join("");
+    const st = d.strength;
+    const extra = st ? `Pim Ø${f(d.section_mm.hole, 0)} mm · tahrik torku ${f(st.input_torque_max_Nmm / 1000, 2)} N·m · n = ${st.safety_factor}`
+                     : "Yük yok: kesit varsayılan";
     $("result").innerHTML = `
       <div class="grid">
-        <div class="col"><h3>Ölçüler</h3><table>${rows}</table>
-          <h3 style="margin-top:10px">Kontroller</h3>${checks}</div>
+        <div class="col"><h3>Ölçüler <span style="font-weight:400;color:var(--muted)">(kesit mm)</span></h3>
+          <table>${rows}</table><div class="extra">${extra}</div>
+          <h3 style="margin-top:8px">Kontroller</h3>${checks}</div>
         <div class="col"><h3>Mekanizma</h3>${mechSvg(d.fusion.points_mm)}</div>
         <div class="col"><h3>İletim açısı μ</h3>${muSvg(d.mu_curve)}</div>
       </div>`;
@@ -179,7 +307,7 @@ Hesaplar ve doğrulama bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     const dot = (q) => `<circle cx="${X(q)}" cy="${Y(q)}" r="3.5" fill="var(--panel)" stroke="var(--text)" stroke-width="1.5"/>`;
     return `<svg viewBox="0 0 ${W} ${H}">
       ${seg(p.O2, p.O4, "--ground", true)}${seg(p.O2, p.A, "--crank")}${seg(p.A, p.B, "--coupler")}${seg(p.O4, p.B, "--rocker")}
-      ${[p.O2, p.O4, p.A, p.B].map(dot).join("")}
+      ${pts.map(dot).join("")}
       <text class="lbl" x="${X(p.O2) + 6}" y="${Y(p.O2) + 12}">O2</text>
       <text class="lbl" x="${X(p.O4) + 6}" y="${Y(p.O4) + 12}">O4</text></svg>`;
   }
@@ -197,9 +325,10 @@ Hesaplar ve doğrulama bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
   }
 
-  // Fusion baglantisi hazir olunca eklentiye haber ver
+  // ------------------------------------------------------------ baslangic
+  labels();
   (function waitForAdsk() {
-    if (window.adsk && adsk.fusionSendData) adsk.fusionSendData("ready", "");
+    if (ready()) { adsk.fusionSendData("ready", ""); requestPreview(); }
     else setTimeout(waitForAdsk, 100);
   })();
 </script>

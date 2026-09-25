@@ -30,17 +30,55 @@ def max_feasible_q(a, psi, q_max=1.5, step=0.05):
     return None
 
 
+def swing_band(Q=1.0, step=5, n=720):
+    """
+    Salinim kaydiricisinin renkli bolgeleri: [(psi, seviye), ...]
+      2: iletim acisi 45-135 icinde (kompakt cozum var)
+      1: 40-140 sinirinda gecer (ama mekanizma buyuk olabilir)
+      0: gecmez
+    Olcekten bagimsiz: acilar krank boyuna bagli degil (a=10 ile hesaplanir).
+    """
+    band = []
+    for psi in range(step, 180, step):
+        m = (kin.synthesize_crank_rocker(10.0, psi) if Q <= 1.0
+             else kin.synthesize_quick_return(10.0, psi, Q, n=n))
+        if m["worst_dev"] <= 45.0:
+            level = 2
+        elif kin.MU_MIN_DEG <= m["mu_min"] and m["mu_max"] <= kin.MU_MAX_DEG:
+            level = 1
+        else:
+            level = 0
+        band.append((psi, level))
+    return band
+
+
 def design_from_text(text, on_status=None):
     """
-    Dondurur: dict(status, message, spec, ...)
+    Cumleden tasarim. Dondurur: dict(status, message, spec, ...)
       status: "ok" | "failed" (kontrollerden gecmedi) | "missing" | "unsupported"
     on_status(str): ilerleme bildirimi icin istege bagli geri cagirma.
     """
     say = on_status or (lambda s: None)
-
     say("LLM cümleyi yorumluyor...")
-    spec = extract_spec(text)
-    result = {"text": text, "spec": spec}
+    result = design_from_spec(extract_spec(text), on_status)
+    result["text"] = text
+    return result
+
+
+def design_from_params(crank_length_mm, output_swing_deg, time_ratio=1.0,
+                       max_load_N=None, material=None):
+    """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim."""
+    return design_from_spec({
+        "mechanism_type": "crank_rocker", "crank_length_mm": crank_length_mm,
+        "output_swing_deg": output_swing_deg, "quick_return": time_ratio > 1.0,
+        "time_ratio": time_ratio if time_ratio > 1.0 else None,
+        "max_load_N": max_load_N or None, "material": material})
+
+
+def design_from_spec(spec, on_status=None):
+    """Yapilandirilmis istekten (LLM ciktisi ya da kaydiricilar) tasarim."""
+    say = on_status or (lambda s: None)
+    result = {"spec": spec}
 
     if spec["mechanism_type"] != "crank_rocker":
         return dict(result, status="unsupported",

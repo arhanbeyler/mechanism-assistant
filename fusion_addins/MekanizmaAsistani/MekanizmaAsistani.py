@@ -14,6 +14,7 @@ import contextlib
 import importlib
 import io
 import json
+import math
 import os
 import secrets
 import sys
@@ -108,7 +109,38 @@ def send_to_palette(action, payload):
 
 # ---------------------------------------------------------------- tasarim akisi
 
-def start_design(text):
+def start_preview(params, req):
+    """Kaydirici onizlemesi: LLM yok, Fusion'a cizim yok; sadece hesap + panel."""
+    pipeline = sys.modules.get("pipeline") or reload_modules()[0]
+
+    def worker():
+        try:
+            result = pipeline.design_from_params(**params)
+        except Exception as e:
+            log("onizleme hata:\n" + traceback.format_exc())
+            result = {"status": "error", "message": f"Hesap hatası: {e}"}
+        result["req"] = req
+        run_on_main(lambda: send_to_palette("preview", result))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def start_band(Q, req):
+    pipeline = sys.modules.get("pipeline") or reload_modules()[0]
+
+    def worker():
+        try:
+            band = pipeline.swing_band(Q)
+        except Exception:
+            log("band hata:\n" + traceback.format_exc())
+            return
+        run_on_main(lambda: send_to_palette("band", {"req": req, "Q": Q, "band": band}))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def start_design(text=None, params=None):
+    """Cumleden (LLM ile) ya da kaydirici degerlerinden tasarla ve Fusion'da ciz."""
     pipeline, fourbar = reload_modules()
 
     def status(s):
@@ -116,7 +148,10 @@ def start_design(text):
 
     def worker():
         try:
-            result = pipeline.design_from_text(text, on_status=status)
+            if params is not None:
+                result = pipeline.design_from_params(**params)
+            else:
+                result = pipeline.design_from_text(text, on_status=status)
         except urllib.error.URLError:
             result = {"status": "error",
                       "message": "Yerel LLM'e (Ollama) ulaşılamadı. Ollama çalışıyor mu?"}
@@ -142,6 +177,61 @@ def finish_design(result, fourbar):
     send_to_palette("result", result)
 
 
+# ---------------------------------------------------------------- dondurme (animasyon)
+
+anim = {"running": False}
+STEP_DEG = 4          # her adimda krank acisi
+STEP_PAUSE = 0.02     # adimlar arasi bekleme (s)
+
+
+def crank_motion():
+    """Aktif belgedeki mekanizmanin krank mafsali (yoksa None)."""
+    design = adsk.fusion.Design.cast(app.activeProduct)
+    if not design:
+        return None
+    for j in design.rootComponent.asBuiltJoints:
+        if j.name.startswith("Sabit-Krank"):
+            return adsk.fusion.RevoluteJointMotion.cast(j.jointMotion)
+    return None
+
+
+def rotate(mode):
+    """mode: 'turn' (bir tam tur) ya da 'toggle' (surekli donmeyi ac/kapat)."""
+    if anim["running"]:
+        if mode == "toggle":
+            anim["running"] = False       # calisan is parcacigi durur ve paneli gunceller
+        return
+    if crank_motion() is None:
+        send_to_palette("status", {"text": "Açık belgede dönecek bir mekanizma yok. Önce 'Fusion'da çiz'."})
+        return
+    anim["running"] = True
+    send_to_palette("anim", {"running": True, "mode": mode})
+    total = 360 if mode == "turn" else float("inf")
+
+    def worker():
+        done = 0
+        while anim["running"] and done < total:
+            stepped = threading.Event()
+
+            def step():
+                try:
+                    motion = crank_motion()
+                    motion.rotationValue = motion.rotationValue + math.radians(STEP_DEG)
+                except Exception:
+                    anim["running"] = False       # belge kapandi vb.
+                finally:
+                    stepped.set()
+
+            run_on_main(step)
+            stepped.wait(2.0)
+            time.sleep(STEP_PAUSE)
+            done += STEP_DEG
+        anim["running"] = False
+        run_on_main(lambda: send_to_palette("anim", {"running": False}))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
 # ---------------------------------------------------------------- Fusion olaylari
 
 class MainThreadHandler(adsk.core.CustomEventHandler):
@@ -159,11 +249,28 @@ class PaletteHTMLHandler(adsk.core.HTMLEventHandler):
     def notify(self, args):
         try:
             html_args = adsk.core.HTMLEventArgs.cast(args)
+            try:
+                data = json.loads(html_args.data) if html_args.data else {}
+            except ValueError:
+                data = {}
             if html_args.action == "design":
-                text = json.loads(html_args.data).get("text", "").strip()
+                text = data.get("text", "").strip()
                 if text:
-                    start_design(text)
+                    start_design(text=text)
                 html_args.returnData = "started"
+            elif html_args.action == "preview":
+                start_preview(data["params"], data.get("req", 0))
+                html_args.returnData = "started"
+            elif html_args.action == "band":
+                start_band(float(data.get("Q", 1.0)), data.get("req", 0))
+                html_args.returnData = "started"
+            elif html_args.action == "draw":
+                anim["running"] = False           # cizmeden once donmeyi durdur
+                start_design(params=data["params"])
+                html_args.returnData = "started"
+            elif html_args.action == "rotate":
+                rotate(data.get("mode", "turn"))
+                html_args.returnData = "ok"
             elif html_args.action == "ready":
                 html_args.returnData = "ok"
         except Exception:
@@ -350,6 +457,7 @@ def stop(context):
     if not owner:
         return          # calisan kopya bu degil: onun kaynaklarina dokunma
     owner = False
+    anim["running"] = False
     setattr(sys, RUNNING_FLAG, False)
     try:
         if server:
