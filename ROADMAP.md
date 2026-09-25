@@ -18,7 +18,9 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 ## B. Dört çubuğu bitirmek
 - [x] **B5. Q'yu cümleye bağlamak.** "Hızlı dönüşlü olsun" dendiğinde anlasın
 - [x] **B6. LLM şemasını sıkılaştırmak.** Gereksiz "eksik bilgi" uyarılarını kesmek
-- [ ] **B7. Mukavemet.** Yük ve malzemeye göre uzuv kesiti, emniyet katsayısı
+- [x] **B7. Mukavemet.** Yük ve malzemeye göre kesit (burkulma, net kesit, eğilme, pim kayma/ezilme), emniyet katsayısı, tahrik torku
+- [ ] **B7b. Uzuv başına ayrı kesit.** Şu an tek kesit tüm uzuvlarda; kısa krank gereksiz iri çıkıyor
+- [ ] **B7c. Parametre kaydırıcıları.** Panelde kaydırıcılarla değerleri değiştirip farkı anında görmek
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
 
 ## C. Yeni modüller
@@ -40,3 +42,5 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
   (uç konumlar farklı montaj kollarına düşmüştü). Bu yüzden her tasarım bağımsız simülasyonla doğrulanıyor.
 - **Üçlü doğrulama:** 35 mm krank, 55° salınım için formül (Norton), bağımsız simülasyon (55.00°) ve
   Fusion'ın montaj çözücüsü (krank mafsalı köprüyle döndürüldü, 54.99°) aynı sonucu veriyor.
+- **Biyel kuvveti F_AB = F / sin μ:** İletim açısı düştükçe biyel ve pim yükü artıyor (μ = 45° → 1.41F).
+  Mukavemet hesabı, iletim açısı kontrolünün neden gerekli olduğunu sayısal olarak gösteriyor.

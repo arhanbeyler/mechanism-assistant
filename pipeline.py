@@ -7,6 +7,7 @@ Sadece standart kutuphane: Fusion'in kendi Python'unda da calisir.
 """
 
 import kinematics as kin
+import strength
 from llm_extract import extract_spec
 
 
@@ -100,6 +101,40 @@ def design_from_text(text, on_status=None):
         checks.append({"name": "Zaman oranı Q (simülasyon)", "ok": q_ok,
                        "detail": f"{meas['Q']:.2f} (hedef {Q:g})"})
 
+    # ---- mukavemet: yuk verildiyse kesit boyutlandirilir, verilmediyse uydurulmaz
+    section, strength_ok = dict(strength.DEFAULT_SECTION), True
+    F, mat_key = spec.get("max_load_N"), spec.get("material")
+    if passed and F:
+        if mat_key not in strength.MATERIALS:
+            mat_key = "PLA"
+            notes.append("Malzeme belirtilmediği için PLA (3B baskı) varsayıldı.")
+        mat = strength.MATERIALS[mat_key]
+        say("Mukavemet hesabı ve kesit boyutlandırma...")
+        forces = strength.analyze_forces(mech, frames, F)
+        sec, s_checks = strength.size_section(forces, {k: mech[k] for k in "abcd"}, mat)
+        strength_ok = sec is not None
+        if sec:
+            section = sec
+        worst = {}
+        for c in s_checks:                      # grup basina en kritik kontrol
+            if c["group"] not in worst or c["util"] > worst[c["group"]]["util"]:
+                worst[c["group"]] = c
+        for g, c in worst.items():
+            checks.append({"name": f"{g}: {c['name']}", "ok": c["util"] <= 1.0,
+                           "detail": f"{c['detail']} · kullanım %{c['util'] * 100:.0f}"})
+        result["strength"] = {
+            "material": mat["name"], "safety_factor": mat["n"], "load_N": F,
+            "coupler_force_max_N": forces["F_ab_max"],
+            "input_torque_max_Nmm": forces["M_crank_max"],
+            "checks": s_checks,
+        }
+    elif passed:
+        notes.append("Yük verilmediği için mukavemet hesabı yapılmadı; "
+                     "varsayılan kesit (10×4 mm, Ø4 pim) kullanıldı.")
+    result["section_mm"] = section
+
+    fusion = kin.to_fusion_dict(mech, frames, passed and strength_ok)
+    fusion["section_mm"] = section
     result.update(
         lengths={k: mech[k] for k in "abcd"},
         target={"swing": psi, "Q": Q},
@@ -107,11 +142,19 @@ def design_from_text(text, on_status=None):
         checks=checks,
         notes=notes,
         mu_curve=sorted((round(f["theta"], 1), round(f["mu"], 2)) for f in frames[::3]),
-        fusion=kin.to_fusion_dict(mech, frames, passed),
+        fusion=fusion,
     )
 
-    if passed:
+    if passed and not strength_ok:
+        passed = False
+        msg = (f"{F:g} N yük için {strength.MATERIALS[mat_key]['name']} ile uygun kesit bulunamadı "
+               f"(genişlik ≤ {strength.MAX_WIDTH} mm). Öneri: daha dayanıklı malzeme ya da daha küçük yük.")
+    elif passed:
         msg = "Tasarım tüm kontrollerden geçti."
+        if "strength" in result:
+            s = section
+            msg += (f" Kesit {s['width']:g}×{s['thickness']:g} mm, pim Ø{s['hole']:g} mm; "
+                    f"en büyük tahrik torku {result['strength']['input_torque_max_Nmm'] / 1000:.2f} N·m.")
     else:
         msg = (f"{psi:g}° salınım" + (f", Q = {Q:g}" if Q > 1 else "") +
                f" ile iletim açısı sınırları ({kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°) sağlanamıyor.")

@@ -86,13 +86,17 @@ def call_on_main(fn, timeout=120):
 
 def reload_modules():
     """Proje modullerini yeniden yukle: kod degisince Fusion'u yeniden baslatmaya gerek yok."""
-    import kinematics
-    import llm_extract
     import pipeline
     import fusion_lib.fourbar
-    for mod in (kinematics, llm_extract, pipeline, fusion_lib.fourbar):
+    root = os.path.normcase(ROOT)
+    ours = [m for m in list(sys.modules.values())
+            if getattr(m, "__file__", None)
+            and os.path.normcase(os.path.realpath(m.__file__)).startswith(root)
+            and os.path.normcase(ADDIN_DIR) not in os.path.normcase(os.path.realpath(m.__file__))]
+    # bagimliliklar once: pipeline en son (digerlerini import ediyor)
+    for mod in sorted(ours, key=lambda m: m.__name__ == "pipeline"):
         importlib.reload(mod)
-    return pipeline, fusion_lib.fourbar
+    return sys.modules["pipeline"], sys.modules["fusion_lib.fourbar"]
 
 
 def send_to_palette(action, payload):
