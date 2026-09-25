@@ -20,7 +20,10 @@ MODEL = "qwen3.5:9b"
 SPEC_SCHEMA = {
     "type": "object",
     "properties": {
-        "mechanism_type": {"type": "string", "enum": ["crank_rocker", "rocker_rocker", "unknown"]},
+        "mechanism_type": {"type": "string", "enum": ["crank_rocker", "rocker_rocker", "spur_gear", "unknown"]},
+        "gear_ratio": {"type": ["number", "null"]},
+        "torque_Nm": {"type": ["number", "null"]},
+        "speed_rpm": {"type": ["number", "null"]},
         "crank_length_mm": {"type": ["number", "null"]},
         "input_swing_deg": {"type": ["number", "null"]},
         "output_swing_deg": {"type": ["number", "null"]},
@@ -29,8 +32,8 @@ SPEC_SCHEMA = {
         "max_load_N": {"type": ["number", "null"]},
         "material": {"type": ["string", "null"], "enum": ["PLA", "PETG", "aluminum", "steel", None]},
     },
-    "required": ["mechanism_type", "crank_length_mm", "input_swing_deg", "output_swing_deg",
-                 "quick_return", "time_ratio", "max_load_N", "material"],
+    "required": ["mechanism_type", "gear_ratio", "torque_Nm", "speed_rpm", "crank_length_mm",
+                 "input_swing_deg", "output_swing_deg", "quick_return", "time_ratio", "max_load_N", "material"],
     "additionalProperties": False,
 }
 
@@ -38,7 +41,10 @@ SYSTEM_PROMPT = (
     "You extract mechanism design requirements from the user's text (usually Turkish) into JSON. "
     "Only use values the user explicitly states. Never invent or estimate numbers; "
     "use null when a value is not given. Convert units to mm, degrees and newtons (1 kg = 9.81 N). "
-    "mechanism_type: 'crank_rocker' when the input (crank) rotates continuously / full turns "
+    "mechanism_type: 'spur_gear' for a gear pair / reducer (dişli, dişli çifti, redüktör, çevrim oranı, "
+    "'3 kat yavaşlatsın'); then gear_ratio = the speed reduction ratio (e.g. '1:3', '3 kat yavaş', 'oran 3' -> 3), "
+    "torque_Nm = input torque in N·m (convert N·mm or kg·cm: 1 kg·cm = 0.0981 N·m), speed_rpm = input speed if given. "
+    "Otherwise: 'crank_rocker' when the input (crank) rotates continuously / full turns "
     "(default when the input motion is not described); 'rocker_rocker' when the INPUT link only turns "
     "through a limited angle (e.g. 'giriş kolu 60 derece dönünce çıkış 90 derece dönsün', "
     "'kolu 45 derece çevirince', '4 cm kolu 45° çevirince diğer kol 120° dönsün' -> rocker_rocker, "

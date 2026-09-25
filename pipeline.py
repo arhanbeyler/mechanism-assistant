@@ -9,6 +9,7 @@ Sadece standart kutuphane: Fusion'in kendi Python'unda da calisir.
 import re
 
 import function_gen
+import gears
 import interference
 import kinematics as kin
 import strength
@@ -92,10 +93,15 @@ def design_from_text(text, on_status=None):
     return result
 
 
-def design_from_params(crank_length_mm, output_swing_deg, time_ratio=1.0,
-                       max_load_N=None, material=None, input_swing_deg=360):
+def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
+                       max_load_N=None, material=None, input_swing_deg=360, kind="fourbar",
+                       gear_ratio=None, torque_Nm=None, speed_rpm=None):
     """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim.
+    kind: "fourbar" ya da "spur_gear" (C0: modul secimi).
     input_swing_deg >= 360: giris tam tur (krank-kol); daha az: sinirli acida giris kolu (B9)."""
+    if kind == "spur_gear":
+        return design_from_spec({"mechanism_type": "spur_gear", "gear_ratio": gear_ratio,
+                                 "torque_Nm": torque_Nm, "speed_rpm": speed_rpm or None, "material": material})
     rr = input_swing_deg < 360
     return design_from_spec({
         "mechanism_type": "rocker_rocker" if rr else "crank_rocker", "crank_length_mm": crank_length_mm,
@@ -111,6 +117,8 @@ def design_from_spec(spec, on_status=None):
     result = {"spec": spec}
 
     mtype = spec["mechanism_type"]
+    if mtype == "spur_gear":
+        return _spur_gear(result, spec, say)
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Şu an sadece dört çubuk mekanizmaları destekleniyor "
@@ -164,6 +172,50 @@ def design_from_spec(spec, on_status=None):
         ]
     return _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi,
                    Q if rr else None, rr) if rr else _crank_rocker(result, spec, notes, say, a, psi)
+
+
+def _spur_gear(result, spec, say):
+    """C9: duz disli cifti. Gerekli: cevrim orani ve giris torku (tork uydurulmaz)."""
+    missing = [name for key, name in (("gear_ratio", "çevrim oranı"), ("torque_Nm", "giriş torku (N·m)"))
+               if spec.get(key) is None]
+    if missing:
+        return dict(result, status="missing", mechanism_type="spur_gear",
+                    message=f"Dişli tasarımı için eksik bilgi: {', '.join(missing)}.")
+    ratio, T1 = float(spec["gear_ratio"]), float(spec["torque_Nm"]) * 1000.0
+    if ratio < 1:
+        ratio = 1 / ratio                     # 1:3 ve 3:1 ayni cift; pinyon her zaman giris
+    if not 1 <= ratio <= 8:
+        return dict(result, status="missing", mechanism_type="spur_gear",
+                    message=f"Tek kademe düz dişli için oran 1–8 arasında olmalı (verilen: {ratio:g}).")
+    notes = []
+    mat_key = spec.get("material")
+    if mat_key not in strength.MATERIALS:
+        mat_key = "PLA"
+        notes.append("Malzeme belirtilmediği için PLA (3B baskı) varsayıldı.")
+    mat = strength.MATERIALS[mat_key]
+    say("Dişli sentezi (Lewis eğilme, kavrama oranı)...")
+    g, g_checks = gears.design(ratio, T1, mat, spec.get("speed_rpm"))
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0 or c["group"] == "Temas",
+               "detail": c["detail"] + (f" · kullanım %{c['util'] * 100:.0f}" if c["group"] != "Temas" else "")}
+              for c in g_checks]
+    result.update(mechanism_type="spur_gear", checks=checks, notes=notes)
+    if g is None:
+        return dict(result, status="failed",
+                    message=" ".join(notes + [f"{T1 / 1000:g} N·m giriş torku için {mat['name']} ile uygun dişli "
+                                              f"bulunamadı. Öneri: daha dayanıklı malzeme ya da daha küçük tork."]))
+    checks.insert(0, {"name": "Çevrim oranı", "ok": g["ratio_err_pct"] <= 2.0,
+                      "detail": f"{g['z2']}/{g['z1']} = {g['ratio']:.3f} (hedef {ratio:g}, fark %{g['ratio_err_pct']:.1f})"})
+    checks.insert(1, {"name": "Alttan kesme", "ok": g["z1"] >= gears.z_min(),
+                      "detail": f"z₁ = {g['z1']} ≥ {gears.z_min():.1f}"})
+    result.update(
+        gear=g, target={"ratio": ratio, "torque_Nm": T1 / 1000},
+        fusion={"type": "spur_gear", "passed_checks": True, **g},
+        status="ok",
+        message=" ".join(notes + [
+            f"Tasarım tüm kontrollerden geçti. Modül {g['module']:g}, z = {g['z1']}/{g['z2']}, "
+            f"diş genişliği {g['face_width']:g} mm, eksen mesafesi {g['center_distance']:g} mm, "
+            f"miller Ø{g['bore1']:g}/Ø{g['bore2']:g} mm (çelik). Çıkış torku {T1 * g['ratio'] / 1000:.2f} N·m."]))
+    return result
 
 
 def _pick_function_generator(a, t_in, psi, spec):

@@ -31,6 +31,10 @@ CASES = [
     ("kolu 30° itince diğer taraf 75° açılsın, kol 50 mm",
      dict(mechanism_type="rocker_rocker", input_swing_deg=30, output_swing_deg=75)),
     ("bana bir dört çubuk yap, 40 derece sallansın", dict(crank_length_mm=None, output_swing_deg=40)),
+    ("1:3 dişli çifti, giriş torku 2 N·m, PLA", dict(mechanism_type="spur_gear", gear_ratio=3, torque_Nm=2, material="PLA")),
+    ("devri 3 kat düşüren bir redüktör, 5 Nm tork, 1500 rpm, çelik",
+     dict(mechanism_type="spur_gear", gear_ratio=3, torque_Nm=5, speed_rpm=1500, material="steel")),
+    ("çevrim oranı 2.5 olan dişli", dict(mechanism_type="spur_gear", gear_ratio=2.5, torque_Nm=None)),
 ]
 
 

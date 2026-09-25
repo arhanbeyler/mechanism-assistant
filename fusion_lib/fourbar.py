@@ -130,6 +130,8 @@ def _find_marked_design(app):
 def _clear(design):
     """Onceki mekanizmayi sil (sadece etiketli belgede cagrilir)."""
     root = design.rootComponent
+    for ml in list(root.motionLinks):        # disli: once mafsallari baglayan motion link
+        ml.deleteMe()
     for j in list(root.asBuiltJoints):
         j.deleteMe()
     for o in list(root.occurrences):
@@ -150,6 +152,11 @@ def build(mech, reuse=True):
         design.attributes.add(MARK_GROUP, MARK_NAME, "1")
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
+    if mech.get("type") == "spur_gear":       # C9: ayni (etiketli) belgede disli cifti
+        import fusion_lib.gear as gear
+        gear.build(mech, root)
+        app.activeViewport.fit()
+        return design
     pts = mech["points_mm"]
     section = mech.get("section_mm") or DEFAULT_SECTION
     d_pin = section["hole"]
