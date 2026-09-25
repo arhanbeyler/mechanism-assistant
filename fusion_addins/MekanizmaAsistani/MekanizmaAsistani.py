@@ -287,12 +287,22 @@ def warm_up_llm():
 
 # ---------------------------------------------------------------- yasam dongusu
 
+RUNNING_FLAG = "_mekanizma_asistani_running"   # tum eklentilerin paylastigi sys modulunde
+owner = False                                   # bu kopya mi baslatti?
+
+
 def run(context):
-    global app, ui
+    global app, ui, owner
     try:
         app = adsk.core.Application.get()
         ui = app.userInterface
-        log("---- eklenti basladi")
+        # Ayni eklenti iki yoldan kayitli olabilir (kisayol + gercek klasor): tek kopya calissin
+        if getattr(sys, RUNNING_FLAG, False):
+            log("---- ikinci kopya atlandi (eklenti zaten calisiyor): " + ADDIN_DIR)
+            return
+        setattr(sys, RUNNING_FLAG, True)
+        owner = True
+        log("---- eklenti basladi: " + os.path.realpath(__file__))
 
         custom_event = app.registerCustomEvent(EVENT_ID)
         on_main = MainThreadHandler()
@@ -318,7 +328,11 @@ def run(context):
 
 
 def stop(context):
-    global server
+    global server, owner
+    if not owner:
+        return          # calisan kopya bu degil: onun kaynaklarina dokunma
+    owner = False
+    setattr(sys, RUNNING_FLAG, False)
     try:
         if server:
             server.shutdown()
