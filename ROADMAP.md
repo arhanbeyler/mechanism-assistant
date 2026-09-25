@@ -23,8 +23,9 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B7c. Parametre kaydırıcıları.** Panelde anında hesaplanan kaydırıcılar, salınımda uygun bölge renkleri; Fusion'da "1 tur" ve sürekli döndürme
 - [x] **B7d. Gerilme yığılması (Kt) ve sehim.** Roark Kt (kırılgan malzemede, eksenel gerilmeye); L/200 sehim sınırı (konsol eğilme / eksenel uzama)
 - [x] **B7e. Fusion FEA ile doğrulama (niteliksel).** Al 6061 kol konsol, 49 N: kökte FEA n = 2–4, el hesabı n ≈ 3.6 ✓. Sim API önizlemede çalışmıyor, çözüm buluta gitti, sonuç sayısal okunamıyor
-- [ ] **B7f. Yerel, otomatik FEA.** gmsh + scikit-fem (tamamen yerel, açık kaynak); sehim/gerilme sayısal karşılaştırma, panelde "FEA ile doğrula"
-- [ ] **B7g. Göbek esnekliği.** FEA: geniş uzuv küçük pimden tutulunca sehim el hesabının 3–4 katı. Mil bağlantılı mafsallarda (O2, O4) göbek/pim çapı kuralı ya da FEA'dan kalibre edilmiş düzeltme
+- [x] **B7f. Yerel, otomatik FEA.** gmsh + scikit-fem (tamamen yerel); kol ve krank için FEA ile el hesabı karşılaştırması; panelde "FEA" düğmesi (Fusion içinde deneme bekliyor)
+- [x] **B7g. Göbek esnekliği.** Model δ_göbek = P·L²/(C·E·t·r²), C FEA ile kalibre (21 geometri, C = 6–9, L'den bağımsız); güvenli taraf için C = 6
+- [ ] **B7h. Mil ve pim çaplarını ayırmak.** O2/O4 (tahrik/çıkış mili, göbek) ile A/B (serbest pim) farklı çap; şu an ortak pim göbek yüzünden Ø10'a çıkıp tüm uzuvları genişletiyor
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
 
 ## C. Yeni modüller
@@ -57,3 +58,6 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - **Yerel FEA (gmsh + scikit-fem, P2 tetra) doğrulaması:** Orta kesit gerilmesi el hesabıyla %0.1–5 uyumlu
   (kiriş teorisi doğrulandı). Sehim ise ideal ankastre varsayımından büyük: Al 9×3 kol +%13, PETG 29×3 kol +%311.
   Sebep: geniş ve rijit uzuv, küçük (Ø4) delik çevresinde dönüyor (göbek esnekliği). Ağ yakınsaması kontrol edildi.
+- **Göbek modeli (FEA kalibrasyonu):** Delikten tutulan uzvun dönme rijitliği k = C·E·t·r². 21 FEA çözümünde
+  C, uzunluktan bağımsız (±%3, L² ölçeklemesi doğrulandı) ve d/w ≤ 0.3 için 5.96–9.17. Güvenli taraf için C = 6.
+  Etkisi: 40 mm, 29 mm genişlik, Ø3 pim uzuvda göbek sehimi kiriş eğilmesinin 11 katı.

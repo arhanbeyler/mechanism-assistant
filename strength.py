@@ -16,7 +16,8 @@ Kontroller (n: emniyet katsayisi, kullanim orani <= 1 olmali), her uzuv icin:
     Krank ek olarak:       M_krank / S_net + F_AB / A_net     <= sy / n
     Kol ek olarak:         F c / S_net + F_AB / A_net         <= sy / n
     Pim ezilmesi:          F_AB / (d t)                        <= sy / n
-    Rijitlik (sehim):      krank/kol: P L^3 / (3 E I_duzlem)   <= L / 200   (uctan yuklu konsol)
+    Rijitlik (sehim):      krank/kol: P L^3/(3 E I) + P L/(kappa G A) + P L^2/(C E t r^2)  <= L / 200
+                           (uctan yuklu konsol: egilme + Timoshenko kayma + gobek donmesi, C = HUB_C)
                            biyel/sabit: F_AB L / (E A)         <= L / 200   (eksenel uzama)
 Pim (tum mafsallarda ayni cap):
     Kayma (tek tesirli):   4 F_AB / (pi d^2)                   <= 0.5 sy / n  (Tresca)
@@ -43,6 +44,13 @@ MATERIALS = {
 }
 
 DEFLECTION_RATIO = 200     # izin verilen sehim: L / 200
+
+# Gobek esnekligi (B7g): milden/pimden tutulan uzuv, kucuk delik cevresinde doner.
+# Donme rijitligi k = C E t r^2  ->  uc sehimine katkisi  delta_hub = P L^2 / (C E t r^2).
+# C, yerel FEA taramasiyla kalibre edildi (tools/hub_calibration.py: 21 geometri,
+# L = 40-100, w = 9-29, d = 3-6 mm). d/w <= 0.3 icin C = 5.96-9.17 ve L'den bagimsiz
+# (L^2 olceklemesi dogrulandi). Guvenli tarafta kalmak icin ALT SINIR kullanilir.
+HUB_C = 6.0
 
 
 def kt_hole_tension(d, w):
@@ -107,8 +115,12 @@ def check_link(name, forces, length, mat, w, t, d):
     if moment:
         P_tip = moment / length                      # uctaki dik kuvvet
         I_in = t * w ** 3 / 12.0
-        delta = P_tip * length ** 3 / (3 * E * I_in)
-        kind = "eğilme sehimi"
+        G = E / (2 * (1 + mat.get("nu", 0.35)))
+        d_bend = P_tip * length ** 3 / (3 * E * I_in)                 # Euler-Bernoulli
+        d_shear = P_tip * length / ((5.0 / 6.0) * G * w * t)         # Timoshenko kayma
+        d_hub = P_tip * length ** 2 / (HUB_C * E * t * (d / 2) ** 2)  # gobek donmesi (FEA kalibre)
+        delta = d_bend + d_shear + d_hub
+        kind = "sehimi (eğilme + kayma + göbek)"
     else:
         delta = F_ab * length / (E * w * t)
         kind = "eksenel uzama"

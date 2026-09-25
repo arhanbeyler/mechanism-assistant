@@ -56,11 +56,29 @@ def test_check_link_hand_calculation():
     kol = {x["name"]: x for x in strength.check_link("Kol", forces, 60.0, PLA, 20, 4, 4)}
     assert kol["Kol eğilme + eksenel"]["util"] == pytest.approx((2000 / S_net + kt * 100 / 64) / allow)
     P_tip, I_in = 2000 / 60, 4 * 20 ** 3 / 12
-    sehim = P_tip * 60 ** 3 / (3 * 2500 * I_in)                      # P L^3 / (3 E I)
-    assert kol["Kol eğilme sehimi"]["util"] == pytest.approx(sehim / (60 / 200))
+    G = 2500 / (2 * (1 + 0.36))
+    sehim = (P_tip * 60 ** 3 / (3 * 2500 * I_in)                     # egilme
+             + P_tip * 60 / ((5 / 6) * G * 20 * 4)                    # Timoshenko kayma
+             + P_tip * 60 ** 2 / (6.0 * 2500 * 4 * 2 ** 2))           # gobek donmesi (C = 6)
+    assert kol["Kol sehimi (eğilme + kayma + göbek)"]["util"] == pytest.approx(sehim / (60 / 200))
 
     tau = 4 * 100 / (math.pi * 16)
     assert strength.check_pin(forces, PLA, 4)["util"] == pytest.approx(tau / (0.5 * allow))
+
+
+def test_hub_model_is_conservative_against_fea():
+    """B7g: gobek modelli el hesabi, FEA sehimini asagi tahmin etmemeli (C alt sinirda)
+    ve asiri da abartmamali. Genis uzuv + kucuk pim: gobek etkisinin baskin oldugu durum."""
+    pytest.importorskip("gmsh")
+    import fea_local
+    L, w, t, d, F, E, nu = 60, 29, 3, 4, 50.0, 2000.0, 0.38
+    fea = fea_local.solve_cantilever(L, w, t, d, F, E, nu, h=2.0)["tip_delta"]
+    mat = {"sy": 35, "E": E, "nu": nu, "n": 3.0, "brittle": False}
+    forces = {"F_ab_max": 0.0, "M_crank_max": 0.0, "M_rocker": F * L}
+    c = {x["name"]: x for x in strength.check_link("Kol", forces, L, mat, w, t, d)}
+    model = c["Kol sehimi (eğilme + kayma + göbek)"]["util"] * L / 200
+    assert model >= fea * 0.98                  # guvenli taraf
+    assert model <= fea * 1.5                   # ama 1.5 kattan fazla abartmiyor
 
 
 @pytest.mark.parametrize("r, expected", [(0.0, 3.00), (0.5, 2.159), (0.3, 2.349)])
@@ -101,15 +119,16 @@ def test_sized_links_pass_and_each_is_minimal(mech30):
 
 
 def test_governing_checks_match_load_type(mech30):
-    """Krank tahrik torkuyla egilmeye calisir -> kritik kontrolu egilme;
-    sabit uzuv sadece eksenel yuk tasir -> egilme kontrolu yok.
+    """Krank tahrik torkuyla egilmeye calisir -> kritik kontrolu momentten gelir (egilme
+    gerilmesi ya da egilme/gobek sehimi); sabit uzuv sadece eksenel yuk tasir -> egilme yok.
     (Ilk varsayim 'kisa krank daha kucuk olmali' yanlisti: krank egilme icin genislik ister.)"""
     m, frames, lengths = mech30
     forces = strength.analyze_forces(m, frames, 50.0)
     sec, checks = strength.size_links(forces, lengths, PLA)
     crank = [c for c in checks if c["name"].startswith("Krank")]
-    assert max(crank, key=lambda c: c["util"])["name"] == "Krank eğilme + eksenel"
-    assert not any("Sabit eğilme" in c["name"] for c in checks)
+    governing = max(crank, key=lambda c: c["util"])["name"]
+    assert governing in ("Krank eğilme + eksenel", "Krank sehimi (eğilme + kayma + göbek)")
+    assert not any("Sabit eğilme" in c["name"] or "Sabit sehimi" in c["name"] for c in checks)
 
 
 def test_per_link_uses_less_material_than_uniform(mech30):
