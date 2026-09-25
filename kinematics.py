@@ -17,10 +17,43 @@ sekilde taranarak secilir.
 import math
 import sys
 
-import numpy as np
+# Not: Bu dosya bilerek sadece Python'un standart kutuphanesini kullanir (numpy yok),
+# cunku Fusion 360'in kendi Python'unda numpy bulunmaz. Noktalar (x, y) demetleridir.
 
 MU_MIN_DEG = 40.0
 MU_MAX_DEG = 140.0
+
+
+# ---------------------------------------------------------------- 2B vektor yardimcilari
+
+def _add(p, q):
+    return (p[0] + q[0], p[1] + q[1])
+
+
+def _sub(p, q):
+    return (p[0] - q[0], p[1] - q[1])
+
+
+def _scale(p, k):
+    return (p[0] * k, p[1] * k)
+
+
+def _norm(p):
+    return math.hypot(p[0], p[1])
+
+
+def _dot(p, q):
+    return p[0] * q[0] + p[1] * q[1]
+
+
+def _cross2(u, v):
+    """2B capraz carpim (z bileseni): isaret, donus yonunu verir."""
+    return u[0] * v[1] - u[1] * v[0]
+
+
+def _linspace(start, stop, n, endpoint=True):
+    step = (stop - start) / ((n - 1) if endpoint else n)
+    return [start + i * step for i in range(n)]
 
 
 # ---------------------------------------------------------------- kontroller
@@ -69,7 +102,7 @@ def synthesize_crank_rocker(a, psi_deg, mu_design=45.0, b_steps=2000):
     by = c * math.sin(psi / 2)
 
     best = None
-    for b in np.linspace(1.05 * a, 15 * a, b_steps):   # kisadan uzuna
+    for b in _linspace(1.05 * a, 15 * a, b_steps):   # kisadan uzuna
         o2 = (bx, -by - (b - a))            # B1-B2 dogrusu uzerinde, B2'nin altinda
         d = math.hypot(*o2)
         mu1, mu2 = transmission_extremes(a, b, c, d)
@@ -81,11 +114,6 @@ def synthesize_crank_rocker(a, psi_deg, mu_design=45.0, b_steps=2000):
         if best is None or worst < best["worst_dev"]:
             best = cand
     return best
-
-
-def _cross2(u, v):
-    """2B capraz carpim (z bileseni): isaret, donus yonunu verir."""
-    return u[0] * v[1] - u[1] * v[0]
 
 
 def synthesize_quick_return(a, psi_deg, Q, mu_design=45.0, n=3600):
@@ -101,46 +129,48 @@ def synthesize_quick_return(a, psi_deg, Q, mu_design=45.0, n=3600):
         return synthesize_crank_rocker(a, psi_deg, mu_design)
     psi = math.radians(psi_deg)
     alpha = math.pi * (Q - 1) / (Q + 1)
-    B1 = np.array([math.cos(psi / 2), math.sin(psi / 2)])
-    B2 = np.array([math.cos(psi / 2), -math.sin(psi / 2)])
-    chord = np.linalg.norm(B1 - B2)
+    B1 = (math.cos(psi / 2), math.sin(psi / 2))
+    B2 = (math.cos(psi / 2), -math.sin(psi / 2))
+    chord = _norm(_sub(B1, B2))
     R = chord / (2 * math.sin(alpha))
-    mid = (B1 + B2) / 2
+    mid = _scale(_add(B1, B2), 0.5)
 
     best = best_ok = None
     for side in (1, -1):
-        center = mid + side * np.array([R * math.cos(alpha), 0.0])
-        for t in np.linspace(0, 2 * math.pi, n, endpoint=False):
-            o2 = center + R * np.array([math.cos(t), math.sin(t)])
-            L1, L2 = np.linalg.norm(B1 - o2), np.linalg.norm(B2 - o2)
+        center = _add(mid, (side * R * math.cos(alpha), 0.0))
+        for t in _linspace(0, 2 * math.pi, n, endpoint=False):
+            o2 = _add(center, (R * math.cos(t), R * math.sin(t)))
+            L1, L2 = _norm(_sub(B1, o2)), _norm(_sub(B2, o2))
             if min(L1, L2) < 1e-9:
                 continue
-            v1, v2 = (B1 - o2) / L1, (B2 - o2) / L2
-            ang = math.acos(max(-1.0, min(1.0, float(np.dot(v1, v2)))))
+            v1, v2 = _scale(_sub(B1, o2), 1 / L1), _scale(_sub(B2, o2), 1 / L2)
+            ang = math.acos(max(-1.0, min(1.0, _dot(v1, v2))))
             if abs(ang - alpha) > 1e-6 or abs(L1 - L2) < 1e-6:
                 continue                     # cemberin yanlis yayi
             a_u, b_u = abs(L1 - L2) / 2, (L1 + L2) / 2
             # Uzanmis (ext) ve katlanmis (fold) konumlar AYNI montaj kolunda olmali:
             # biyel-kol arasindaki isaretli aci iki konumda da ayni isarette.
             ext, fold = (B1, B2) if L1 > L2 else (B2, B1)
-            A_ext = o2 + a_u * (ext - o2) / np.linalg.norm(ext - o2)
-            A_fold = o2 - a_u * (fold - o2) / np.linalg.norm(fold - o2)
-            s_ext = _cross2(ext - A_ext, -ext)
-            s_fold = _cross2(fold - A_fold, -fold)
+            A_ext = _add(o2, _scale(_sub(ext, o2), a_u / _norm(_sub(ext, o2))))
+            A_fold = _sub(o2, _scale(_sub(fold, o2), a_u / _norm(_sub(fold, o2))))
+            s_ext = _cross2(_sub(ext, A_ext), _scale(ext, -1))
+            s_fold = _cross2(_sub(fold, A_fold), _scale(fold, -1))
             if s_ext * s_fold <= 0:
                 continue                     # farkli montaj kollari: gercekte olusmaz
             k = a / a_u                      # olcek: krank = a
-            b, c, d = b_u * k, k, float(np.linalg.norm(o2)) * k
+            b, c, d = b_u * k, k, _norm(o2) * k
             if not grashof(a, b, c, d)[0] or min(a, b, c, d) != a:
                 continue                     # krank-kol olmali (en kisa = krank)
             mu1, mu2 = transmission_extremes(a, b, c, d)
             worst = max(abs(90 - mu1), abs(90 - mu2))
-            cand = dict(a=a, b=b, c=c, d=d, o2=tuple(o2 * k), b_ref=tuple(ext * k),
+            cand = dict(a=a, b=b, c=c, d=d, o2=_scale(o2, k), b_ref=_scale(ext, k),
                         mu_min=min(mu1, mu2), mu_max=max(mu1, mu2),
                         worst_dev=worst, size=b + c + d, Q=Q)
-            if worst <= 90 - mu_design and (best_ok is None or cand["size"] < best_ok["size"]):
+            # Esitlikte ilk bulunan kalir (1e-9 tolerans): ayna-simetrik cozumler arasinda
+            # yuvarlama gurultusu secimi degistirmesin, ayni girdi hep ayni ciktiyi versin.
+            if worst <= 90 - mu_design and (best_ok is None or cand["size"] < best_ok["size"] - 1e-9):
                 best_ok = cand
-            if best is None or worst < best["worst_dev"]:
+            if best is None or worst < best["worst_dev"] - 1e-9:
                 best = cand
     return best_ok or best
 
@@ -163,8 +193,8 @@ def _circle_intersections(p0, r0, p1, r1):
 
 def simulate(m, n=360):
     """Krank 360 derece doner; her adimda A, B noktalari ve iletim acisi."""
-    o2 = np.array(m["o2"])
-    o4 = np.array([0.0, 0.0])
+    o2 = tuple(m["o2"])
+    o4 = (0.0, 0.0)
     ground_angle = math.atan2(-o2[1], -o2[0])  # O2 -> O4 yonu
 
     # Baslangic: sentezdeki uzanmis konum (krank, kol ucu B_ref'e bakar) -> dogru montaj kolu
@@ -174,20 +204,20 @@ def simulate(m, n=360):
         th0 = math.atan2(b_ref[1] - o2[1], b_ref[0] - o2[0]) - ground_angle
 
     frames, prev_b = [], b_ref
-    for step in np.linspace(0, 2 * math.pi, n, endpoint=False):
+    for step in _linspace(0, 2 * math.pi, n, endpoint=False):
         th = (th0 + step) % (2 * math.pi)
-        A = o2 + m["a"] * np.array([math.cos(ground_angle + th), math.sin(ground_angle + th)])
+        A = _add(o2, (m["a"] * math.cos(ground_angle + th), m["a"] * math.sin(ground_angle + th)))
         sols = _circle_intersections(A, m["b"], o4, m["c"])
         if not sols:
             raise RuntimeError(f"Mekanizma krank acisi {math.degrees(th):.1f} derecede kilitleniyor")
         # Sureklilik: onceki B'ye en yakin cozumu sec (montaj kolu degismesin)
         if prev_b is None:
-            B = np.array(max(sols, key=lambda s: s[0]))
+            B = max(sols, key=lambda s: s[0])
         else:
-            B = np.array(min(sols, key=lambda s: math.dist(s, prev_b)))
+            B = min(sols, key=lambda s: math.dist(s, prev_b))
         prev_b = B
-        ab, ob = B - A, B - o4
-        cos_mu = np.dot(-ab, -ob) / (np.linalg.norm(ab) * np.linalg.norm(ob))
+        ab, ob = _sub(B, A), _sub(B, o4)
+        cos_mu = _dot(ab, ob) / (_norm(ab) * _norm(ob))
         mu = math.degrees(math.acos(max(-1.0, min(1.0, cos_mu))))
         rocker = math.degrees(math.atan2(B[1], B[0]))
         frames.append(dict(theta=math.degrees(th), A=A, B=B, mu=mu, rocker=rocker))
