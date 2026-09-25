@@ -1,0 +1,52 @@
+"""
+LLM degerlendirme seti: istem (prompt) her degistiginde calistir.
+Bir yeri duzeltirken baska bir yeri bozmamak icin (ornek: '45° cevirince' duzeltilince
+'30 mm krank, 60° salinim' bozulmustu).
+
+Kullanim (proje klasorunde, Ollama calisirken):  python -u tools/llm_eval.py
+LLM cikisi + kod guvenlik agi (pipeline.input_turn_backstop) birlikte test edilir.
+"""
+
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from llm_extract import extract_spec  # noqa: E402
+from pipeline import input_turn_backstop  # noqa: E402
+
+# (cumle, beklenen alanlar)
+CASES = [
+    ("30 mm krank, 60° salınım", dict(mechanism_type="crank_rocker", crank_length_mm=30, output_swing_deg=60)),
+    ("30 mm krank, 60 derece salınım", dict(mechanism_type="crank_rocker", crank_length_mm=30, output_swing_deg=60)),
+    ("4 cm krank, 50°, hızlı dönüşlü", dict(mechanism_type="crank_rocker", crank_length_mm=40, quick_return=True)),
+    ("30 mm krank tam tur dönsün, kol 60 derece sallansın", dict(mechanism_type="crank_rocker", output_swing_deg=60)),
+    ("30 mm krank, 60 derece salınım, uçta 5 kg yük, PETG", dict(mechanism_type="crank_rocker", material="PETG")),
+    ("4 cm kolu 45° çevirince diğer kol 120° dönsün, PETG, 2 kg",
+     dict(mechanism_type="rocker_rocker", crank_length_mm=40, input_swing_deg=45, output_swing_deg=120)),
+    ("4 cm kolu 45 derece çevirince diğer kol 120 derece dönsün",
+     dict(mechanism_type="rocker_rocker", input_swing_deg=45, output_swing_deg=120)),
+    ("40 mm giriş kolu 60° dönünce çıkış kolu 90° dönsün",
+     dict(mechanism_type="rocker_rocker", crank_length_mm=40, input_swing_deg=60, output_swing_deg=90)),
+    ("kolu 30° itince diğer taraf 75° açılsın, kol 50 mm",
+     dict(mechanism_type="rocker_rocker", input_swing_deg=30, output_swing_deg=75)),
+    ("bana bir dört çubuk yap, 40 derece sallansın", dict(crank_length_mm=None, output_swing_deg=40)),
+]
+
+
+def main():
+    fails = 0
+    for text, want in CASES:
+        t0 = time.time()
+        spec, _ = input_turn_backstop(text, extract_spec(text))
+        bad = {k: (spec.get(k), v) for k, v in want.items()
+               if not (spec.get(k) == v or (isinstance(v, (int, float)) and isinstance(spec.get(k), (int, float))
+                                             and abs(spec.get(k) - v) < 1e-6))}
+        fails += bool(bad)
+        print(f"{'OK ' if not bad else 'HATA'} ({time.time() - t0:.1f} s) {text}" + (f"\n      {bad}" if bad else ""))
+    print(f"\n{len(CASES) - fails}/{len(CASES)} dogru")
+    return fails
+
+
+if __name__ == "__main__":
+    sys.exit(1 if main() else 0)

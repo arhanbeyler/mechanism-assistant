@@ -6,6 +6,8 @@ Hem terminal (main.py) hem Fusion paneli bunu kullanir.
 Sadece standart kutuphane: Fusion'in kendi Python'unda da calisir.
 """
 
+import re
+
 import function_gen
 import interference
 import kinematics as kin
@@ -54,6 +56,26 @@ def swing_band(Q=1.0, step=5, n=720):
     return band
 
 
+_INPUT_TURN = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(?:°|derece|derecelik)\s*(?:\S+\s+)?"
+    r"(?:çevir|döndür|dönün|döndüğ|itin|it(?:ti)?ğ|hareket ettir|oynat)", re.IGNORECASE)
+
+
+def input_turn_backstop(text, spec):
+    """Guvenlik agi: "X° cevirince/dondurunce/itince" kalibi varsa giris kolu sinirli acida doner.
+    LLM bunu kacirirsa (ornegin '45°' yaziminda) sayi DOGRUDAN kullanicinin cumlesinden okunur
+    (uydurma degil). Dondurur: (spec, not ya da None)."""
+    m = _INPUT_TURN.search(text)
+    if not m or spec.get("input_swing_deg") is not None:
+        return spec, None
+    angle = float(m.group(1).replace(",", "."))
+    if not 0 < angle < 360:
+        return spec, None
+    fixed = dict(spec, mechanism_type="rocker_rocker", input_swing_deg=angle,
+                 quick_return=False, time_ratio=None)
+    return fixed, f"Giriş kolunun {angle:g}° döndüğü cümleden okundu (sınırlı açılı mekanizma)."
+
+
 def design_from_text(text, on_status=None):
     """
     Cumleden tasarim. Dondurur: dict(status, message, spec, ...)
@@ -62,7 +84,10 @@ def design_from_text(text, on_status=None):
     """
     say = on_status or (lambda s: None)
     say("LLM cümleyi yorumluyor...")
-    result = design_from_spec(extract_spec(text), on_status)
+    spec, note = input_turn_backstop(text, extract_spec(text))
+    result = design_from_spec(spec, on_status)
+    if note and "message" in result:
+        result["message"] = note + " " + result["message"]
     result["text"] = text
     return result
 

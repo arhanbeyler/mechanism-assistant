@@ -81,6 +81,28 @@ def test_pipeline_rocker_rocker_asks_for_input_angle(monkeypatch):
     assert "giriş kolunun dönme açısı" in r["message"]
 
 
+@pytest.mark.parametrize("text, angle", [
+    ("4 cm kolu 45° çevirince diğer kol 120° dönsün, PETG, 2 kg", 45),
+    ("kolu 30 derece itince diğer taraf 75 derece açılsın", 30),
+    ("giriş kolu 60° dönünce çıkış 90° dönsün", 60),
+    ("kolu 22,5° döndürünce", 22.5),
+])
+def test_backstop_reads_input_turn_from_sentence(text, angle):
+    """LLM giris acisini kacirsa bile kullanicinin cumlesindeki sayi kullanilir."""
+    llm_missed = {"mechanism_type": "crank_rocker", "input_swing_deg": None, "quick_return": False}
+    spec, note = pipeline.input_turn_backstop(text, llm_missed)
+    assert spec["mechanism_type"] == "rocker_rocker"
+    assert spec["input_swing_deg"] == pytest.approx(angle)
+    assert note
+
+
+@pytest.mark.parametrize("text", ["30 mm krank, 60° salınım", "krank tam tur dönsün, kol 60 derece sallansın",
+                                  "40 mm krank, 50 derece, hızlı dönüşlü"])
+def test_backstop_leaves_crank_rocker_alone(text):
+    spec, note = pipeline.input_turn_backstop(text, {"mechanism_type": "crank_rocker", "input_swing_deg": None})
+    assert spec["mechanism_type"] == "crank_rocker" and note is None
+
+
 def test_params_360_means_crank_rocker():
     r = pipeline.design_from_params(30, 60, input_swing_deg=360)
     assert r["mechanism_type"] == "crank_rocker"
