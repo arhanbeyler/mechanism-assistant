@@ -86,20 +86,53 @@ def hole_edge(occ, local_x_mm, sec):
     body = occ.component.bRepBodies.item(0)
     for edge in body.edges:
         geo = edge.geometry
-        if isinstance(geo, adsk.core.Circle3D) \
-                and abs(geo.radius - mm(sec["hole"] / 2)) < 1e-4 \
-                and abs(geo.center.x - mm(local_x_mm)) < 1e-4 \
-                and abs(geo.center.z - mm(sec["thickness"])) < 1e-4:
+        # Kisa uzuvlarda Fusion delik kenarini tam daire yerine yaylara bolebiliyor
+        if isinstance(geo, (adsk.core.Circle3D, adsk.core.Arc3D)) \
+                and abs(geo.radius - mm(sec["hole"] / 2)) < 1e-3 \
+                and abs(geo.center.x - mm(local_x_mm)) < 1e-3 \
+                and abs(geo.center.y) < 1e-3 \
+                and abs(geo.center.z - mm(sec["thickness"])) < 1e-3:
             return edge.createForAssemblyContext(occ)
     raise RuntimeError(f"{occ.component.name}: x={local_x_mm} mm'de delik kenari bulunamadi")
 
 
-def build(mech, new_document=True):
-    """Mekanizmayi kurar. Dondurur: olusturulan tasarim (Design)."""
+MARK_GROUP, MARK_NAME = "MekanizmaAsistani", "fourbar"   # eklentinin cizdigi belgenin etiketi
+
+
+def _find_marked_design(app):
+    """Daha once bu eklentinin cizdigi (etiketli) acik belge; yoksa (None, None)."""
+    for i in range(app.documents.count):
+        doc = app.documents.item(i)
+        try:
+            des = adsk.fusion.Design.cast(doc.products.itemByProductType("DesignProductType"))
+        except Exception:
+            continue
+        if des and des.attributes.itemByName(MARK_GROUP, MARK_NAME):
+            return doc, des
+    return None, None
+
+
+def _clear(design):
+    """Onceki mekanizmayi sil (sadece etiketli belgede cagrilir)."""
+    root = design.rootComponent
+    for j in list(root.asBuiltJoints):
+        j.deleteMe()
+    for o in list(root.occurrences):
+        o.deleteMe()
+
+
+def build(mech, reuse=True):
+    """Mekanizmayi kurar. reuse=True: eklentinin daha once cizdigi belge aciksa onu gunceller
+    (yeni sekme acmaz); yoksa yeni belge acar. Dondurur: tasarim (Design)."""
     app = adsk.core.Application.get()
-    if new_document:
+    doc, design = _find_marked_design(app) if reuse else (None, None)
+    if doc:
+        doc.activate()
+        _clear(design)
+    else:
         app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
-    design = adsk.fusion.Design.cast(app.activeProduct)
+        design = adsk.fusion.Design.cast(app.activeProduct)
+        design.attributes.add(MARK_GROUP, MARK_NAME, "1")
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
     pts = mech["points_mm"]
