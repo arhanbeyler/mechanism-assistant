@@ -1,0 +1,6 @@
+# Python
+__pycache__/
+*.pyc
+
+# Uretilen ciktilar (her calistirmada yeniden olusur)
+output/

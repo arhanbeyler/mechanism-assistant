@@ -1,0 +1,10 @@
+{
+	"autodeskProduct": "Fusion",
+	"type": "script",
+	"author": "Arhan Beyler",
+	"description": {
+		"": "kinematics.py ciktisindan dort cubuk mekanizmasini kurar"
+	},
+	"supportedOS": "windows|mac",
+	"editEnabled": true
+}

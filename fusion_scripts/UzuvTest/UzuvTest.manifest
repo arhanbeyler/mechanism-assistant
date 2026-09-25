@@ -1,0 +1,10 @@
+{
+	"autodeskProduct": "Fusion",
+	"type": "script",
+	"author": "Arhan Beyler",
+	"description": {
+		"": "Ilk test: tek bir mekanizma uzvu cizer"
+	},
+	"supportedOS": "windows|mac",
+	"editEnabled": true
+}
