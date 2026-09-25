@@ -26,6 +26,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
 
 ## C. Yeni modüller
+- [ ] **C0. Modüle özel kaydırıcılar.** Her modül kendi parametrelerini (ad, birim, aralık) tanımlar, panel kaydırıcıları otomatik kurar (yay seçiliyse yay kaydırıcıları). İlk yeni modülle birlikte
 - [ ] **C9. Düz dişli.** Dört çubuk + dişli kademesi ile büyük salınım
 - [ ] **C10. Helis ve konik yay**
 - [ ] **C11. Mil, kam**
