@@ -21,7 +21,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - [x] **B7. Mukavemet.** Yük ve malzemeye göre kesit (burkulma, net kesit, eğilme, pim kayma/ezilme), emniyet katsayısı, tahrik torku
 - [x] **B7b. Uzuv başına ayrı kesit.** Ortak pim çapı, uzuv başına genişlik/kalınlık; tek kesite göre %32 daha az malzeme
 - [x] **B7c. Parametre kaydırıcıları.** Panelde anında hesaplanan kaydırıcılar, salınımda uygun bölge renkleri; Fusion'da "1 tur" ve sürekli döndürme
-- [ ] **B7d. Gerilme yığılması (Kt) ve sehim.** Delik kenarında tepe gerilme (PLA kırılgan, yorulma); uzuvların esnemesi
+- [x] **B7d. Gerilme yığılması (Kt) ve sehim.** Roark Kt (kırılgan malzemede, eksenel gerilmeye); L/200 sehim sınırı (konsol eğilme / eksenel uzama)
 - [ ] **B7e. Fusion FEA ile doğrulama.** Static Stress sonucu el hesabıyla karşılaştırılır (rapor için)
 - [ ] **B8. Pimler ve boşluk.** Print-in-place baskıya hazırlık
 
@@ -50,3 +50,5 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 - **Yanlış sezgi, doğru motor:** "Kısa krank daha küçük kesit almalı" varsayımı yanlış çıktı. Krank tahrik torkuyla
   eğilmeye çalışıyor (genişlik ister), sabit uzuv ise sadece eksenel yük taşıyor (burkulma, kalınlık ister).
   5 kg / PETG örneği: Krank 21×3, Biyel 13×3, Kol 24×3, Sabit 11×4 mm.
+- **Alüminyumda rijitlik belirleyici:** 5 kg örneğinde kolda gerilme kullanımı %57 iken sehim kullanımı %94.
+  Metalde parçayı kırılma değil esneme sınırı boyutlandırıyor. PETG'de sehim sınırı kolu 24'ten 29 mm genişliğe çıkardı.

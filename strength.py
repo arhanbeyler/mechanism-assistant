@@ -16,8 +16,16 @@ Kontroller (n: emniyet katsayisi, kullanim orani <= 1 olmali), her uzuv icin:
     Krank ek olarak:       M_krank / S_net + F_AB / A_net     <= sy / n
     Kol ek olarak:         F c / S_net + F_AB / A_net         <= sy / n
     Pim ezilmesi:          F_AB / (d t)                        <= sy / n
+    Rijitlik (sehim):      krank/kol: P L^3 / (3 E I_duzlem)   <= L / 200   (uctan yuklu konsol)
+                           biyel/sabit: F_AB L / (E A)         <= L / 200   (eksenel uzama)
 Pim (tum mafsallarda ayni cap):
     Kayma (tek tesirli):   4 F_AB / (pi d^2)                   <= 0.5 sy / n  (Tresca)
+
+Gerilme yigilmasi (Kt), sadece KIRILGAN malzemelerde (PLA, PETG) ve sadece EKSENEL
+gerilmeye: delik duzlem ici egilmenin tarafsiz ekseninde kaldigi icin egilme tepe
+gerilmesini belirgin artirmaz. Sunek metallerde statik yukte yerel akma yuku dagittigi
+icin kullanilmaz (yorulmada gerekir). Roark, sonlu genislikte delikli plaka, cekme,
+net kesite gore:  Kt = 3.00 - 3.13 (d/w) + 3.66 (d/w)^2 - 1.53 (d/w)^3
 
 Boyutlandirma: pim capi ortak; her uzvun genislik ve kalinligi ayri secilir.
 Hedef: toplam hacim (sum w * t * L) en kucuk.
@@ -28,11 +36,19 @@ import math
 # Tipik degerler (3B baski icin %100 doluluk, katmanlar uzuv duzleminde varsayildi).
 # Dogrulanmali: baski yonu ve dolulukla plastiklerin dayanimi belirgin degisir.
 MATERIALS = {
-    "PLA":      {"name": "PLA (3B baskı)",      "sy": 40.0,  "E": 2500.0,   "n": 3.0},
-    "PETG":     {"name": "PETG (3B baskı)",     "sy": 35.0,  "E": 2000.0,   "n": 3.0},
-    "aluminum": {"name": "Alüminyum 6061-T6",  "sy": 276.0, "E": 69000.0,  "n": 2.0},
-    "steel":    {"name": "Çelik S235",          "sy": 235.0, "E": 200000.0, "n": 2.0},
+    "PLA":      {"name": "PLA (3B baskı)",      "sy": 40.0,  "E": 2500.0,   "n": 3.0, "brittle": True},
+    "PETG":     {"name": "PETG (3B baskı)",     "sy": 35.0,  "E": 2000.0,   "n": 3.0, "brittle": True},
+    "aluminum": {"name": "Alüminyum 6061-T6",  "sy": 276.0, "E": 69000.0,  "n": 2.0, "brittle": False},
+    "steel":    {"name": "Çelik S235",          "sy": 235.0, "E": 200000.0, "n": 2.0, "brittle": False},
 }
+
+DEFLECTION_RATIO = 200     # izin verilen sehim: L / 200
+
+
+def kt_hole_tension(d, w):
+    """Roark: sonlu genislikte plakada merkez delik, cekme, net kesite gore Kt (0 <= d/w < 1)."""
+    r = d / w
+    return 3.00 - 3.13 * r + 3.66 * r ** 2 - 1.53 * r ** 3
 
 LINK_KEYS = {"Krank": "a", "Biyel": "b", "Kol": "c", "Sabit": "d"}
 
@@ -80,10 +96,24 @@ def check_link(name, forces, length, mat, w, t, d):
     checks = [{"group": "Burkulma", "name": f"{name} burkulması", "util": F_ab * n / P_cr,
                "detail": f"F_AB = {F_ab:.0f} N, P_kr = {P_cr:.0f} N"}]
     moment = {"Krank": forces["M_crank_max"], "Kol": forces["M_rocker"]}.get(name, 0.0)
-    sigma = moment / S_net + F_ab / A_net
+    kt = kt_hole_tension(d, w) if mat.get("brittle") else 1.0
+    sigma = moment / S_net + kt * F_ab / A_net
     label = f"{name} eğilme + eksenel" if moment else f"{name} net kesit"
     checks.append({"group": "Gerilme", "name": label, "util": sigma / allow,
-                   "detail": f"σ = {sigma:.1f} MPa"})
+                   "detail": f"σ = {sigma:.1f} MPa" + (f" (Kt = {kt:.2f})" if kt > 1 else "")})
+
+    # Rijitlik: krank ve kol uctan yuklu konsol (duzlem ici), digerleri eksenel uzama
+    limit = length / DEFLECTION_RATIO
+    if moment:
+        P_tip = moment / length                      # uctaki dik kuvvet
+        I_in = t * w ** 3 / 12.0
+        delta = P_tip * length ** 3 / (3 * E * I_in)
+        kind = "eğilme sehimi"
+    else:
+        delta = F_ab * length / (E * w * t)
+        kind = "eksenel uzama"
+    checks.append({"group": "Rijitlik", "name": f"{name} {kind}", "util": delta / limit,
+                   "detail": f"δ = {delta:.2f} mm (sınır L/{DEFLECTION_RATIO} = {limit:.2f} mm)"})
     s_br = F_ab / (d * t)
     checks.append({"group": "Pim", "name": f"{name} pim ezilmesi", "util": s_br / allow,
                    "detail": f"σ_ez = {s_br:.1f} MPa"})

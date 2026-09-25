@@ -43,17 +43,41 @@ def test_check_link_hand_calculation():
     S_net = 4 * (20 ** 3 - 4 ** 3) / (6 * 20)
     I_min = 20 * 4 ** 3 / 12
 
+    kt = 3.00 - 3.13 * 0.2 + 3.66 * 0.2 ** 2 - 1.53 * 0.2 ** 3     # d/w = 4/20, PLA kirilgan
+
     biyel = {x["name"]: x for x in strength.check_link("Biyel", forces, 50.0, PLA, 20, 4, 4)}
-    assert biyel["Biyel net kesit"]["util"] == pytest.approx((100 / 64) / allow)
+    assert biyel["Biyel net kesit"]["util"] == pytest.approx(kt * (100 / 64) / allow)
     assert biyel["Biyel pim ezilmesi"]["util"] == pytest.approx((100 / 16) / allow)
     P_cr = math.pi ** 2 * 2500 * I_min / 50 ** 2
     assert biyel["Biyel burkulması"]["util"] == pytest.approx(100 * 3 / P_cr)
+    uzama = 100 * 50 / (2500 * 20 * 4)                               # F L / (E A)
+    assert biyel["Biyel eksenel uzama"]["util"] == pytest.approx(uzama / (50 / 200))
 
     kol = {x["name"]: x for x in strength.check_link("Kol", forces, 60.0, PLA, 20, 4, 4)}
-    assert kol["Kol eğilme + eksenel"]["util"] == pytest.approx((2000 / S_net + 100 / 64) / allow)
+    assert kol["Kol eğilme + eksenel"]["util"] == pytest.approx((2000 / S_net + kt * 100 / 64) / allow)
+    P_tip, I_in = 2000 / 60, 4 * 20 ** 3 / 12
+    sehim = P_tip * 60 ** 3 / (3 * 2500 * I_in)                      # P L^3 / (3 E I)
+    assert kol["Kol eğilme sehimi"]["util"] == pytest.approx(sehim / (60 / 200))
 
     tau = 4 * 100 / (math.pi * 16)
     assert strength.check_pin(forces, PLA, 4)["util"] == pytest.approx(tau / (0.5 * allow))
+
+
+@pytest.mark.parametrize("r, expected", [(0.0, 3.00), (0.5, 2.159), (0.3, 2.349)])
+def test_kt_roark_values(r, expected):
+    """Roark: delik kucukken Kt -> 3 (sonsuz plaka), delik buyudukce azalir (net kesite gore)."""
+    assert strength.kt_hole_tension(r * 10, 10) == pytest.approx(expected, abs=0.002)
+
+
+def test_kt_only_for_brittle_materials():
+    """Sunek celikte statik hesapta Kt yok; kirilgan PLA'da var."""
+    forces = {"F_ab_max": 100.0, "M_crank_max": 0.0, "M_rocker": 0.0}
+    steel = strength.MATERIALS["steel"]
+    net = {x["name"]: x for x in strength.check_link("Biyel", forces, 50.0, steel, 20, 4, 4)}
+    assert net["Biyel net kesit"]["util"] == pytest.approx((100 / 64) / (235 / 2))
+    assert "Kt" not in net["Biyel net kesit"]["detail"]
+    pla = {x["name"]: x for x in strength.check_link("Biyel", forces, 50.0, PLA, 20, 4, 4)}
+    assert "Kt" in pla["Biyel net kesit"]["detail"]
 
 
 def _volume(sec, lengths):
