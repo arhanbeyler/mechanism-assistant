@@ -138,6 +138,39 @@ def _clear(design):
         o.deleteMe()
 
 
+# Gorunumler (panelle ayni renkler): bilesen adi -> Fusion Appearance Library gorunumu. Adi "Yay" ile
+# baslayanlar yay kareleri; "Kama" govdeye ayrica uygulanir.
+APPEARANCES = {"Sabit": "Plastic - Matte (Gray)", "Taban": "Plastic - Matte (Gray)", "Yataklar": "Plastic - Matte (Gray)",
+               "Krank": "Plastic - Matte (Red)", "Pinyon": "Plastic - Matte (Red)", "Kam": "Plastic - Matte (Red)",
+               "Biyel": "Plastic - Matte (Blue)",
+               "Kol": "Plastic - Matte (Green)", "Cark": "Plastic - Matte (Green)", "Itici": "Plastic - Matte (Green)",
+               "Mil": "Steel - Satin", "Yay": "Steel - Satin", "Kama": "Brass - Matte"}
+
+
+def _appearance(design, name):
+    ap = design.appearances.itemByName(name)
+    if ap:
+        return ap
+    lib = adsk.core.Application.get().materialLibraries.itemByName("Fusion Appearance Library")
+    return design.appearances.addByCopy(lib.appearances.itemByName(name), name)
+
+
+def paint(design):
+    """Cizilen bilesenleri renklendirir (sadece gorsel: bir sorun cizimi bozmasin)."""
+    try:
+        for occ in design.rootComponent.occurrences:
+            key = "Yay" if occ.component.name.startswith("Yay ") else occ.component.name
+            if key in APPEARANCES:
+                occ.appearance = _appearance(design, APPEARANCES[key])
+            for body in occ.component.bRepBodies:
+                if body.name.startswith("Kama"):
+                    body.appearance = _appearance(design, APPEARANCES["Kama"])
+                elif body.name == "Basma plakası":
+                    body.appearance = _appearance(design, APPEARANCES["Taban"])
+    except Exception:
+        pass
+
+
 def build(mech, reuse=True):
     """Mekanizmayi kurar. reuse=True: eklentinin daha once cizdigi belge aciksa onu gunceller
     (yeni sekme acmaz); yoksa yeni belge acar. Dondurur: tasarim (Design)."""
@@ -163,6 +196,7 @@ def build(mech, reuse=True):
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)
+        paint(design)
         app.activeViewport.fit()
         return design
     pts = mech["points_mm"]
@@ -201,6 +235,7 @@ def build(mech, reuse=True):
 
     if mech.get("input_range_deg"):
         _limit_input_joint(root, occs["Krank"], mech["input_range_deg"])
+    paint(design)
     app.activeViewport.fit()
     return design
 
