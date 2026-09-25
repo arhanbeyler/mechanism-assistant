@@ -34,7 +34,8 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 ## C. Yeni modüller
 - [x] **C0. Modüle özel kaydırıcılar.** pipeline.MODULES (ad, birim, aralık); panel "Tür" seçicisi ve kaydırıcıları tanımdan kuruyor; sohbetten gelen tasarım doğru modüle geçiyor
 - [x] **C9. Düz dişli.** Lewis eğilme, kavrama oranı, alttan kesme, Hertz (bilgi), çelik mil ve göbek; Fusion'da evolvent dişler, dairesel çoklama, motion link (diş kesişimi 0, oran doğrulandı)
-- [ ] **C10. Helis ve konik yay**
+- [x] **C10. Helis ve konik yay.** Shigley: Bergsträsser, S_ut = A/dᵐ, tam sıkışmada akma yok, burkulma; konik k = G·d⁴/(16·Nₐ(R₁+R₂)(R₁²+R₂²)); Fusion'da helis sweep + taşlanmış uçlar
+- [x] **L1. İki aşamalı LLM.** Yönlendirici (tür) + modüle özel kısa çıkarıcı; tek uzun istem 9B modelde ayrıntı kaçırıyordu; llm_eval 16/16
 - [ ] **C11. Mil, kam**
 
 ## D. Dış dünya
@@ -74,3 +75,8 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
   "En kompakt" seçimi göbeklerin sığmayacağı kısa uzuvlar üretti; seçim ölçütü "dengeli oran" yapıldı.
 - **Dişli doğrulaması (Fusion):** Oran 3 / 2 N·m / PLA → m = 2, z = 18/54, b = 16 mm. Beş dönüş konumunda pinyon ile çark
   arasındaki kesişim hacmi 0 mm³ (evolvent fazı doğru); pinyon 90° → çark −30° (oran ve yön doğru).
+- **Yay doğrulaması (Fusion):** 100 N / 20 mm → Ø1.6 tel, D = 9.6 mm, 15 sarım; Fusion'da boy 50.2 mm (L₀ = 50.2), dış çap 11.2 mm.
+  Konik yay (50 N / 15 mm, D₂/D₁ = 0.5): boy 30.71 mm, dış çap 16.1 mm, tasarımla aynı. Konik yay sabiti formülü
+  sarım sarım sayısal integralle doğrulandı (test).
+- **Tek uzun LLM istemi ölçeklenmiyor:** Yay alanları eklenince eski bir dört çubuk cümlesi bozuldu (15/16).
+  İki aşamalı yapı (yönlendirici + modül çıkarıcısı) hem 16/16 verdi hem de istemleri kısalttığı için ~6 s'de kaldı.

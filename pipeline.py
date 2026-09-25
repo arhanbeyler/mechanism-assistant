@@ -12,6 +12,7 @@ import function_gen
 import gears
 import interference
 import kinematics as kin
+import springs
 import strength
 from llm_extract import extract_spec
 
@@ -26,6 +27,17 @@ MODULES = {
             {"key": "torque_Nm", "label": "Giriş torku", "unit": "N·m", "min": 0.1, "max": 50, "step": 0.1, "default": 2},
             {"key": "speed_rpm", "label": "Giriş devri", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
              "zero_label": "belirtilmedi"},
+        ],
+    },
+    "spring": {
+        "title": "Basma yayı",
+        "params": [
+            {"key": "spring_force_N", "label": "En büyük kuvvet", "unit": "N", "min": 1, "max": 500, "step": 1, "default": 100},
+            {"key": "spring_deflection_mm", "label": "Bu kuvvette çökme", "unit": "mm", "min": 1, "max": 100, "step": 1, "default": 20},
+            {"key": "spring_taper", "label": "Konik oranı (D₂/D₁)", "unit": "", "min": 0.3, "max": 1.0, "step": 0.05,
+             "default": 1.0, "one_label": "silindirik"},
+            {"key": "outer_diameter_max_mm", "label": "Dış çap sınırı", "unit": "mm", "min": 0, "max": 100, "step": 1,
+             "default": 0, "zero_label": "serbest"},
         ],
     },
 }
@@ -110,10 +122,15 @@ def design_from_text(text, on_status=None):
 
 def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        max_load_N=None, material=None, input_swing_deg=360, kind="fourbar",
-                       gear_ratio=None, torque_Nm=None, speed_rpm=None):
+                       gear_ratio=None, torque_Nm=None, speed_rpm=None,
+                       spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None):
     """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim.
-    kind: "fourbar" ya da "spur_gear" (C0: modul secimi).
+    kind: "fourbar", "spur_gear" ya da "spring" (C0: modul secimi).
     input_swing_deg >= 360: giris tam tur (krank-kol); daha az: sinirli acida giris kolu (B9)."""
+    if kind == "spring":
+        return design_from_spec({"mechanism_type": "spring", "spring_force_N": spring_force_N,
+                                 "spring_deflection_mm": spring_deflection_mm, "spring_taper": spring_taper,
+                                 "outer_diameter_max_mm": outer_diameter_max_mm or None, "material": material})
     if kind == "spur_gear":
         return design_from_spec({"mechanism_type": "spur_gear", "gear_ratio": gear_ratio,
                                  "torque_Nm": torque_Nm, "speed_rpm": speed_rpm or None, "material": material})
@@ -134,6 +151,8 @@ def design_from_spec(spec, on_status=None):
     mtype = spec["mechanism_type"]
     if mtype == "spur_gear":
         return _spur_gear(result, spec, say)
+    if mtype == "spring":
+        return _spring(result, spec, say)
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Şu an sadece dört çubuk mekanizmaları destekleniyor "
@@ -230,6 +249,48 @@ def _spur_gear(result, spec, say):
             f"Tasarım tüm kontrollerden geçti. Modül {g['module']:g}, z = {g['z1']}/{g['z2']}, "
             f"diş genişliği {g['face_width']:g} mm, eksen mesafesi {g['center_distance']:g} mm, "
             f"miller Ø{g['bore1']:g}/Ø{g['bore2']:g} mm (çelik). Çıkış torku {T1 * g['ratio'] / 1000:.2f} N·m."]))
+    return result
+
+
+def _spring(result, spec, say):
+    """C10: basma yayi (silindirik ya da konik). Gerekli: kuvvet ve cokme (uydurulmaz)."""
+    result["mechanism_type"] = "spring"
+    missing = [name for key, name in (("spring_force_N", "en büyük kuvvet"),
+                                      ("spring_deflection_mm", "bu kuvvetteki çökme (mm)"))
+               if spec.get(key) is None]
+    if missing:
+        return dict(result, status="missing", message=f"Yay tasarımı için eksik bilgi: {', '.join(missing)}.")
+    F, y = float(spec["spring_force_N"]), float(spec["spring_deflection_mm"])
+    notes = []
+    taper = spec.get("spring_taper")
+    if taper is None and spec.get("spring_shape") == "conical":
+        taper = 0.5
+        notes.append("Konik oranı belirtilmediği için küçük uç çapı büyük ucun yarısı alındı (D₂/D₁ = 0.5).")
+    taper = min(1.0, max(0.3, float(taper))) if taper else 1.0
+    if spec.get("material") == "steel" or spec.get("material") is None:
+        mat = springs.SPRING_MATERIALS["music_wire"]
+    else:
+        mat = springs.SPRING_MATERIALS["music_wire"]
+        notes.append("Yaylar çelik telden yapılır (plastik/alüminyum yay uygun değil); müzik teli varsayıldı.")
+    say("Yay sentezi (Shigley: Bergsträsser, tam sıkışma, burkulma)...")
+    geo, s_checks = springs.design(F, y, mat, taper, spec.get("outer_diameter_max_mm") or None)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": c["detail"] + (f" · kullanım %{c['util'] * 100:.0f}" if c["group"] in ("Gerilme", "Burkulma") else "")}
+              for c in s_checks]
+    result.update(checks=checks, notes=notes, target={"force_N": F, "deflection_mm": y, "taper": taper})
+    if geo is None:
+        return dict(result, status="failed", message=" ".join(notes + [
+            f"{F:g} N / {y:g} mm için uygun yay bulunamadı. Öneri: çökmeyi artırın, dış çap sınırını gevşetin "
+            f"ya da kuvveti azaltın."]))
+    kind = "konik" if taper < 1 else "silindirik"
+    result.update(
+        spring=dict(geo, material=mat["name"]),
+        fusion={"type": "spring", "passed_checks": True, **geo},
+        status="ok",
+        message=" ".join(notes + [
+            f"Tasarım tüm kontrollerden geçti ({kind}, {mat['name']}). Tel Ø{geo['d']:g} mm, ortalama çap "
+            + (f"{geo['D1']:.1f} → {geo['D2']:.1f}" if taper < 1 else f"{geo['D1']:.1f}")
+            + f" mm, {geo['Na']:g} aktif + 2 uç sarım, serbest boy {geo['L0']:.1f} mm, k = {geo['k']:.2f} N/mm."]))
     return result
 
 

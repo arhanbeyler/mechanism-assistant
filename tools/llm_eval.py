@@ -35,6 +35,10 @@ CASES = [
     ("devri 3 kat düşüren bir redüktör, 5 Nm tork, 1500 rpm, çelik",
      dict(mechanism_type="spur_gear", gear_ratio=3, torque_Nm=5, speed_rpm=1500, material="steel")),
     ("çevrim oranı 2.5 olan dişli", dict(mechanism_type="spur_gear", gear_ratio=2.5, torque_Nm=None)),
+    ("100 N yükte 20 mm sıkışan bir basma yayı", dict(mechanism_type="spring", spring_force_N=100, spring_deflection_mm=20)),
+    ("5 kg taşıyan, 15 mm çöken konik yay", dict(mechanism_type="spring", spring_shape="conical", spring_deflection_mm=15)),
+    ("dış çapı en fazla 12 mm olan yay, 30 N'da 10 mm sıkışsın",
+     dict(mechanism_type="spring", spring_force_N=30, spring_deflection_mm=10, outer_diameter_max_mm=12)),
 ]
 
 

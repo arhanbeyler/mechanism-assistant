@@ -157,6 +157,11 @@ def build(mech, reuse=True):
         gear.build(mech, root)
         app.activeViewport.fit()
         return design
+    if mech.get("type") == "spring":          # C10: basma yayi
+        import fusion_lib.spring as spring
+        spring.build(mech, root)
+        app.activeViewport.fit()
+        return design
     pts = mech["points_mm"]
     section = mech.get("section_mm") or DEFAULT_SECTION
     d_pin = section["hole"]
