@@ -70,7 +70,7 @@ In a system one module's output is another's input (forces, diameters and masses
 
 ## H. Machine elements
 - [x] **H1. Bolted joint.** Stiffnesses (bolt from its plain / threaded lengths, members by Wileman), joint constant, preload and torque, yield / load / separation factors, Goodman fatigue; 4 bolts tried first. Fusion: translucent flanges, one bolt and one nut component placed N times, cosmetic ISO thread at the free end. Findings: the LLM read '50 kN değişken yük' as a mass (×9.81) even with a stricter prompt, so a code backstop (pipeline.force_backstop) takes an N / kN number from the sentence when the model's value is that number × 9.81; a thread's default location is the high end (under the head), set LowEnd at creation (it cannot be changed afterwards)
-- [ ] **H2. Welded joint**
+- [x] **H2. Welded joint.** Cantilever bar welded to a wall: welds as lines (three patterns), throat shear from shear + bending, AISC allowables and minimum leg, bar bending; the bar is sized when not given. Fusion: wall, bar, triangular beads. Findings: the LLM swapped '40x20 lama' (height / width); a cantilever bar stands on its deep side, so the larger number is made the height after extraction (a rule, not a guess); setSymmetricExtent(d, True) means d in total
 - [ ] **H3. Splined shaft, fits (H7/k6)**
 - [ ] **H4. Torsion, extension and disc (Belleville) springs; spring fatigue (Zimmerli)**
 - [ ] **H5. Coupling, brake / clutch, flywheel**

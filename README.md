@@ -26,8 +26,8 @@ Sentences can be written in English or Turkish.
 | ![rack and pinion](docs/img/rack_pinion.png) | ![chain drive](docs/img/chain_drive.png) | ![V-belt drive](docs/img/belt_drive.png) |
 | **Planetary gear set** | **Helical gear pair** | **Worm gear (self-locking)** |
 | ![planetary](docs/img/planetary.png) | ![helical gears](docs/img/helical_gear.png) | ![worm gear](docs/img/worm_gear.png) |
-| **Bevel gear pair** | **Bolted joint** | |
-| ![bevel gears](docs/img/bevel_gear.png) | ![bolted joint](docs/img/bolted_joint.png) | |
+| **Bevel gear pair** | **Bolted joint** | **Welded bracket** |
+| ![bevel gears](docs/img/bevel_gear.png) | ![bolted joint](docs/img/bolted_joint.png) | ![welded bracket](docs/img/welded_joint.png) |
 
 ## Core rule: the LLM never produces a number
 
@@ -45,7 +45,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (77/77, incl. 12
+  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (79/79, incl. 12
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -78,6 +78,7 @@ flowchart LR
 | Worm gear | Ratio 5–100, worm speed, output torque (or input torque / power: the output follows the efficiency, iterated), self-locking on request; starts 1–4, standard module, diameter quotient q; the smallest set that passes | Shigley 15-4 / AGMA: wheel rating C_s d_G^0.8 F_e C_m C_v, sliding speed, friction curve, efficiency (tested against the force ratio), worm and wheel forces, self-locking with a 40 % margin on the static friction (λ ≲ 5.5°), worm not too slender, N_G ≥ 21, shafts; Shigley example 15-4 reproduced (λ 4.764°, f 0.0178, e 0.818, W_Gt 1050 lbf, (W_t)all 1456 lbf); in Fusion an Archimedean thread (its transverse section swept with a twist of 2π per lead) on a helical wheel, zero overlap over a worm turn |
 | Bevel gears | Ratio 1–6, input torque, straight teeth, shafts at 90°; the lightest pair that passes | Pitch cones and one apex, Tredgold's virtual teeth z/cos γ for Lewis (at the mean section), contact ratio and undercut, face ≤ A_o/3 and 10 m, forces W_t, W_r = W_t tan φ cos γ, W_a = W_t tan φ sin γ (Shigley's example reproduced: 406 → 140 / 46.7 lbf; swapped on the gear), shafts and hubs; in Fusion the virtual tooth on the back cone lofted to its copy scaled towards the apex (straight elements through the apex), contact with no overlap while turning |
 | Bolted joint | Separating load (static or fluctuating), clamped thickness, plate material, bolt class, number of bolts (4 tried first); the smallest ISO metric bolt that passes, with nut, standard length | Shigley ch. 8: bolt stiffness from its threaded and plain lengths, member stiffness (Wileman; within 8 % of the frustum model), joint constant C (tested against the two-spring model), preload 0.75 F_p and tightening torque, yield / load / separation factors, Goodman fatigue (the load line meets the Goodman line at n_f, tested); in Fusion two flanges with clearance holes, hex bolts with a cosmetic ISO thread at the free end and nuts |
+| Welded bracket | Load and its arm, bar section (sized in bending when not given), weld all around / top and bottom / sides; the smallest fillet leg that passes | Shigley ch. 9: welds as lines (unit area and second moment, tested by integrating along the lines), primary and bending shear on the throat combined, AISC 0.30 S_ut (E70), AISC minimum leg for the thickness, bar bending 0.6 S_y; in Fusion the wall, the bar and triangular fillet beads touching both |
 | Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)) |
 | Disk cam | Cycloidal, harmonic or 3-4-5 motion; smallest base circle | Pressure angle ≤ 30°, no undercut, ρ ≥ 2·R_roller |
 | **Cam + follower spring (system)** | With speed and follower mass: the follower's acceleration sets the spring force needed against jump (1.3 × inertia); the preload is swept and the spring module designs the lightest spring that also passes with its real (rounded) rate | Contact force > 0 over the whole turn (recomputed from the motion table), all spring checks at the real top force |
@@ -130,7 +131,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 278 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 282 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -145,7 +146,7 @@ function_gen.py      Freudenstein function generator (limited-input four-bar)
 strength.py          link, pin and shaft sizing; hub compliance; K_t; deflection
 interference.py      layer order and shaft-to-link clearance over the cycle
 fea_local.py         gmsh + scikit-fem link model (with hub) vs hand calculation
-gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py   module engines
+gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py   module engines
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)
 reducer.py reducer2.py cam_system.py   systems: modules sized together until their constraints agree
 fusion_lib/          Fusion builders (one per module) + shared document handling
