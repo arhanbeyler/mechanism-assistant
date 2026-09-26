@@ -767,8 +767,41 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
         "_preview": bool(preview)})
 
 
+# numeric fields that may be zero (0 is meaningful) and the one that may also be negative
+_ZERO_OK = {"offset_mm", "bending_moment_Nm", "spring_force_min_N", "radial_force_N", "dwell_top_deg", "speed_rpm"}
+_NEGATIVE_OK = {"offset_mm"}
+
+
+def _sanitize(spec):
+    """A zero or negative value where it has no meaning (a force, a length, a ratio) is dropped, so the module asks
+    for it instead of computing with it; non-finite numbers too. Returns (clean spec, note or None)."""
+    clean, dropped = dict(spec), []
+    for k, v in spec.items():
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            continue
+        if not math.isfinite(v) or (v < 0 and k not in _NEGATIVE_OK) or (v == 0 and k not in _ZERO_OK | _NEGATIVE_OK):
+            clean[k] = None
+            dropped.append(f"{_field_label(k)} = {v:g}")
+    return clean, ("Ignored (zero or negative where that has no meaning): " + ", ".join(dropped) + ".") if dropped else None
+
+
 def design_from_spec(spec, on_status=None):
-    """Design from a structured request (LLM output or sliders)."""
+    """Design from a structured request (LLM output or sliders). Inputs are sanitised first; a numeric failure
+    inside a module (values far outside what its method covers) comes back as a failed design with the reason,
+    never as an exception."""
+    spec, note = _sanitize(spec)
+    try:
+        result = _design_from_spec(spec, on_status)
+    except (ValueError, ZeroDivisionError, OverflowError, TypeError, StopIteration, IndexError, KeyError) as e:
+        result = {"spec": spec, "mechanism_type": spec.get("mechanism_type"), "status": "failed",
+                  "message": f"These values are outside what the {spec.get('mechanism_type', '').replace('_', ' ')} "
+                             f"method covers ({type(e).__name__}: {e}). Please check the numbers."}
+    if note:
+        result["message"] = note + " " + result.get("message", "")
+    return result
+
+
+def _design_from_spec(spec, on_status=None):
     say = on_status or (lambda s: None)
     result = {"spec": spec}
 

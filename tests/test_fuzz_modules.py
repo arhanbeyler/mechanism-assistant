@@ -32,3 +32,14 @@ def test_random_slider_values(kind):
         r = pipeline.design_from_params(kind=kind, preview=True, **kw)
         assert r.get("status") in ("ok", "failed", "missing"), (kw, r.get("status"))
         json.dumps(r, allow_nan=False)
+
+
+def test_zero_or_negative_values_are_asked_for_not_used():
+    r = pipeline.design_from_spec({"mechanism_type": "spur_gear", "gear_ratio": 0, "torque_Nm": -5, "material": "PLA"})
+    assert r["status"] == "missing" and "Ignored" in r["message"]
+
+
+def test_absurd_values_fail_with_a_reason():
+    r = pipeline.design_from_spec({"mechanism_type": "press", "force_N": 400, "stroke_mm": 1e6, "working_stroke_mm": 1,
+                                   "speed_rpm": 50})
+    assert r["status"] == "failed" and "outside what" in r["message"]

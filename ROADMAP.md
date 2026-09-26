@@ -104,6 +104,7 @@ In a system one module's output is another's input (forces, diameters and masses
 
 ## Robustness
 - [x] **Fuzz test of every module** (random slider values incl. the range ends, 2100 designs): chain / V-belt with a centre distance shorter than the wheels (asin > 1), a ratchet with no room inside a given diameter, a shaft bearing with no radial load (L10 = C/0) crashed; now they fail with a reason. `tests/test_fuzz_modules.py` keeps 8 fixed samples per module; `tools/fusion_smoke.py` builds every module in Fusion (36/36)
+- [x] **Spec fuzz (the LLM path):** random field subsets with zero / negative / huge values crashed 14 modules. Now `pipeline.design_from_spec` drops zero or negative values where they have no meaning (reported; the module then asks for them) and turns a numeric failure inside a module (e.g. a 1 km stroke) into a failed design with the reason
 
 ## Findings (for the report)
 - **For Q = 1** the relation is `c = a / sin(ψ/2)`. There is a trade-off between compactness and transmission angle.
