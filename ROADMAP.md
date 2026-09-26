@@ -44,7 +44,7 @@ Sentence → LLM (Ollama, local) → engines + checks → Fusion 360
 In a system one module's output is another's input (forces, diameters and masses are never typed in twice).
 - [x] **E1. Single-stage reducer.** Motor (power, speed) → gear pair → two shafts (gear forces → M, T; gear mass → critical speed) → bearings → keys → housing. The constraints (gear bore = shaft diameter, key ≤ face width, bearings side by side in one wall, common span) are iterated until nothing changes. Housing + bearings + keyed shafts + gears with keyways in Fusion; tooth overlap 0 at 6 angles, ratio 1/3 verified
 - [ ] **E2. Multi-stage reducer.** Splitting the ratio over the stages, intermediate shaft
-- [ ] **E3. Cam + spring assembly.** Follower spring sized with the cam; jump check at high speed
+- [x] **E3. Cam + spring assembly.** With cam speed and follower mass: required spring force = max(F_min, 1.3·(−m·ẍ) − F_ext) over the turn; preload swept, the spring module designs each candidate, the lightest that still passes with its real (rounded) rate wins; contact force stays > 0 (recomputed in the tests); impossible speeds are rejected with a reason
 - [ ] **E4. Press.** Slider-crank + flywheel (energy fluctuation from the torque curve) + motor
 - [ ] **E5. Folding platform** (senior-project candidate). Four-bar + counterbalance spring + beam / plate + pins
 

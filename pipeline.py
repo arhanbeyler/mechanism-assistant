@@ -9,6 +9,7 @@ Standard library only: it also runs in Fusion's own Python.
 import math
 import re
 
+import cam_system
 import cams
 import function_gen
 import gears
@@ -81,6 +82,10 @@ MODULES = {
             {"key": "return_deg", "label": "Return angle", "unit": "°", "min": 20, "max": 200, "step": 5, "default": 120},
             {"key": "motion_law", "label": "Motion law", "default": "cycloidal",
              "options": [["cycloidal", "Cycloidal"], ["harmonic", "Simple harmonic"], ["poly345", "3-4-5 polynomial"]]},
+            {"key": "speed_rpm", "label": "Cam speed", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
+             "zero_label": "not given"},
+            {"key": "follower_mass_kg", "label": "Follower mass", "unit": "kg", "min": 0, "max": 3, "step": 0.05,
+             "default": 0, "zero_label": "none"},
         ],
     },
     "shaft": {
@@ -151,7 +156,7 @@ _INPUT_TURN = re.compile(
 
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
-_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank")
+_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam")
 
 
 def input_turn_backstop(text, spec):
@@ -271,7 +276,8 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None,
                        cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None,
                        bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None,
-                       span_mm=None, power_kW=None, stroke_mm=None, offset_mm=None, rod_length_mm=None):
+                       span_mm=None, power_kW=None, stroke_mm=None, offset_mm=None, rod_length_mm=None,
+                       follower_mass_kg=None, follower_load_N=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
@@ -291,7 +297,9 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     if kind == "cam":
         return design_from_spec({"mechanism_type": "cam", "cam_rise_mm": cam_rise_mm, "rise_deg": rise_deg,
                                  "dwell_top_deg": dwell_top_deg, "return_deg": return_deg,
-                                 "motion_law": motion_law or "cycloidal", "roller_radius_mm": None})
+                                 "motion_law": motion_law or "cycloidal", "roller_radius_mm": None,
+                                 "speed_rpm": speed_rpm or None, "follower_mass_kg": follower_mass_kg or None,
+                                 "follower_load_N": follower_load_N or None})
     if kind == "spring":
         return design_from_spec({"mechanism_type": "spring", "spring_force_N": spring_force_N,
                                  "spring_deflection_mm": spring_deflection_mm, "spring_taper": spring_taper,
@@ -685,14 +693,32 @@ def _cam(result, spec, say):
         return dict(result, status="failed", message=" ".join(notes + [
             "No suitable cam found. Suggestion: larger rise / return angles, and keep their sum below 360°."]))
     table = cams.svaj(h, b1, b2, float(b3), law_, n=360)
+    msg = (f"All checks passed ({LAW_NAMES[law_]}). Base circle R_b = {d['Rb']:g} mm, roller "
+           f"R = {d['Rf']:g} mm, lift {h:g} mm: {b1:g}° rise, {b2:g}° dwell, {float(b3):g}° return, "
+           f"{d['dwell_bottom']:g}° dwell at the bottom.")
+    rpm, mass = spec.get("speed_rpm"), spec.get("follower_mass_kg")
+    if rpm and mass:                                  # E3: the follower spring is designed with the cam
+        say("Follower spring (jump check)...")
+        sysd, s_checks = cam_system.design(d, cams.svaj(h, b1, b2, float(b3), law_, n=720), float(rpm), float(mass),
+                                           float(spec.get("follower_load_N") or 0.0))
+        checks += [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0, "detail": c["detail"]}
+                   for c in s_checks]
+        if sysd is None:
+            return dict(result, status="failed", cam=d, message=" ".join(notes + [
+                f"The cam works, but no spring keeps a {mass:g} kg follower on it at {rpm:g} rpm. Suggestion: lower "
+                "speed, a lighter follower, or longer rise / return angles (gentler motion)."]))
+        sp = sysd["spring"]
+        result["cam_spring"] = sysd
+        notes.append("Gravity and damping neglected in the jump check.")
+        msg += (f" Follower spring: wire Ø{sp['d']:g} mm, mean Ø{sp['D1']:.1f} mm, {sp['Na']:g} active coils, "
+                f"k = {sysd['k']:.2f} N/mm, preload {sysd['preload_N']:.1f} N; smallest contact force "
+                f"{sysd['contact_min']:.1f} N at {rpm:g} rpm.")
+    elif rpm or mass:
+        notes.append("For the follower spring both the cam speed and the follower mass are needed.")
     result.update(
         cam=d, cam_curve=[(round(t, 1), round(s, 3)) for t, s, _, _ in table[::2]],
         fusion={"type": "cam", "passed_checks": True, **d, "s_table": [round(s, 4) for _, s, _, _ in table]},
-        status="ok",
-        message=" ".join(notes + [
-            f"All checks passed ({LAW_NAMES[law_]}). Base circle R_b = {d['Rb']:g} mm, roller "
-            f"R = {d['Rf']:g} mm, lift {h:g} mm: {b1:g}° rise, {b2:g}° dwell, {float(b3):g}° return, "
-            f"{d['dwell_bottom']:g}° dwell at the bottom."]))
+        status="ok", message=" ".join(notes + [msg]))
     return result
 
 

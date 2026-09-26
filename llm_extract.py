@@ -133,12 +133,17 @@ CAM = (_schema({
     "return_deg": {"type": ["number", "null"]},
     "motion_law": {"type": ["string", "null"], "enum": ["cycloidal", "harmonic", "poly345", None]},
     "roller_radius_mm": {"type": ["number", "null"]},
+    "speed_rpm": {"type": ["number", "null"]},
+    "follower_mass_kg": {"type": ["number", "null"]},
+    "follower_load_N": {"type": ["number", "null"]},
 }), COMMON + (
     "The user wants a disk cam with a translating roller follower. cam_rise_mm: follower lift/stroke "
     "('20 mm kaldırsın', 'strok 20'). rise_deg: cam angle for the rise ('120 derecede yükselsin'). "
     "dwell_top_deg: dwell at the top ('60 derece beklesin', 'üstte 60° bekleme'). return_deg: cam angle for the "
     "return/fall ('120 derecede insin'). motion_law: 'cycloidal' (sikloidal), 'harmonic' (basit harmonik), "
-    "'poly345' (3-4-5 polinom) only if named. roller_radius_mm: roller radius if given."))
+    "'poly345' (3-4-5 polinom) only if named. roller_radius_mm: roller radius if given. speed_rpm: cam speed "
+    "('600 devirde', '600 rpm') if given. follower_mass_kg: mass of the follower in kg ('itici 200 g' -> 0.2) if "
+    "given. follower_load_N: a load pressing the follower onto the cam if given."))
 
 SHAFT = (_schema({
     "torque_Nm": {"type": ["number", "null"]},

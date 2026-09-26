@@ -41,6 +41,8 @@ CASES = [
     ("strok 80 mm, 10 mm kaçıklık, 1200 devir piston", dict(mechanism_type="slider_crank", stroke_mm=80, offset_mm=10,
                                                             speed_rpm=1200)),
     ("25 mm krank ile ileri geri giden bir piston", dict(mechanism_type="slider_crank", crank_length_mm=25)),
+    ("20 mm kaldıran, 120 derecede yükselen kam, 600 devirde dönecek, itici 200 gram",
+     dict(mechanism_type="cam", cam_rise_mm=20, rise_deg=120, speed_rpm=600, follower_mass_kg=0.2)),
     # English: the panel's example sentences
     ("30 mm crank, 60° swing, 5 kg at the tip, PETG",
      dict(mechanism_type="crank_rocker", crank_length_mm=30, output_swing_deg=60, material="PETG")),

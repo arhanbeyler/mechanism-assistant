@@ -452,14 +452,29 @@ Everything is computed on this computer, with a local AI.</div>
     const law = { cycloidal: "cycloidal", harmonic: "simple harmonic", poly345: "3-4-5 polynomial" }[c.motion];
     const rows = [["Base circle R_b", `${f(c.Rb)} mm`], ["Roller R", `${f(c.Rf)} mm`], ["Lift", `${f(c.h)} mm`],
                   ["Angles", `${c.rise}° / ${c.dwell_top}° / ${c.return}° / ${f(c.dwell_bottom, 0)}°`],
-                  ["Motion law", law], ["Shaft bore", `Ø${f(c.bore, 0)} mm`]]
-      .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
+                  ["Motion law", law], ["Shaft bore", `Ø${f(c.bore, 0)} mm`]];
+    const sp = d.cam_spring;                   // E3: follower spring designed with the cam
+    if (sp) rows.push(["Spring", `Ø${sp.spring.d} wire, Ø${f(sp.spring.D1)} mean, ${sp.spring.Na} coils`],
+                      ["Rate / preload", `${f(sp.k, 2)} N/mm / ${f(sp.preload_N)} N`],
+                      ["Contact min / max", `${f(sp.contact_min)} / ${f(sp.contact_max)} N @ ${sp.rpm} rpm`]);
     $("result").innerHTML = `
       <div class="grid">
-        <div class="col"><h3>Cam</h3><table>${rows}</table></div>
+        <div class="col"><h3>Cam</h3><table>${rows.map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
         <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
-        <div class="col"><h3>Displacement s(θ)</h3>${camSvg(d.cam_curve, c.h)}</div>
+        <div class="col"><h3>Displacement s(θ)${sp ? " · contact force" : ""}</h3>${camSvg(d.cam_curve, c.h)}${sp ? contactSvg(sp.contact_curve) : ""}</div>
       </div>`;
+  }
+
+  function contactSvg(curve) {               // roller-cam contact force over one turn (must stay > 0)
+    const W = 220, H = 80, l = 26, r = 6, t = 6, b = 16;
+    const top = Math.max(...curve.map((p) => p[1])) || 1;
+    const X = (th) => l + th / 360 * (W - l - r), Y = (v) => t + (1 - v / top) * (H - t - b);
+    const line = curve.map(([th, v]) => `${X(th).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(360)}" y2="${Y(0)}"/>
+      <text class="lbl" x="${l - 4}" y="${Y(top) + 3}" text-anchor="end">${Math.round(top)} N</text>
+      <text class="lbl" x="${l - 4}" y="${Y(0) + 3}" text-anchor="end">0</text>
+      <polyline points="${line}" fill="none" stroke="var(--rocker)" stroke-width="2"/></svg>`;
   }
 
   function camSvg(curve, h) {                // displacement diagram

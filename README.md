@@ -35,7 +35,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (40/40, incl. 11
+  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (41/41, incl. 11
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -55,6 +55,7 @@ flowchart LR
 | Spur gears | Lewis bending (Shigley Y table, Barth K_v), involute teeth | Contact ratio ≥ 1.2, undercut z ≥ 17, Hertz contact stress (info), shaft and hub |
 | Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)) |
 | Disk cam | Cycloidal, harmonic or 3-4-5 motion; smallest base circle | Pressure angle ≤ 30°, no undercut, ρ ≥ 2·R_roller |
+| **Cam + follower spring (system)** | With speed and follower mass: the follower's acceleration sets the spring force needed against jump (1.3 × inertia); the preload is swept and the spring module designs the lightest spring that also passes with its real (rounded) rate | Contact force > 0 over the whole turn (recomputed from the motion table), all spring checks at the real top force |
 | Shaft | DE-Goodman fatigue with Marin factors, k_b iteration, Table 7-1 K_t; catalogue ball bearings; DIN 6885 key; diameter raised until every check passes | Fatigue n_f and yield at the hub and at the torque-carrying bearing seat, L10 life ≥ 20 000 h, key shear and crushing, slope ≤ 1 mrad and deflection ≤ 0.13 mm (numerical integration on the stepped shaft), Rayleigh critical speed ≥ 2× running speed |
 | **Reducer (system)** | Gear pair → gear forces and masses → both shafts → bearings → keys → housing, iterated until the constraints agree (gear bore = shaft, key ≤ face width, bearings side by side, common span) | All of the above + housing web; in Fusion, tooth overlap 0 mm³ at 6 angles and the output turns at exactly 1/i |
 
@@ -103,7 +104,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 164 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 175 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
