@@ -444,6 +444,20 @@ class CommandExecuteHandler(adsk.core.CommandEventHandler):
         show_palette()
 
 
+PALETTE_POS = os.path.join(ROOT, "output", "palette_pos.json")   # per machine (output/ is not in git)
+
+
+def _save_palette_pos(pal):
+    """Remember where the user put the floating palette (screen coordinates, any monitor)."""
+    try:
+        if pal.dockingState == adsk.core.PaletteDockingStates.PaletteDockStateFloating:
+            os.makedirs(os.path.dirname(PALETTE_POS), exist_ok=True)
+            with open(PALETTE_POS, "w", encoding="utf-8") as fh:
+                json.dump({"left": pal.left, "top": pal.top, "width": pal.width, "height": pal.height}, fh)
+    except Exception:
+        log("panel konumu kaydedilemedi:" + chr(10) + traceback.format_exc())
+
+
 def show_palette():
     pal = ui.palettes.itemById(PALETTE_ID)
     if not pal:
@@ -455,13 +469,18 @@ def show_palette():
         # Alta yapisik (docked) halde Fusion paneli daraltip "kaybedebiliyordu": serbest pencere
         pal.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateFloating
         pal.setSize(1100, 320)
-        # A new floating palette opens at (0, 0), hidden behind Fusion's toolbar: put it near the
-        # bottom of the model view instead
+        # A new floating palette opens at (0, 0): on a dual-monitor setup that is the other screen.
+        # Restore where the user last left it (saved in stop()); first time: near the model view bottom.
         try:
-            vp = app.activeViewport
-            pal.setPosition(200, max(150, vp.height - 250))
+            with open(PALETTE_POS, encoding="utf-8") as fh:
+                p = json.load(fh)
+            pal.setSize(int(p["width"]), int(p["height"]))
+            pal.setPosition(int(p["left"]), int(p["top"]))
         except Exception:
-            pal.setPosition(200, 400)
+            try:
+                pal.setPosition(200, max(150, app.activeViewport.height - 250))
+            except Exception:
+                pal.setPosition(200, 400)
     pal.isVisible = True
 
 
@@ -621,6 +640,7 @@ def stop(context):
             server = None
         pal = ui.palettes.itemById(PALETTE_ID)
         if pal:
+            _save_palette_pos(pal)
             pal.deleteMe()
         panel = ui.allToolbarPanels.itemById("SolidScriptsAddinsPanel")
         ctrl = panel.controls.itemById(CMD_ID) if panel else None
