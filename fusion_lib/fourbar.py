@@ -204,7 +204,7 @@ def paint(design):
                     body.appearance = _appearance(design, APPEARANCES["Key"])
                 elif body.name == "Top plate":
                     body.appearance = _appearance(design, APPEARANCES["Base"])
-                elif body.name.startswith(("Shaft", "Pin", "Spindle")) and name in ("Driver", "Driven", "Sun", "Flywheel", "Input", "Output", "Wheel", "Arm", "Crank", "Lever"):
+                elif body.name.startswith(("Shaft", "Pin", "Spindle")) and name in ("Driver", "Driven", "Sun", "Flywheel", "Input", "Output", "Hub A", "Hub B", "Wheel", "Arm", "Crank", "Lever"):
                     body.appearance = _appearance(design, APPEARANCES["Shaft"])
     except Exception:
         pass
@@ -257,7 +257,8 @@ def build(mech, reuse=True):
              "snap_fit": "snap_fit",            # I1: printed snap-fit
              "flexure": "flexure",              # I2: living hinge
              "press": "press",                  # E4: crank press (slider-crank + flywheel)
-             "six_bar": "sixbar"}.get(mech.get("type"))   # F4b: Watt II six-bar
+             "six_bar": "sixbar",               # F4b: Watt II six-bar
+             "coupling": "coupling"}.get(mech.get("type"))   # H5b: flange coupling
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

@@ -16,6 +16,7 @@ import cams
 import dynamics
 import clutch
 import chain
+import coupling
 import coupler
 import fits
 import flywheel
@@ -53,6 +54,15 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "coupling": {
+        "title": "Flange coupling",
+        "params": [
+            {"key": "torque_Nm", "label": "Torque", "unit": "N·m", "min": 5, "max": 5000, "step": 5, "default": 100},
+            {"key": "shaft_diameter_mm", "label": "Shaft Ø", "unit": "mm", "min": 0, "max": 100, "step": 1, "default": 0,
+             "zero_label": "sized"},
+            {"key": "bolts", "label": "Bolts", "unit": "", "min": 0, "max": 12, "step": 1, "default": 0, "zero_label": "4 / 6"},
+        ],
+    },
     "press": {
         "title": "Crank press (system)",
         "params": [
@@ -589,6 +599,9 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "coupling":
+        return design_from_spec({"mechanism_type": "coupling", "torque_Nm": torque_Nm,
+                                 "shaft_diameter_mm": shaft_diameter_mm or None, "bolts": bolts or None})
     if kind == "path_synthesis":
         return design_from_spec({"mechanism_type": "path_synthesis", "path_points": path_points})
     if kind == "press":
@@ -752,6 +765,8 @@ def design_from_spec(spec, on_status=None):
         return _press(result, spec, say)
     if mtype == "path_synthesis":
         return _path_synthesis(result, spec, say)
+    if mtype == "coupling":
+        return _coupling(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -769,7 +784,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -2142,6 +2157,34 @@ def _path_synthesis(result, spec, say):
     else:
         msg = "The best linkage found does not meet the checks above: move the points closer together or give fewer."
     result.update(status="ok" if passed else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _coupling(result, spec, say):
+    """H5b: rigid flange coupling. Required: the torque; the shaft is sized in torsion when not given."""
+    result["mechanism_type"] = "coupling"
+    T = spec.get("torque_Nm")
+    if not T:
+        return dict(result, status="missing", message="Missing for the coupling: the torque (N·m).")
+    notes = [f"Service factor {coupling.K_SERVICE:g}; steel hubs, class 8.8 bolts carrying the torque by friction (μ {coupling.MU:g})."]
+    d = spec.get("shaft_diameter_mm")
+    say("Flange coupling: key, bolts (friction), hub and flange...")
+    c, s_checks = coupling.design(float(T) * 1000.0, float(d) if d else None, spec.get("bolts") or None)
+    checks = [{"name": f"{x['group']}: {x['name']}", "ok": x["util"] <= 1.0,
+               "detail": f"{x['detail']} · use {x['util'] * 100:.0f}%"} for x in s_checks]
+    if c is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "The coupling does not pass (see the checks): usually the shaft is too thin for the torque."]))
+    if not d:
+        notes.append(f"Shaft not given: Ø{c['d']:g} mm from torsion.")
+    result.update(coupling=c, checks=checks, notes=notes, target={"torque_Nm": float(T)},
+                  fusion={"type": "coupling", "passed_checks": True, **{k: c[k] for k in ("d", "D_hub", "L_hub", "D_bolt",
+                                                                                        "D_flange", "t", "N", "bolt")}})
+    k, b = c["key"], c["bolt"]
+    msg = (f"All checks passed. Flange coupling for a Ø{c['d']:g} shaft: hubs Ø{c['D_hub']:g} × {c['L_hub']:g}, flanges "
+           f"Ø{c['D_flange']:g} × {c['t']:g} mm, {c['N']} × M{b['d']}×{b['L']} bolts on Ø{c['D_bolt']:g} (friction holds "
+           f"{b['T_fric'] / 1000:.0f} N·m), key {k['b']}×{k['h']}×{k['length']:g}.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
 

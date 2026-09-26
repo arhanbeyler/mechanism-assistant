@@ -34,6 +34,8 @@ Sentences can be written in English or Turkish.
 | ![disc clutch](docs/img/clutch.png) | ![snap-fit](docs/img/snap_fit.png) | ![living hinge](docs/img/flexure.png) |
 | **Crank press (system)** | **Path synthesis (through given points)** | **Watt six-bar (large swing)** |
 | ![crank press](docs/img/press.png) | ![path synthesis](docs/img/path_synthesis.png) | ![six-bar](docs/img/six_bar.png) |
+| **Flange coupling** | | |
+| ![flange coupling](docs/img/coupling.png) | | |
 
 ## Core rule: the LLM never produces a number
 
@@ -51,7 +53,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (95/95, incl. 12
+  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (96/96, incl. 12
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -91,6 +93,7 @@ flowchart LR
 | Torsion spring | Moment at a working angle, arbor optional; the lightest music-wire spring in whole quarter body turns | Shigley 10-12: inner-fibre stress with K_i, S_y = 0.78 S_ut, rate d⁴E/(10.8 D N_a) with the legs' share, winding-down of the coil onto the arbor; Shigley example 10-8 reproduced (M 7.55 lbf·in, k' 29.2 lbf·in/turn, 93°); in Fusion a close-wound helix sweep with straight legs |
 | Flywheel | Energy fluctuation (or the work of one press stroke and the share of the cycle it takes), mean speed, C_s (from the application, reported), max diameter optional | I = ΔE/(C_s ω²) (tested: the energy between the speed limits is ΔE), steel disk t = 0.1 D, rotating-disk stress, rim speed, speed range; in Fusion the disk turns on its shaft between pedestals |
 | Disc clutch | Torque (or power and speed), lining, max diameter optional; service factor 1.3 | Shigley 16-5 uniform wear: T = N π f p_a r_i (r_o² − r_i²) (both forms tested equal), the best r_i = r_o/√3 found numerically, clamp force; more plates when the diameter is limited; in Fusion flywheel, friction disks, intermediate and pressure plates, input and output linked 1:1 (engaged) |
+| Flange coupling | Torque (service factor 1.5), shaft (sized in torsion when not given), bolts optional; the usual proportions (hub 2d × 1.5d, bolt circle 3d, flange 4d × 0.5d) | Key (DIN 6885) shear, crushing and its fit in the hub; bolts carrying the torque by friction μ N F_i r (the next smaller bolt tested to slip); hub torsion, flange shear; says when the shaft is too thin; in Fusion both hubs, shafts, bolts with a cosmetic thread and nuts |
 | Snap-fit (printed) | Undercut, PLA / PETG, hold force optional, permanent or releasable, repeated use; the shortest printable cantilever | Bayer / Covestro cantilever method: root strain 1.5 y h / l² within the material's allowance (tested against beam theory), deflection force, snap-in and pull-out forces over the ramp and the retaining face (a square face locks); in Fusion the snap and the catch against its hook, touching |
 | Living hinge (printed) | Bend angle, PLA / PETG, a few or many cycles; the shortest, thinnest printable strip | A strip in pure bending: strain t θ/(2L) (tested as t/2 over the radius) kept elastic (S_y/E, halved for many cycles), stiffness E I / L (tested as E I / ρ), moment at the full bend, the pivot's wander along the strip |
 | Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)); fatigue for a cycling force (Zimmerli + Gerber, the Gerber point tested on the curve) |
@@ -146,7 +149,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 318 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 321 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -161,7 +164,7 @@ function_gen.py      Freudenstein function generator (limited-input four-bar)
 strength.py          link, pin and shaft sizing; hub compliance; K_t; deflection
 interference.py      layer order and shaft-to-link clearance over the cycle
 fea_local.py         gmsh + scikit-fem link model (with hub) vs hand calculation
-gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py press.py pathsynth.py sixbar.py   module engines
+gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py press.py pathsynth.py sixbar.py coupling.py   module engines
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)
 reducer.py reducer2.py cam_system.py   systems: modules sized together until their constraints agree
 fusion_lib/          Fusion builders (one per module) + shared document handling

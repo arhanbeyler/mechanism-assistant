@@ -77,7 +77,8 @@ In a system one module's output is another's input (forces, diameters and masses
 - [x] **H4. Torsion spring; compression-spring fatigue.** Torsion spring (Shigley 10-12, example 10-8 reproduced), arbor clearance when wound; Zimmerli + Gerber fatigue when the force cycles (a new 'cycles down to' input). Fusion: helix sweep with legs. Finding: adding the new field's description at the START of the spring prompt made the model drop an old case's force ('30 N'da'); placed at the end it works
 - [ ] **H4b. Extension and disc (Belleville) springs**
 - [x] **H5. Flywheel and disc clutch.** Flywheel from the energy fluctuation (or a press stroke) and C_s; dry disc clutch / brake by uniform wear, faces added when the diameter is limited. Fusion: flywheel on pedestals (turns), engaged clutch with input and output linked 1:1. Finding: an 'all' symmetric extrude-cut from a sketch on the mid plane cut only one pedestal's hole fully; cutting on an offset plane through the thickness works
-- [ ] **H5b. Couplings** (rigid flange, jaw); flywheel sized from the four-bar / slider-crank torque curve (needs K2)
+- [x] **H5b. Rigid flange coupling.** Key, friction-type bolts, hub and flange; the flywheel from a torque curve came with K2 (four-bar) and E4 (press)
+- [ ] **H5c. Jaw / elastic couplings** (maker data)
 
 ## I. For 3D printing
 - [x] **I1. Snap-fit.** Printed cantilever (PLA 2 %, PETG 3 % strain, 60 % for repeated use), forces over the ramp and the retaining face, printable wall ≥ 3 perimeters. Fusion: snap and catch touching. Finding: a locked hook's pull-out force is infinite, which JSON cannot carry to the panel; it is sent as null with locked = true
