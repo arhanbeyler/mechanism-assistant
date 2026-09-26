@@ -366,7 +366,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -375,7 +375,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -768,7 +768,60 @@ Everything is computed on this computer, with a local AI.</div>
       <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
   }
 
+  function renderClampCard(d) {              // F5: toggle clamp
+    const s = d.clamp;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const sec = (d.section_mm && d.section_mm.links) || {};
+    const secTxt = (n) => sec[n] ? ` (${f(sec[n].width, 0)}×${f(sec[n].thickness, 0)})` : "";
+    const rows = [["Opening / handle travel", `${f(s.opening, 0)}° / ${f(s.travel, 0)}°`],
+                  ["Handle link a", `${f(s.a, 1)} mm${secTxt("Crank")}`], ["Coupler b", `${f(s.b, 1)} mm${secTxt("Coupler")}`],
+                  ["Arm c / spindle", `${f(s.c, 1)} / ${f(s.L_arm, 0)} mm${secTxt("Rocker")}`],
+                  ["Base d", `${f(s.d, 1)} mm${secTxt("Ground")}`], ["Handle length", `${f(s.L_handle, 0)} mm`],
+                  ["Over-centre", `${f(s.overcentre, 0)}° → arm lifts ${f(s.backoff_mm, 2)} mm`]];
+    if (s.F) rows.push(["Coupler / pivot force", `${f(s.F_AB, 0)} / ${f(s.R_O4, 0)} N`],
+                       ["Stop torque", `${f(s.T_stop / 1000, 2)} N·m`], ["Pins", `Ø${f(d.section_mm.hole, 0)} (steel)`]);
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Toggle clamp</h3><table>${rows.map(([k, v]) =>
+          `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Locked / open · handle force</h3>${clampSvg(s)}${handleSvg(s)}</div>
+      </div>`;
+  }
+
+  function clampSvg(s) {                     // locked pose (solid) and open pose (faint), to scale
+    const W = 220, H = 120, pad = 8, p = s.points, o = s.open;
+    const all = [p.O2, p.O4, p.A, p.B, p.H, p.S, o.A, o.B, s.post];
+    const xs = all.map((q) => q[0]), ys = all.map((q) => q[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const sc = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad) / (y1 - y0));
+    const X = (x) => (W - (x1 - x0) * sc) / 2 + (x - x0) * sc, Y = (y) => (H + (y1 - y0) * sc) / 2 - (y - y0) * sc;
+    const ln = (a, b, c, w, op) => `<line x1="${X(a[0])}" y1="${Y(a[1])}" x2="${X(b[0])}" y2="${Y(b[1])}" stroke="var(${c})" stroke-width="${w}" stroke-linecap="round" opacity="${op || 1}"/>`;
+    const lb = Math.hypot(o.B[0], o.B[1]), So = [o.B[0] / lb * s.L_arm, o.B[1] / lb * s.L_arm];
+    return `<svg viewBox="0 0 ${W} ${H}">
+      ${ln(p.O2, o.A, "--crank", 3, 0.3)}${ln(o.A, o.B, "--coupler", 2, 0.3)}${ln(p.O4, So, "--rocker", 3, 0.3)}
+      ${ln(p.O2, p.O4, "--ground", 3)}${ln(p.O2, p.H, "--crank", 4)}${ln(p.A, p.B, "--coupler", 3)}${ln(p.O4, p.S, "--rocker", 4)}
+      <circle cx="${X(s.post[0])}" cy="${Y(s.post[1])}" r="3" fill="var(--muted)"/>
+      <circle cx="${X(p.O2[0])}" cy="${Y(p.O2[1])}" r="3.5" fill="var(--panel)" stroke="var(--text)" stroke-width="1.5"/>
+      <circle cx="${X(p.O4[0])}" cy="${Y(p.O4[1])}" r="3.5" fill="var(--panel)" stroke="var(--text)" stroke-width="1.5"/></svg>`;
+  }
+
+  function handleSvg(s) {                    // handle force that holds the rated spindle force, over the travel
+    const W = 220, H = 80, l = 30, r = 6, t = 6, b = 16, top = Math.max(...s.curve.map((c) => c[1])) || 1;
+    const X = (th) => l + th / s.travel * (W - l - r), Y = (v) => t + (1 - v / top) * (H - t - b);
+    const line = s.curve.map(([th, v]) => `${X(th).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(s.travel)}" y2="${Y(0)}"/>
+      <text class="lbl" x="${l - 4}" y="${Y(top) + 3}" text-anchor="end">${Math.round(top)} N</text>
+      <text class="lbl" x="${l - 4}" y="${Y(0) + 3}" text-anchor="end">0</text>
+      <text class="lbl" x="${X(0)}" y="${H - 4}">open</text>
+      <text class="lbl" x="${X(s.travel)}" y="${H - 4}" text-anchor="end">dead centre</text>
+      <text class="lbl" x="${X(s.travel / 2)}" y="${t + 8}" text-anchor="middle">for ${Math.round(s.F_ref)} N at the spindle</text>
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "toggle_clamp") return renderClampCard(d);
     if (d.mechanism_type === "geneva") return renderGenevaCard(d);
     if (d.mechanism_type === "straight_line") return renderStraightCard(d);
     if (d.mechanism_type === "reducer" && d.reducer2) return renderReducer2Card(d);

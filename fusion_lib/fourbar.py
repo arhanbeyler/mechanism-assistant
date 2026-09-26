@@ -158,6 +158,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Housing": "Plastic - Matte (Gray)",
                "Crank": "Plastic - Matte (Red)", "Pinion": "Plastic - Matte (Red)", "Cam": "Plastic - Matte (Red)",
                "Coupler": "Plastic - Matte (Blue)", "Driver": "Plastic - Matte (Red)", "Wheel": "Plastic - Matte (Green)",
+               "Handle": "Plastic - Matte (Red)", "Arm": "Plastic - Matte (Green)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
                "Shaft": "Steel - Satin", "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin",
@@ -186,7 +187,7 @@ def paint(design):
                     body.appearance = _appearance(design, APPEARANCES["Key"])
                 elif body.name == "Top plate":
                     body.appearance = _appearance(design, APPEARANCES["Base"])
-                elif body.name.startswith(("Shaft", "Pin")) and name in ("Driver", "Wheel"):   # F3: steel parts
+                elif body.name.startswith(("Shaft", "Pin", "Spindle")) and name in ("Driver", "Wheel", "Arm"):
                     body.appearance = _appearance(design, APPEARANCES["Shaft"])
     except Exception:
         pass
@@ -219,7 +220,8 @@ def build(mech, reuse=True):
              "slider_crank": "slider_crank",  # F1: slider-crank (piston)
              "reducer2": "reducer2",          # E2: two-stage reducer
              "straight_line": "straight_line",  # F2: Hoeckens straight-line linkage
-             "geneva": "geneva"}.get(mech.get("type"))   # F3: Geneva (wheel driven from a table by the add-in)
+             "geneva": "geneva",                # F3: Geneva (wheel driven from a table by the add-in)
+             "toggle_clamp": "toggle_clamp"}.get(mech.get("type"))   # F5: toggle clamp
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

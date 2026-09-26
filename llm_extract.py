@@ -35,7 +35,8 @@ def _schema(props):
 
 # ---------------------------------------------------------------- 1) router
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
-                                   "enum": ["fourbar", "slider_crank", "straight_line", "geneva", "reducer", "spur_gear",
+                                   "enum": ["fourbar", "slider_crank", "straight_line", "geneva", "toggle_clamp",
+                                            "reducer", "spur_gear",
                                             "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
@@ -44,6 +45,8 @@ ROUTER_PROMPT = (
     "'spring': a spring (yay, basma yayı, konik yay). "
     "'slider_crank': a piston or slider moved back and forth by a crank (piston, pistonlu, krank-biyel, strok, "
     "stroke, 'ileri geri giden', reciprocating slider, 'X mm strok'). "
+    "'toggle_clamp': a toggle / over-centre clamp that holds a workpiece (mafsallı / kelebek / toggle "
+    "işkence, hızlı bağlama aparatı, 'kol ölü noktayı geçip kilitlensin', hold-down clamp). "
     "'geneva': intermittent rotation, a wheel that turns a step and stops (Cenevre / Malta haçı mekanizması, "
     "Geneva, indexing table / endeksleme tablası, 'X derece adım adım dönsün', 'dur-kalk dönen tabla'). "
     "'straight_line': a linkage whose POINT follows a straight line with no slide or guide (düz çizgi / doğrusal "
@@ -146,6 +149,19 @@ GENEVA = (_schema({
     "load_diameter_mm: a table / plate carried on the wheel shaft ('2 kg, 300 mm çaplı tabla') if given. "
     "material only if named."))
 
+TOGGLE_CLAMP = (_schema({
+    "opening_deg": {"type": ["number", "null"]},
+    "handle_travel_deg": {"type": ["number", "null"]},
+    "arm_length_mm": {"type": ["number", "null"]},
+    "clamp_force_N": {"type": ["number", "null"]},
+    "handle_length_mm": {"type": ["number", "null"]},
+    "material": MATERIAL,
+}), COMMON + (
+    "The user wants a toggle clamp. opening_deg: how far the clamp arm opens ('90 derece açılsın'). "
+    "handle_travel_deg: how far the handle turns if given. arm_length_mm: distance from the arm pivot to the "
+    "pressing spindle / pad ('kol 60 mm', 'arm 6 cm'). clamp_force_N: holding / clamping force ('1000 N tutsun', "
+    "'50 kg' -> 490.5) if given. handle_length_mm: handle length if given. material only if named."))
+
 SPRING = (_schema({
     "spring_force_N": {"type": ["number", "null"]},
     "spring_deflection_mm": {"type": ["number", "null"]},
@@ -197,22 +213,24 @@ SHAFT = (_schema({
     "'plain' (düz) only if named. shaft_material: '1020' or '1045' only if named. safety_n: required safety "
     "factor if given ('emniyet katsayısı 2.5')."))
 
-MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "straight_line": STRAIGHT_LINE, "geneva": GENEVA, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
+MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "straight_line": STRAIGHT_LINE, "geneva": GENEVA, "toggle_clamp": TOGGLE_CLAMP, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # All fields (the pipeline expects one dict; fields of other modules are None)
 ALL_FIELDS = {"mechanism_type": "unknown", "quick_return": False}
 for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
-KIND_TO_TYPE = {"slider_crank": "slider_crank", "straight_line": "straight_line", "geneva": "geneva", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
+KIND_TO_TYPE = {"slider_crank": "slider_crank", "straight_line": "straight_line", "geneva": "geneva",
+                "toggle_clamp": "toggle_clamp", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
 # ---------------------------------------------------------------- 3) edits of the current design (K1)
 KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "slider_crank": "slider_crank",
-                "straight_line": "straight_line", "geneva": "geneva", "reducer": "reducer", "spur_gear": "spur_gear",
+                "straight_line": "straight_line", "geneva": "geneva", "toggle_clamp": "toggle_clamp", "reducer": "reducer", "spur_gear": "spur_gear",
                 "spring": "spring", "cam": "cam", "shaft": "shaft"}
 DESCRIPTION = {"fourbar": "four-bar linkage", "slider_crank": "slider-crank (piston) mechanism",
-               "straight_line": "straight-line linkage (Hoeckens)", "geneva": "Geneva mechanism (intermittent rotation)", "reducer": "single-stage gear reducer (gearbox)",
+               "straight_line": "straight-line linkage (Hoeckens)", "geneva": "Geneva mechanism (intermittent rotation)",
+               "toggle_clamp": "toggle clamp", "reducer": "single-stage gear reducer (gearbox)",
                "spur_gear": "spur gear pair", "spring": "compression spring", "cam": "disk cam with roller follower",
                "shaft": "rotating shaft"}
 NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}

@@ -54,8 +54,8 @@ def check_layers(mech, frames, section, order, ends=LINK_ENDS):
         worst = float("inf")
         for fr in frames:
             pts = {"O2": tuple(mech["o2"]), "O4": (0.0, 0.0), "A": tuple(fr["A"]), "B": tuple(fr["B"])}
-            if "P" in fr:
-                pts["P"] = tuple(fr["P"])
+            pts.update({k: tuple(v) for k, v in fr.items()                     # extra points: P, H, S ...
+                        if k not in pts and isinstance(v, (tuple, list)) and len(v) == 2})
             for name in between:
                 s = sec["links"][name]
                 e0, e1 = ends[name]
@@ -65,10 +65,10 @@ def check_layers(mech, frames, section, order, ends=LINK_ENDS):
     return out
 
 
-def choose_layer_order(mech, frames, section, ends=LINK_ENDS):
+def choose_layer_order(mech, frames, section, ends=LINK_ENDS, orders=LAYER_ORDERS):
     """First layer order without interference. Returns (order, clearances, passed)."""
     best = None
-    for order in LAYER_ORDERS:
+    for order in orders:
         res = check_layers(mech, frames, section, order, ends)
         margin = min((r[2] for r in res), default=float("inf"))
         if margin >= 0:

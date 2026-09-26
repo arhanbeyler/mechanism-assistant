@@ -20,6 +20,7 @@ import kinematics as kin
 import shafts
 import slider_crank
 import springs
+import toggle
 import llm_extract
 import reducer
 import reducer2
@@ -30,6 +31,18 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "toggle_clamp": {
+        "title": "Toggle clamp",
+        "params": [
+            {"key": "opening_deg", "label": "Arm opening", "unit": "°", "min": 20, "max": 150, "step": 5, "default": 90},
+            {"key": "handle_travel_deg", "label": "Handle travel", "unit": "°", "min": 30, "max": 170, "step": 5,
+             "default": 90},
+            {"key": "arm_length_mm", "label": "Arm (to spindle)", "unit": "mm", "min": 20, "max": 300, "step": 5,
+             "default": 60},
+            {"key": "clamp_force_N", "label": "Holding force", "unit": "N", "min": 0, "max": 5000, "step": 50,
+             "default": 0, "zero_label": "none"},
+        ],
+    },
     "geneva": {
         "title": "Geneva (intermittent rotation)",
         "params": [
@@ -306,10 +319,16 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None,
                        span_mm=None, power_kW=None, stroke_mm=None, offset_mm=None, rod_length_mm=None,
                        follower_mass_kg=None, follower_load_N=None, slots=None, center_distance_mm=None,
-                       load_mass_kg=None, load_diameter_mm=None):
+                       load_mass_kg=None, load_diameter_mm=None, opening_deg=None, handle_travel_deg=None,
+                       arm_length_mm=None, clamp_force_N=None, handle_length_mm=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "toggle_clamp":
+        return design_from_spec({"mechanism_type": "toggle_clamp", "opening_deg": opening_deg,
+                                 "handle_travel_deg": handle_travel_deg, "arm_length_mm": arm_length_mm,
+                                 "clamp_force_N": clamp_force_N or None, "handle_length_mm": handle_length_mm,
+                                 "material": material})
     if kind == "geneva":
         return design_from_spec({"mechanism_type": "geneva", "slots": slots, "center_distance_mm": center_distance_mm,
                                  "speed_rpm": speed_rpm or None, "load_mass_kg": load_mass_kg or None,
@@ -366,6 +385,8 @@ def design_from_spec(spec, on_status=None):
         return _straight_line(result, spec, say)
     if mtype == "geneva":
         return _geneva(result, spec, say)
+    if mtype == "toggle_clamp":
+        return _toggle_clamp(result, spec, say)
     if mtype == "reducer":
         return _reducer(result, spec, say)
     if mtype == "spur_gear":
@@ -379,7 +400,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, slider-crank, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -728,6 +749,109 @@ def _geneva(result, spec, say):
         if rpm and J:
             msg += (f" At {rpm:g} rpm: peak wheel acceleration {info['alpha_max']:.0f} rad/s², pin force "
                     f"{ld['F_pin']:.0f} N, driver torque {ld['T_driver'] / 1000:.2f} N·m.")
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+_CLAMP_NAMES = (("Crank", "Handle link"), ("Coupler", "Coupler"), ("Rocker", "Arm"), ("Ground", "Base"))
+
+
+def _toggle_clamp(result, spec, say):
+    """F5: toggle clamp. Required: arm opening angle and spindle distance (arm length). Handle travel and handle
+    length have defaults (reported); with a holding force the pins and links are sized."""
+    result["mechanism_type"] = "toggle_clamp"
+    psi, L = spec.get("opening_deg"), spec.get("arm_length_mm")
+    missing = [n for v, n in ((psi, "arm opening angle"), (L, "arm length to the spindle (mm)")) if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the toggle clamp: {', '.join(missing)}.")
+    psi, L = float(psi), float(L)
+    notes = []
+    travel = spec.get("handle_travel_deg")
+    if not travel:
+        travel = 90.0
+        notes.append("Handle travel not given: 90° assumed.")
+    Lh = spec.get("handle_length_mm")
+    if not Lh:
+        Lh = 2 * L
+        notes.append(f"Handle length not given: {Lh:g} mm (twice the arm).")
+    F = float(spec.get("clamp_force_N") or 0.0)
+    mat_key = spec.get("material")
+    if mat_key not in strength.MATERIALS:
+        mat_key = "steel" if F else "PLA"
+        notes.append(f"Material not given: {strength.MATERIALS[mat_key]['name']} assumed.")
+    mat = strength.MATERIALS[mat_key]
+    if not 10 <= psi <= 150 or not 20 <= travel <= 170:
+        return dict(result, status="failed", message="The opening must be 10..150° and the handle travel 20..170°.")
+    say("Toggle clamp: dead-centre synthesis, over-centre lock, forces...")
+    d, s_checks = toggle.design(psi, float(travel), L, mat, F, float(Lh))
+    if d is None:
+        return dict(result, status="failed", message=s_checks + " Suggestion: more handle travel or less opening.")
+    m, fr, an = d["mech"], d["frames"], d["analysis"]
+
+    def rename(text):
+        for old, new in _CLAMP_NAMES:
+            text = text.replace(old, new)
+        return text
+
+    checks = [{"name": c["name"], "ok": c["util"] <= 1.0 + 1e-9, "detail": c["detail"]}
+              for c in s_checks if c["group"] == "Motion"]
+    strength_ok = True
+    if F:
+        say("Pins and links for the holding force...")
+        strength_ok = d["section"] is not None
+        worst = {}
+        for c in s_checks:
+            if c["group"] != "Motion" and (c["group"] not in worst or c["util"] > worst[c["group"]]["util"]):
+                worst[c["group"]] = c
+        checks += [{"name": rename(f"{k}: {c['name']}"), "ok": c["util"] <= 1.0,
+                    "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for k, c in worst.items()]
+    else:
+        notes.append("No holding force given, so no strength sizing: default section (10×4 mm, Ø4 pins).")
+    section = d["section"] or strength.DEFAULT_SECTION
+    section = {"hole": section["hole"], "shaft": section["hole"],
+               "links": {n: dict(section["links"][n], boss0=max(section["links"][n]["width"], 2.5 * section["hole"]),
+                                 boss1=max(section["links"][n]["width"], 2.5 * section["hole"]))
+                         for n in ("Crank", "Coupler", "Rocker", "Ground")}}
+    k_dc = an["k_dc"]
+    F_ref = F or 100.0
+    curve = [(round(f["th"], 1), round(toggle.handle_torque(m, f, F_ref, L) / Lh, 2)) for f in fr[1:k_dc:4]]
+    locked = fr[-1]
+    r3 = lambda p: [round(p[0], 3), round(p[1], 3)]
+    unit = lambda p, q: ((q[0] - p[0]) / math.dist(p, q), (q[1] - p[1]) / math.dist(p, q))
+    uh, ua = unit(m["O2"], locked["A"]), unit((0.0, 0.0), locked["B"])
+    pts = {"O2": r3(m["O2"]), "O4": [0.0, 0.0], "A": r3(locked["A"]), "B": r3(locked["B"]),
+           "H": r3((m["O2"][0] + Lh * uh[0], m["O2"][1] + Lh * uh[1])), "S": r3((L * ua[0], L * ua[1]))}
+    # two base plates (bottom holds O2, top holds O4): every pin joins neighbouring layers; a post ties them
+    r_post = max(4.0, section["hole"])
+    post, gap = toggle.spacer(m, fr, L, Lh, section, r_post)
+    checks.append({"name": "Base post clears the moving links", "ok": gap >= toggle.SPACER_GAP,
+                   "detail": f"smallest gap {gap:.1f} mm over the stroke (needed {toggle.SPACER_GAP:g})"})
+    total = m["travel"] + toggle.OVERCENTRE
+    ok = all(c["ok"] for c in checks) and strength_ok
+    info = {"a": m["a"], "b": m["b"], "c": m["c"], "d": m["d"], "L_arm": L, "L_handle": Lh, "opening": psi,
+            "travel": m["travel"], "overcentre": toggle.OVERCENTRE, "backoff_deg": an["backoff_deg"],
+            "backoff_mm": an["backoff_mm"], "F": F, "F_ref": F_ref, "F_AB": an["F_AB"], "R_O4": an["R_O4"],
+            "T_stop": an["T_stop"], "mu_locked": an["mu_locked"], "curve": curve, "points": pts,
+            "open": {"A": r3(fr[0]["A"]), "B": r3(fr[0]["B"])}, "post": r3(post)}
+    result.update(clamp=info, checks=checks, notes=notes, section_mm=section, target={"opening": psi},
+                  fusion={"type": "toggle_clamp", "passed_checks": ok, "points_mm": pts, "section_mm": section,
+                          "lengths_mm": {"a": m["a"], "b": m["b"], "c": m["c"], "d": m["d"], "L_arm": L,
+                                         "L_handle": Lh}, "post": r3(post), "post_r": r_post,
+                          "spindle_dir": -1 if fr[0]["psi"] > an["psi_dc"] else 1,
+                          "input_range_deg": sorted([0.0, -m["sign"] * total])})
+    if not strength_ok:
+        msg = f"No {mat['name']} section holds {F:g} N. Suggestion: a stronger material or a smaller force."
+    elif not ok:
+        msg = "The design does not meet the checks above. Suggestion: more handle travel or less opening."
+    else:
+        msg = (f"All checks passed. Toggle clamp: arm opens {psi:g}° for {m['travel']:g}° of handle travel; "
+               f"handle link {m['a']:.1f} mm, coupler {m['b']:.1f} mm, arm link {m['c']:.1f} mm (spindle at {L:g} mm), "
+               f"base {m['d']:.1f} mm. The handle goes {toggle.OVERCENTRE:g}° past the dead centre onto a stop, so a "
+               f"push on the spindle locks it harder; there the arm lifts {an['backoff_mm']:.2f} mm, which the "
+               f"clamping squeeze must exceed.")
+        if F:
+            msg += (f" Holding {F:g} N: coupler {an['F_AB']:.0f} N, arm pivot {an['R_O4']:.0f} N, "
+                    f"stop torque {an['T_stop'] / 1000:.2f} N·m.")
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
     return result
 

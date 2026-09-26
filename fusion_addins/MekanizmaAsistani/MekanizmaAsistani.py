@@ -242,7 +242,7 @@ def crank_motion():
     if not design:
         return None
     for j in design.rootComponent.asBuiltJoints:
-        if j.name.startswith("Ground-Crank") or j.name in INPUT_JOINTS:
+        if j.name.startswith(("Ground-Crank", "Ground-Handle")) or j.name in INPUT_JOINTS:
             return adsk.fusion.RevoluteJointMotion.cast(j.jointMotion)
     return None
 
