@@ -38,6 +38,7 @@ import worm
 import llm_extract
 import planetary
 import power_screw
+import press
 import rack_pinion
 import ratchet
 import reducer
@@ -50,6 +51,16 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "press": {
+        "title": "Crank press (system)",
+        "params": [
+            {"key": "force_N", "label": "Press force", "unit": "N", "min": 1000, "max": 200000, "step": 1000, "default": 20000},
+            {"key": "stroke_mm", "label": "Stroke", "unit": "mm", "min": 10, "max": 200, "step": 5, "default": 60},
+            {"key": "working_stroke_mm", "label": "Working part", "unit": "mm", "min": 0, "max": 50, "step": 1, "default": 6,
+             "zero_label": "10 %"},
+            {"key": "speed_rpm", "label": "Strokes / min", "unit": "", "min": 5, "max": 200, "step": 5, "default": 40},
+        ],
+    },
     "flexure": {
         "title": "Living hinge (printed)",
         "params": [
@@ -571,10 +582,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        fluctuating=None, arm_mm=None, bar_width_mm=None, bar_height_mm=None, weld_pattern=None,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
                        arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
-                       undercut_mm=None, hold_force_N=None, releasable=None, repeated=None):
+                       undercut_mm=None, hold_force_N=None, releasable=None, repeated=None,
+                       working_stroke_mm=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "press":
+        return design_from_spec({"mechanism_type": "press", "force_N": force_N, "stroke_mm": stroke_mm,
+                                 "working_stroke_mm": working_stroke_mm or None, "speed_rpm": speed_rpm})
     if kind == "flexure":
         return design_from_spec({"mechanism_type": "flexure", "spring_angle_deg": spring_angle_deg, "material": material,
                                  "repeated": repeated in (True, "yes")})
@@ -729,6 +744,8 @@ def design_from_spec(spec, on_status=None):
         return _snap_fit(result, spec, say)
     if mtype == "flexure":
         return _flexure(result, spec, say)
+    if mtype == "press":
+        return _press(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -746,7 +763,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -2007,6 +2024,55 @@ def _flexure(result, spec, say):
     msg = (f"All checks passed. Strip {d['L']:g} × {d['t']:g} mm, {d['w']:g} mm wide: {d['theta_deg']:g}° gives "
            f"{100 * d['eps']:.2f} % strain (limit {100 * d['eps_allow']:.2f} %) and takes {d['M']:.1f} N·mm "
            f"({d['k_Nmm_deg']:.3f} N·mm/°); its pivot wanders about {d['pivot_shift']:.0f} mm along the strip.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _press(result, spec, say):
+    """E4: crank press system. Required: the press force, the stroke and the strokes per minute; the working
+    stroke defaults to 10 % of the stroke (reported)."""
+    result["mechanism_type"] = "press"
+    F, S, spm = spec.get("force_N"), spec.get("stroke_mm"), spec.get("speed_rpm")
+    missing = [n for v, n in ((F, "press force (N / kN / ton)"), (S, "stroke (mm)"), (spm, "strokes per minute")) if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the press: {', '.join(missing)}.")
+    F, S, spm = float(F), float(S), float(spm)
+    notes = []
+    s_w = spec.get("working_stroke_mm")
+    if not s_w:
+        s_w = 0.1 * S
+        notes.append(f"Working stroke not given: the force acts over the last {s_w:g} mm (10 % of the stroke).")
+    Cs = spec.get("speed_fluctuation")
+    if not Cs:
+        notes.append(f"Speed fluctuation C_s = {press.CS_PRESS:g} (typical for presses).")
+    notes.append(f"Motor 1450 rpm, 4:1 V-belt to the flywheel shaft, drive efficiency {press.ETA:g}; inertia and "
+                 "friction of the ram left out of the torque.")
+    say("Press: slider-crank, torque curve, energy per stroke, flywheel, motor...")
+    d, s_checks = press.design(F, S, float(s_w), spm, Cs, 1450.0, "steel", spec.get("outer_diameter_max_mm") or None)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if d is None or d["section"] is None or not all(c["ok"] for c in checks):
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "The press does not pass (see the failing checks): a longer stroke or a smaller force."]))
+    fw = d["flywheel"]
+    section = strength.section_with_bosses({"hole": d["section"]["hole"], "shaft": d["section"]["shaft"],
+                                            "links": d["section"]["links"]})
+    g = slider_crank.synthesize(S, 0.0)
+    frames = slider_crank.simulate(g["a"], g["b"], 0.0)
+    m = slider_crank.measure(frames)
+    k = len(frames) // 8
+    th0 = math.radians(frames[k]["theta"])
+    pts = {"O2": [0.0, 0.0], "A": [g["a"] * math.cos(th0), g["a"] * math.sin(th0)], "B": [frames[k]["x"], 0.0]}
+    result.update(press=dict({k2: v for k2, v in d.items() if k2 not in ("section",)}, section=section),
+                  checks=checks, notes=notes, target={"force_N": F},
+                  fusion={"type": "press", "passed_checks": True, **g, "x_min": m["x_min"], "x_max": m["x_max"],
+                          "points_mm": pts, "section_mm": section, "fly_D": fw["D"], "fly_t": fw["t"],
+                          "fly_bore": fw["bore"], "gear_ratio": d["gear_ratio"]})
+    msg = (f"All checks passed. Crank {d['a']:g} mm, rod {d['b']:g} mm (stroke {S:g} mm); {F / 1000:g} kN over the last "
+           f"{d['s_w']:g} mm is {d['W']:.0f} J per stroke. Peak crank torque {d['T_max'] / 1000:.0f} N·m, mean "
+           f"{d['T_mean'] / 1000:.1f} N·m: with a Ø{fw['D']:.0f} × {fw['t']:.0f} mm flywheel ({fw['mass']:.0f} kg) at "
+           f"{d['flywheel_rpm']:.0f} rpm a {d['P_motor'] / 1000:.2f} kW motor is enough (without it "
+           f"{d['P_no_flywheel'] / 1000:.1f} kW); gears {d['gear_ratio']:.1f}:1 to the crankshaft.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 

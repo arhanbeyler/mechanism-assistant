@@ -61,6 +61,8 @@ CASES = [
     ("PETG kutu kapağı için 1.5 mm tırnaklı geçme, sökülebilir olsun", dict(mechanism_type="snap_fit", undercut_mm=1.5,
                                                                           material="PETG", releasable=True)),
     ("snap-fit clip with a 1 mm undercut that holds 20 N", dict(mechanism_type="snap_fit", undercut_mm=1, hold_force_N=20)),
+    ("20 kN'luk eksantrik pres, 60 mm strok, son 6 mm'de kesme yapıyor, dakikada 40 vuruş",
+     dict(mechanism_type="press", force_N=20000, stroke_mm=60, working_stroke_mm=6, speed_rpm=40)),
     ("300 devirde dönen pres volanı, zımba her vuruşta 1500 J iş yapıyor, devrin %10'unda",
      dict(mechanism_type="flywheel", work_J=1500, work_fraction=0.1, speed_rpm=300, application="press")),
     ("flywheel for 500 J energy fluctuation at 1000 rpm with 2 % speed variation",

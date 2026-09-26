@@ -103,16 +103,17 @@ def forces(frames, a, F):
     return {"F": F, "F_ab_max": F_rod, "M_crank_max": T, "M_rocker": 0.0}
 
 
-def size(forc, a, b, mat):
+def size(forc, a, b, mat, pins=None):
     """Pin (A, B) + shaft (O2) diameters and the lightest crank / rod sections (smallest volume).
     Returns (section, checks) or (None, checks at the largest section)."""
     lengths = {"Crank": a, "Coupler": b}
     best = None
-    for d in strength.PIN_DIAMETERS:
+    pins = pins or strength.PIN_DIAMETERS
+    for d in pins:
         pin = strength.check_pin(forc, mat, d)
         if pin["util"] > 1.0:
             continue
-        for ds in (x for x in strength.PIN_DIAMETERS if x >= d):
+        for ds in (x for x in pins if x >= d):
             shaft = strength.check_shaft(forc, mat, ds)
             if shaft["util"] > 1.0:
                 continue
@@ -131,7 +132,7 @@ def size(forc, a, b, mat):
                     best = ({"hole": float(d), "shaft": float(ds), "links": links}, checks, volume)
     if best:
         return best[0], best[1]
-    d, w, t = strength.PIN_DIAMETERS[-1], strength.MAX_WIDTH, strength.THICKNESSES[-1]
+    d, w, t = pins[-1], strength.MAX_WIDTH, strength.THICKNESSES[-1]
     fail = [strength.check_pin(forc, mat, d), strength.check_shaft(forc, mat, d)]
     for name, L in lengths.items():
         fail += strength.check_link(name, forc, L, mat, w, t, d, d)

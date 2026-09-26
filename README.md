@@ -32,6 +32,8 @@ Sentences can be written in English or Turkish.
 | ![press fit](docs/img/press_fit.png) | ![torsion spring](docs/img/torsion_spring.png) | ![flywheel](docs/img/flywheel.png) |
 | **Disc clutch** | **Snap-fit (printed)** | **Living hinge (printed)** |
 | ![disc clutch](docs/img/clutch.png) | ![snap-fit](docs/img/snap_fit.png) | ![living hinge](docs/img/flexure.png) |
+| **Crank press (system)** | | |
+| ![crank press](docs/img/press.png) | | |
 
 ## Core rule: the LLM never produces a number
 
@@ -49,7 +51,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (91/91, incl. 12
+  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (92/92, incl. 12
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -92,6 +94,7 @@ flowchart LR
 | Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)); fatigue for a cycling force (Zimmerli + Gerber, the Gerber point tested on the curve) |
 | Disk cam | Cycloidal, harmonic or 3-4-5 motion; smallest base circle | Pressure angle ≤ 30°, no undercut, ρ ≥ 2·R_roller |
 | **Cam + follower spring (system)** | With speed and follower mass: the follower's acceleration sets the spring force needed against jump (1.3 × inertia); the preload is swept and the spring module designs the lightest spring that also passes with its real (rounded) rate | Contact force > 0 over the whole turn (recomputed from the motion table), all spring checks at the real top force |
+| **Crank press (system)** | Press force, stroke, the part of the stroke it acts over (10 % if not given), strokes per minute: the slider-crank, its torque curve by virtual work, the energy per stroke, the flywheel on the fast shaft (4:1 belt, gears to the crank) and the motor, all from one torque curve | Work per stroke = F s_w (the integral of the torque, tested), the motor supplies the mean power while the flywheel covers the fluctuation (the same flywheel on the crankshaft would need the ratio² more inertia, tested), crank and rod sized for the working-zone forces with larger steel pins; in Fusion the flywheel turns at the gear ratio with the crank |
 | Shaft | DE-Goodman fatigue with Marin factors, k_b iteration, Table 7-1 K_t; catalogue ball bearings; DIN 6885 key; diameter raised until every check passes | Fatigue n_f and yield at the hub and at the torque-carrying bearing seat, L10 life ≥ 20 000 h, key shear and crushing, slope ≤ 1 mrad and deflection ≤ 0.13 mm (numerical integration on the stepped shaft), Rayleigh critical speed ≥ 2× running speed |
 | **Reducer (system)** | Gear pair → gear forces and masses → both shafts → bearings → keys → housing, iterated until the constraints agree (gear bore = shaft, key ≤ face width, bearings side by side, common span) | All of the above + housing web; in Fusion, tooth overlap 0 mm³ at 6 angles and the output turns at exactly 1/i |
 | **Two-stage reducer (system)** | Ratios above 6: the ratio is split over two stages (lightest gear set near √i); three shafts, the intermediate one carries two gears (loads in two planes, reactions, M/EI deflection and Rayleigh speed with several masses); gear bores, key lengths, bearing seats and the common span iterated together | Per shaft: fatigue / yield at every seat, keys, bearing life, slopes and deflections at each gear; gear 2 clears the output shaft, gear 4 clears the input shaft, material between bearing seats; in Fusion, tooth overlap 0 in both stages at 5 angles, both ratios exact |
@@ -141,7 +144,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 308 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 312 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -156,7 +159,7 @@ function_gen.py      Freudenstein function generator (limited-input four-bar)
 strength.py          link, pin and shaft sizing; hub compliance; K_t; deflection
 interference.py      layer order and shaft-to-link clearance over the cycle
 fea_local.py         gmsh + scikit-fem link model (with hub) vs hand calculation
-gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py   module engines
+gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py press.py   module engines
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)
 reducer.py reducer2.py cam_system.py   systems: modules sized together until their constraints agree
 fusion_lib/          Fusion builders (one per module) + shared document handling

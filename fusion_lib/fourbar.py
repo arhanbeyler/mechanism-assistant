@@ -255,7 +255,8 @@ def build(mech, reuse=True):
              "torsion_spring": "torsion_spring",   # H4: torsion spring
              "flywheel": "flywheel", "clutch": "clutch",   # H5: flywheel, disc clutch
              "snap_fit": "snap_fit",            # I1: printed snap-fit
-             "flexure": "flexure"}.get(mech.get("type"))   # I2: living hinge
+             "flexure": "flexure",              # I2: living hinge
+             "press": "press"}.get(mech.get("type"))   # E4: crank press (slider-crank + flywheel)
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)
