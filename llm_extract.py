@@ -37,7 +37,7 @@ def _schema(props):
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
                                    "enum": ["fourbar", "slider_crank", "straight_line", "geneva", "toggle_clamp",
                                             "scotch_yoke", "quick_return", "ratchet", "power_screw", "rack_pinion",
-                                            "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear", "bevel_gear", "bolted_joint", "welded_joint", "press_fit", "torsion_spring", "flywheel", "clutch", "snap_fit", "flexure", "press", "path_synthesis", "coupling", "reducer", "spur_gear",
+                                            "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear", "bevel_gear", "bolted_joint", "welded_joint", "press_fit", "torsion_spring", "flywheel", "clutch", "snap_fit", "flexure", "press", "path_synthesis", "coupling", "disc_spring", "reducer", "spur_gear",
                                             "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
@@ -54,6 +54,8 @@ ROUTER_PROMPT = (
     "presi with stroke and strokes per minute, punch press, crank press); a flywheel alone is 'flywheel'. "
     "'flywheel': a flywheel that evens out the speed (volan, volant, 'devir dalgalanması', pres / zımba volanı, "
     "flywheel, energy storage wheel). "
+    "'disc_spring': disc / Belleville / cup springs (tabak yay, çanak yay, Belleville, disc spring), "
+    "usually a big force over a small deflection. "
     "'coupling': a coupling joining two shafts (kaplin, flanşlı kaplin, mil bağlantısı, 'iki mili bağla', "
     "rigid / flange coupling). "
     "'clutch': a friction disc clutch or disc brake (kavrama, debriyaj, disk fren, sürtünmeli kavrama, clutch, "
@@ -251,6 +253,15 @@ SNAP = (_schema({
     "'1.5 mm undercut'). hold_force_N: force it must hold if given (N; kg x 9.81). snap_width_mm: tab width if given. "
     "releasable: true if it must come apart again (sökülebilir, açılabilir, releasable). repeated: true if it is "
     "snapped many times (sık açılıp kapanan, repeated). material only if named."))
+
+DISC = (_schema({
+    "spring_force_N": {"type": ["number", "null"]},
+    "spring_deflection_mm": {"type": ["number", "null"]},
+    "arbor_mm": {"type": ["number", "null"]},
+}), COMMON + (
+    "The user wants a disc (Belleville) spring stack. spring_force_N: the force in NEWTONS (N, kN are forces: "
+    "'5 kN' -> 5000; only a mass is converted: '500 kg' -> 4905). spring_deflection_mm: the deflection at that "
+    "force. arbor_mm: the guide rod / bolt it sits on, if given ('M12 cıvata üstünde' -> 12)."))
 
 COUPLING = (_schema({
     "torque_Nm": {"type": ["number", "null"]},
@@ -506,7 +517,7 @@ SHAFT = (_schema({
     "factor if given ('emniyet katsayısı 2.5')."))
 
 MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "straight_line": STRAIGHT_LINE, "geneva": GENEVA, "toggle_clamp": TOGGLE_CLAMP, "scotch_yoke": SCOTCH_YOKE, "ratchet": RATCHET, "power_screw": POWER_SCREW, "rack_pinion": RACK_PINION,
-                     "chain_drive": CHAIN_DRIVE, "planetary": PLANETARY, "helical_gear": HELICAL, "worm_gear": WORM, "bevel_gear": BEVEL, "bolted_joint": BOLTED, "welded_joint": WELDED, "press_fit": PRESS, "torsion_spring": TORSION_SPRING, "flywheel": FLYWHEEL, "press": CRANK_PRESS, "path_synthesis": PATH, "coupling": COUPLING, "snap_fit": SNAP, "flexure": FLEXURE, "clutch": CLUTCH, "belt_drive": BELT_DRIVE,
+                     "chain_drive": CHAIN_DRIVE, "planetary": PLANETARY, "helical_gear": HELICAL, "worm_gear": WORM, "bevel_gear": BEVEL, "bolted_joint": BOLTED, "welded_joint": WELDED, "press_fit": PRESS, "torsion_spring": TORSION_SPRING, "flywheel": FLYWHEEL, "press": CRANK_PRESS, "path_synthesis": PATH, "coupling": COUPLING, "disc_spring": DISC, "snap_fit": SNAP, "flexure": FLEXURE, "clutch": CLUTCH, "belt_drive": BELT_DRIVE,
                      "quick_return": QUICK_RETURN, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # All fields (the pipeline expects one dict; fields of other modules are None)
@@ -515,18 +526,18 @@ for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
 KIND_TO_TYPE = {"slider_crank": "slider_crank", "straight_line": "straight_line", "geneva": "geneva",
-                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "helical_gear": "helical_gear", "worm_gear": "worm_gear", "bevel_gear": "bevel_gear", "bolted_joint": "bolted_joint", "welded_joint": "welded_joint", "press_fit": "press_fit", "torsion_spring": "torsion_spring", "flywheel": "flywheel", "clutch": "clutch", "snap_fit": "snap_fit", "flexure": "flexure", "press": "press", "path_synthesis": "path_synthesis", "coupling": "coupling", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
+                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "helical_gear": "helical_gear", "worm_gear": "worm_gear", "bevel_gear": "bevel_gear", "bolted_joint": "bolted_joint", "welded_joint": "welded_joint", "press_fit": "press_fit", "torsion_spring": "torsion_spring", "flywheel": "flywheel", "clutch": "clutch", "snap_fit": "snap_fit", "flexure": "flexure", "press": "press", "path_synthesis": "path_synthesis", "coupling": "coupling", "disc_spring": "disc_spring", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
 # ---------------------------------------------------------------- 3) edits of the current design (K1)
 KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "slider_crank": "slider_crank",
                 "straight_line": "straight_line", "geneva": "geneva", "toggle_clamp": "toggle_clamp",
-                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "helical_gear": "helical_gear", "worm_gear": "worm_gear", "bevel_gear": "bevel_gear", "bolted_joint": "bolted_joint", "welded_joint": "welded_joint", "press_fit": "press_fit", "torsion_spring": "torsion_spring", "flywheel": "flywheel", "clutch": "clutch", "snap_fit": "snap_fit", "flexure": "flexure", "press": "press", "path_synthesis": "path_synthesis", "coupling": "coupling", "reducer": "reducer", "spur_gear": "spur_gear",
+                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "helical_gear": "helical_gear", "worm_gear": "worm_gear", "bevel_gear": "bevel_gear", "bolted_joint": "bolted_joint", "welded_joint": "welded_joint", "press_fit": "press_fit", "torsion_spring": "torsion_spring", "flywheel": "flywheel", "clutch": "clutch", "snap_fit": "snap_fit", "flexure": "flexure", "press": "press", "path_synthesis": "path_synthesis", "coupling": "coupling", "disc_spring": "disc_spring", "reducer": "reducer", "spur_gear": "spur_gear",
                 "spring": "spring", "cam": "cam", "shaft": "shaft"}
 DESCRIPTION = {"fourbar": "four-bar linkage", "slider_crank": "slider-crank (piston) mechanism",
                "straight_line": "straight-line linkage (Hoeckens)", "geneva": "Geneva mechanism (intermittent rotation)",
                "toggle_clamp": "toggle clamp", "scotch_yoke": "Scotch yoke",
-               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "chain_drive": "roller chain drive", "belt_drive": "V-belt drive", "planetary": "planetary gear set", "helical_gear": "helical gear pair", "worm_gear": "worm gear set", "bevel_gear": "bevel gear pair", "bolted_joint": "bolted joint", "welded_joint": "welded bracket", "press_fit": "press fit", "torsion_spring": "torsion spring", "flywheel": "flywheel", "clutch": "disc clutch", "snap_fit": "snap-fit", "flexure": "living hinge", "press": "crank press", "path_synthesis": "path-generating four-bar", "coupling": "flange coupling", "reducer": "single-stage gear reducer (gearbox)",
+               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "chain_drive": "roller chain drive", "belt_drive": "V-belt drive", "planetary": "planetary gear set", "helical_gear": "helical gear pair", "worm_gear": "worm gear set", "bevel_gear": "bevel gear pair", "bolted_joint": "bolted joint", "welded_joint": "welded bracket", "press_fit": "press fit", "torsion_spring": "torsion spring", "flywheel": "flywheel", "clutch": "disc clutch", "snap_fit": "snap-fit", "flexure": "living hinge", "press": "crank press", "path_synthesis": "path-generating four-bar", "coupling": "flange coupling", "disc_spring": "disc spring stack", "reducer": "single-stage gear reducer (gearbox)",
                "spur_gear": "spur gear pair", "spring": "compression spring", "cam": "disk cam with roller follower",
                "shaft": "rotating shaft"}
 NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}

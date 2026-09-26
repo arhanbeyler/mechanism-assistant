@@ -173,7 +173,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Driven": "Plastic - Matte (Green)", "Sun": "Plastic - Matte (Red)", "Planet": "Plastic - Matte (Green)",
                "Carrier": "Plastic - Matte (Blue)", "Ring": "Plastic - Matte (Gray)", "Worm": "Steel - Satin", "Bolt": "Steel - Satin", "Hex": "Steel - Satin",
                "Plate": "Plastic - Matte (Gray)",
-               "Wall": "Plastic - Matte (Gray)", "Bar": "Steel - Satin", "Weld": "Coating - Black Oxide", "Hub": "Plastic - Matte (Green)", "Arbor": "Plastic - Matte (Gray)", "Flywheel": "Plastic - Matte (Red)",
+               "Wall": "Plastic - Matte (Gray)", "Bar": "Steel - Satin", "Weld": "Coating - Black Oxide", "Disc": "Steel - Satin", "Hub": "Plastic - Matte (Green)", "Arbor": "Plastic - Matte (Gray)", "Flywheel": "Plastic - Matte (Red)",
                "Input": "Plastic - Matte (Red)", "Snap": "Plastic - Matte (Red)", "Hinge": "Plastic - Matte (Blue)", "Catch": "Plastic - Matte (Gray)", "Output": "Plastic - Matte (Green)", "Chain": "Coating - Black Oxide", "Belt": "Rubber - Hard",
                "Yoke": "Plastic - Matte (Green)", "Ram": "Plastic - Matte (Green)", "Lever": "Plastic - Matte (Blue)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
@@ -258,7 +258,8 @@ def build(mech, reuse=True):
              "flexure": "flexure",              # I2: living hinge
              "press": "press",                  # E4: crank press (slider-crank + flywheel)
              "six_bar": "sixbar",               # F4b: Watt II six-bar
-             "coupling": "coupling"}.get(mech.get("type"))   # H5b: flange coupling
+             "coupling": "coupling",            # H5b: flange coupling
+             "disc_spring": "disc_spring"}.get(mech.get("type"))   # H4b: disc spring stack
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

@@ -17,6 +17,7 @@ import dynamics
 import clutch
 import chain
 import coupling
+import disc_spring
 import coupler
 import fits
 import flywheel
@@ -54,6 +55,15 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "disc_spring": {
+        "title": "Disc spring stack",
+        "params": [
+            {"key": "spring_force_N", "label": "Force", "unit": "N", "min": 100, "max": 100000, "step": 100, "default": 5000},
+            {"key": "spring_deflection_mm", "label": "Deflection", "unit": "mm", "min": 0.2, "max": 30, "step": 0.1, "default": 2},
+            {"key": "arbor_mm", "label": "Guide rod Ø", "unit": "mm", "min": 0, "max": 60, "step": 1, "default": 0,
+             "zero_label": "none"},
+        ],
+    },
     "coupling": {
         "title": "Flange coupling",
         "params": [
@@ -599,6 +609,9 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "disc_spring":
+        return design_from_spec({"mechanism_type": "disc_spring", "spring_force_N": spring_force_N,
+                                 "spring_deflection_mm": spring_deflection_mm, "arbor_mm": arbor_mm or None})
     if kind == "coupling":
         return design_from_spec({"mechanism_type": "coupling", "torque_Nm": torque_Nm,
                                  "shaft_diameter_mm": shaft_diameter_mm or None, "bolts": bolts or None})
@@ -767,6 +780,8 @@ def design_from_spec(spec, on_status=None):
         return _path_synthesis(result, spec, say)
     if mtype == "coupling":
         return _coupling(result, spec, say)
+    if mtype == "disc_spring":
+        return _disc_spring(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -784,7 +799,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, disc springs, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -2184,6 +2199,33 @@ def _coupling(result, spec, say):
     msg = (f"All checks passed. Flange coupling for a Ø{c['d']:g} shaft: hubs Ø{c['D_hub']:g} × {c['L_hub']:g}, flanges "
            f"Ø{c['D_flange']:g} × {c['t']:g} mm, {c['N']} × M{b['d']}×{b['L']} bolts on Ø{c['D_bolt']:g} (friction holds "
            f"{b['T_fric'] / 1000:.0f} N·m), key {k['b']}×{k['h']}×{k['length']:g}.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _disc_spring(result, spec, say):
+    """H4b: disc (Belleville) spring stack. Required: force and the deflection at that force."""
+    result["mechanism_type"] = "disc_spring"
+    F, y = spec.get("spring_force_N"), spec.get("spring_deflection_mm")
+    missing = [n for v, n in ((F, "force"), (y, "deflection at that force (mm)")) if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the disc spring: {', '.join(missing)}.")
+    notes = ["Spring steel 51CrV4, DIN 2093 series proportions, static load."]
+    rod = spec.get("arbor_mm")
+    say("Disc springs: DIN 2092 force curve, stacking in series / parallel...")
+    b, s_checks = disc_spring.design(float(F), float(y), float(rod) if rod else None)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if b is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "No disc stack does it: allow more deflection (more discs in series) or a larger diameter."]))
+    result.update(disc_spring=b, checks=checks, notes=notes, target={"force_N": float(F), "deflection_mm": float(y)},
+                  fusion={"type": "disc_spring", "passed_checks": True, **{k: b[k] for k in ("De", "Di", "t", "h0", "np", "ns")},
+                          "rod": rod})
+    stack = (f"{b['ns']} in series" if b["np"] == 1 else f"{b['ns']} groups of {b['np']} nested discs in series")
+    msg = (f"All checks passed. Disc springs {b['De']:g} × {b['Di']:g} × {b['t']:g} mm (series {b['series']}, h0 {b['h0']:g}), "
+           f"{stack}: {b['y']:.2f} mm at {float(F):g} N, stress {b['sigma_om']:.0f} MPa; stack {b['L0']:.1f} mm free, "
+           f"{b['L_loaded']:.1f} mm loaded.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
