@@ -170,6 +170,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Handle": "Plastic - Matte (Red)", "Arm": "Plastic - Matte (Green)",
                "Ratchet": "Plastic - Matte (Green)", "Pawl": "Plastic - Matte (Red)",
                "Screw": "Steel - Satin", "Nut": "Brass - Matte", "Rack": "Plastic - Matte (Green)",
+               "Driven": "Plastic - Matte (Green)", "Chain": "Coating - Black Oxide", "Belt": "Rubber - Hard",
                "Yoke": "Plastic - Matte (Green)", "Ram": "Plastic - Matte (Green)", "Lever": "Plastic - Matte (Blue)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
@@ -199,7 +200,7 @@ def paint(design):
                     body.appearance = _appearance(design, APPEARANCES["Key"])
                 elif body.name == "Top plate":
                     body.appearance = _appearance(design, APPEARANCES["Base"])
-                elif body.name.startswith(("Shaft", "Pin", "Spindle")) and name in ("Driver", "Wheel", "Arm", "Crank", "Lever"):
+                elif body.name.startswith(("Shaft", "Pin", "Spindle")) and name in ("Driver", "Driven", "Wheel", "Arm", "Crank", "Lever"):
                     body.appearance = _appearance(design, APPEARANCES["Shaft"])
     except Exception:
         pass
@@ -238,7 +239,8 @@ def build(mech, reuse=True):
              "scotch_yoke": "slotted", "quick_return": "slotted",   # F4: slot mechanisms
              "ratchet": "ratchet",              # F6: ratchet and pawl
              "power_screw": "power_screw",      # G5: power screw
-             "rack_pinion": "rack_pinion"}.get(mech.get("type"))   # G4: rack and pinion
+             "rack_pinion": "rack_pinion",      # G4: rack and pinion
+             "chain_drive": "flex_drive", "belt_drive": "flex_drive"}.get(mech.get("type"))   # G3: chain / V-belt
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

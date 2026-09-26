@@ -366,7 +366,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -375,7 +375,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -916,7 +916,50 @@ Everything is computed on this computer, with a local AI.</div>
       </div>`;
   }
 
+  function renderDriveCard(d) {              // G3: roller chain / V-belt drive
+    const s = d.drive;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const isChain = d.mechanism_type === "chain_drive";
+    const rows = isChain
+      ? [["Chain", `no. ${s.no} (ISO ${s.iso}${s.strands > 1 ? "-" + s.strands : ""}), pitch ${f(s.p, 2)} mm`],
+         ["Sprockets", `${s.N1} / ${s.N2} teeth, Ø${f(s.D1, 0)} / Ø${f(s.D2, 0)} mm`],
+         ["Length", `${s.links} links`], ["Chain speed / pull", `${f(s.V, 1)} m/s, ${f(s.F, 0)} N`],
+         ["Rating", `${f(s.H_d / 1000, 2)} of ${f(s.H_a / 1000, 2)} kW (${s.limit})`],
+         ["Speed variation", `${f(100 * s.chordal, 1)} % (chordal)`]]
+      : [["Belts", `${s.belts} × ${s.belt}`], ["Sheaves", `Ø${f(s.d, 0)} / Ø${f(s.D, 0)} mm, ${f(s.width, 0)} mm wide`],
+         ["Belt speed", `${f(s.V, 1)} m/s`], ["Per belt", `${f(s.H_a / 1000, 2)} kW (K1 ${f(s.K1, 2)}, K2 ${f(s.K2, 2)})`],
+         ["Safety n_fs", f(s.n_fs, 2)], ["Tensions F1 / F2", `${f(s.F1, 0)} / ${f(s.F2, 0)} N per belt`],
+         ["Initial tension", `${f(s.Fi, 0)} N per belt`], ["Shaft load", `${f(s.shaft_load, 0)} N`],
+         ["Belt life", `${s.life_h >= 1e6 ? "> 10⁶" : f(s.life_h, 0)} h`]];
+    rows.push(["Centre distance", `${f(s.C, 1)} mm, wrap ${f(s.wrap, 0)}°`],
+              ["Speeds", `${f(s.rpm_in, 0)} → ${f(s.rpm_out, 0)} rpm (i = ${f(s.ratio, 3)})`],
+              ["Shafts", `Ø${f(s.bore1, 0)} / Ø${f(s.bore2, 0)} (service factor ${f(s.Ks, 1)})`]);
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>${isChain ? "Roller chain drive" : "V-belt drive"}</h3><table>${rows.map(([k, v]) =>
+          `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Side view</h3>${driveSvg(isChain ? s.D1 : s.d, isChain ? s.D2 : s.D, s.C, s.small_is_input)}</div>
+      </div>`;
+  }
+
+  function driveSvg(d1, d2, C, smallIn) {    // two pitch circles and the straight spans of the chain / belt
+    const W = 220, H = 110, pad = 8, r1 = d1 / 2, r2 = d2 / 2;
+    const sc = Math.min((W - 2 * pad) / (C + r1 + r2), (H - 2 * pad) / (2 * r2));
+    const X = (x) => pad + (x + r1) * sc, Y = (y) => H / 2 - y * sc;
+    const b = Math.asin((r2 - r1) / C), ny = Math.cos(b), nx = -Math.sin(b);
+    const span = (s) => `<line x1="${X(nx * r1)}" y1="${Y(s * ny * r1)}" x2="${X(C + nx * r2)}" y2="${Y(s * ny * r2)}"
+      stroke="var(--accent)" stroke-width="2"/>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%">
+      <circle cx="${X(0)}" cy="${Y(0)}" r="${r1 * sc}" fill="none" stroke="var(--text)"/>
+      <circle cx="${X(C)}" cy="${Y(0)}" r="${r2 * sc}" fill="none" stroke="var(--text)"/>
+      ${span(1)}${span(-1)}
+      <circle cx="${X(0)}" cy="${Y(0)}" r="2.5" fill="var(--text)"/><circle cx="${X(C)}" cy="${Y(0)}" r="2.5" fill="var(--text)"/>
+      <text class="lbl" x="${X(smallIn ? 0 : C)}" y="${H - 1}" text-anchor="middle">input ↻</text></svg>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "chain_drive" || d.mechanism_type === "belt_drive") return renderDriveCard(d);
     if (d.mechanism_type === "rack_pinion") return renderRackCard(d);
     if (d.mechanism_type === "power_screw") return renderScrewCard(d);
     if (d.mechanism_type === "ratchet") return renderRatchetCard(d);

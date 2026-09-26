@@ -37,7 +37,7 @@ def _schema(props):
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
                                    "enum": ["fourbar", "slider_crank", "straight_line", "geneva", "toggle_clamp",
                                             "scotch_yoke", "quick_return", "ratchet", "power_screw", "rack_pinion",
-                                            "reducer", "spur_gear",
+                                            "chain_drive", "belt_drive", "reducer", "spur_gear",
                                             "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
@@ -46,6 +46,10 @@ ROUTER_PROMPT = (
     "'spring': a spring (yay, basma yayı, konik yay). "
     "'slider_crank': a piston or slider moved back and forth by a crank (piston, pistonlu, krank-biyel, strok, "
     "stroke, 'ileri geri giden', reciprocating slider, 'X mm strok'). "
+    "'chain_drive': a roller chain and sprockets transmitting rotation (zincir, zincir dişli, zincirli aktarma, "
+    "zincir-dişli, bisiklet zinciri, roller chain, sprocket). "
+    "'belt_drive': a V-belt and pulleys transmitting rotation (kayış, V kayış, kayış-kasnak, kasnak, "
+    "kayışlı aktarma, V-belt, pulley, sheave). A chain or belt is never 'spur_gear' or 'reducer'. "
     "'rack_pinion': a rack and pinion turning rotation into straight motion (kremayer, kremayer-pinyon, dişli kremayer, "
     "rack and pinion). "
     "'power_screw': a lead / power screw that moves or lifts a load along its axis (trapez vida, güç vidası, "
@@ -177,6 +181,25 @@ QUICK_RETURN = (_schema(dict(SLOTTED, time_ratio={"type": ["number", "null"]})),
     "time_ratio: slow stroke time / fast stroke time ('dönüş 1.5 kat hızlı' -> 1.5, 'Q = 1.6') if given. "
     "max_load_N: cutting force on the ram if given. speed_rpm: crank speed if given. material only if named."))
 
+FLEX_DRIVE_FIELDS = {
+    "power_kW": {"type": ["number", "null"]},
+    "torque_Nm": {"type": ["number", "null"]},
+    "speed_rpm": {"type": ["number", "null"]},
+    "gear_ratio": {"type": ["number", "null"]},
+    "shock": {"type": ["string", "null"], "enum": ["smooth", "moderate", "heavy", None]},
+    "center_distance_mm": {"type": ["number", "null"]},
+}
+FLEX_DRIVE_TEXT = (
+    "power_kW: transmitted power in kW ('2 kW' -> 2, '750 W' -> 0.75, 1 HP = 0.746 kW). torque_Nm: input torque "
+    "in N·m only if given. speed_rpm: INPUT (driver / motor) speed ('1450 devir', '1450 rpm', '1450 d/d'). "
+    "gear_ratio: input speed / output speed ('1:3', 'oran 3', '3 kat yavaşlatsın' -> 3; 'devri 2 katına "
+    "çıkarsın' / 'speed up 2x' -> 0.5; '1400 devirden 560 devire' -> 2.5); null if not given. shock: 'smooth' "
+    "(düzgün, darbesiz, fan, uniform), 'moderate' (orta darbeli, konveyör), 'heavy' (ağır darbeli, kırıcı, "
+    "crusher) only if described, else null. center_distance_mm: distance between the shafts (eksenler arası, "
+    "mil mesafesi, 'aradaki mesafe 400 mm') only if given.")
+CHAIN_DRIVE = (_schema(FLEX_DRIVE_FIELDS), COMMON + "The user wants a roller chain drive. " + FLEX_DRIVE_TEXT)
+BELT_DRIVE = (_schema(FLEX_DRIVE_FIELDS), COMMON + "The user wants a V-belt drive. " + FLEX_DRIVE_TEXT)
+
 RACK_PINION = (_schema({
     "force_N": {"type": ["number", "null"]},
     "travel_mm": {"type": ["number", "null"]},
@@ -275,6 +298,7 @@ SHAFT = (_schema({
     "factor if given ('emniyet katsayısı 2.5')."))
 
 MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "straight_line": STRAIGHT_LINE, "geneva": GENEVA, "toggle_clamp": TOGGLE_CLAMP, "scotch_yoke": SCOTCH_YOKE, "ratchet": RATCHET, "power_screw": POWER_SCREW, "rack_pinion": RACK_PINION,
+                     "chain_drive": CHAIN_DRIVE, "belt_drive": BELT_DRIVE,
                      "quick_return": QUICK_RETURN, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # All fields (the pipeline expects one dict; fields of other modules are None)
@@ -283,18 +307,18 @@ for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
 KIND_TO_TYPE = {"slider_crank": "slider_crank", "straight_line": "straight_line", "geneva": "geneva",
-                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
+                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
 # ---------------------------------------------------------------- 3) edits of the current design (K1)
 KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "slider_crank": "slider_crank",
                 "straight_line": "straight_line", "geneva": "geneva", "toggle_clamp": "toggle_clamp",
-                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "reducer": "reducer", "spur_gear": "spur_gear",
+                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "reducer": "reducer", "spur_gear": "spur_gear",
                 "spring": "spring", "cam": "cam", "shaft": "shaft"}
 DESCRIPTION = {"fourbar": "four-bar linkage", "slider_crank": "slider-crank (piston) mechanism",
                "straight_line": "straight-line linkage (Hoeckens)", "geneva": "Geneva mechanism (intermittent rotation)",
                "toggle_clamp": "toggle clamp", "scotch_yoke": "Scotch yoke",
-               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "reducer": "single-stage gear reducer (gearbox)",
+               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "chain_drive": "roller chain drive", "belt_drive": "V-belt drive", "reducer": "single-stage gear reducer (gearbox)",
                "spur_gear": "spur gear pair", "spring": "compression spring", "cam": "disk cam with roller follower",
                "shaft": "rotating shaft"}
 NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}

@@ -167,3 +167,47 @@ def design(P_W, n_in, ratio, Ks=1.0, C_mm=None, strands_max=3):
     if best:
         return best[0], best[1]
     return None, (best_any[1] if best_any else [])
+
+
+# ---------------------------------------------------------------- geometry for drawing
+FLANK = math.radians(20.0)                        # flank opening of the tooth gap (simplified ANSI form)
+PLATE_H = 0.95                                    # link plate height, in pitches
+PLATE_T = 0.125                                   # one link plate's thickness, in pitches
+
+
+def seat_radius(Dr):
+    """ANSI roller seat radius 0.5025 Dr + 0.0015 in."""
+    return 0.5025 * Dr + 0.0015 * IN
+
+
+def tooth_gap(p, N, Dr, flank=FLANK):
+    """One tooth gap centred on +x (pitch point (R, 0)): the roller seat arc and two straight flanks
+    tangent to it, opening outward, run past the outside circle. Returns a dict of points (mm) and the
+    tooth's top land width at the outside circle."""
+    R, Ro, rs = pitch_diameter(p, N) / 2, outside_diameter(p, N) / 2, seat_radius(Dr)
+    s, c = math.sin(flank), math.cos(flank)
+    ends = {}
+    for side in (1, -1):
+        q = (R - rs * s, side * rs * c)                       # where the seat arc meets the flank
+        d = (c, side * s)                                     # flank direction (outward, away from the gap centre)
+        # |q + t d| = r  ->  t^2 + 2 t (q.d) + |q|^2 - r^2 = 0
+        qd, qq = q[0] * d[0] + q[1] * d[1], q[0] ** 2 + q[1] ** 2
+        at = lambda r: -qd + math.sqrt(qd * qd - qq + r * r)
+        t_o, t_x = at(Ro), at(Ro + 0.3 * p)
+        ends[side] = (q, (q[0] + t_o * d[0], q[1] + t_o * d[1]), (q[0] + t_x * d[0], q[1] + t_x * d[1]))
+    half = math.atan2(ends[1][1][1], ends[1][1][0])           # half the gap's angle at the outside circle
+    land = (2 * math.pi / N - 2 * half) * Ro
+    return {"R": R, "Ro": Ro, "rs": rs, "bottom": (R - rs, 0.0),
+            "seat_plus": ends[1][0], "seat_minus": ends[-1][0],
+            "out_plus": ends[1][2], "out_minus": ends[-1][2], "land": land}
+
+
+def open_path(r1, r2, C):
+    """Open (uncrossed) drive around circles r1 at (0, 0) and r2 at (C, 0): tangent points of the upper and
+    lower straight spans, and the far points of both arcs. Offsetting both radii by the same amount keeps
+    the spans parallel (the chain's plate band, a belt's faces)."""
+    b = math.asin((r2 - r1) / C)
+    nx, ny = -math.sin(b), math.cos(b)
+    return {"u1": (r1 * nx, r1 * ny), "u2": (C + r2 * nx, r2 * ny), "l1": (r1 * nx, -r1 * ny),
+            "l2": (C + r2 * nx, -r2 * ny), "far1": (-r1, 0.0), "far2": (C + r2, 0.0),
+            "length": 2 * C * math.cos(b) + r1 * (math.pi - 2 * b) + r2 * (math.pi + 2 * b)}

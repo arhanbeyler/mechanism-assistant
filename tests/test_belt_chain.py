@@ -78,3 +78,21 @@ def test_vbelt_design_passes_and_ratio():
     assert d and all(c["util"] <= 1 for c in checks)
     assert d["D"] / d["d"] == pytest.approx(2.5) and d["n_fs"] >= 1
     assert vbelt.h_tab("A", 4.0, 6000) is None                  # beyond 5000 ft/min: not rated
+
+
+def test_sprocket_teeth_keep_a_top_land():
+    for ch in chain.CHAINS:
+        p, Dr = ch["p"] * chain.IN, ch["Dr"] * chain.IN
+        for N in range(17, chain.N2_MAX + 1):
+            g = chain.tooth_gap(p, N, Dr)
+            assert g["land"] > 0.1 * p
+            assert g["rs"] > Dr / 2                        # the roller fits its seat
+            assert g["bottom"][0] < g["R"] - Dr / 2        # the seat reaches below the roller
+
+
+def test_open_path_length_matches_the_belt_formula():
+    path = chain.open_path(3.7, 5.5, 42.41)
+    assert path["length"] == pytest.approx(vbelt.pitch_length(42.41, 11, 7.4), rel=1e-4)
+    for a, b in (("u1", "u2"), ("l1", "l2")):             # spans are tangent: perpendicular to the radii
+        (x1, y1), (x2, y2) = path[a], path[b]
+        assert x1 * (x2 - x1) + y1 * (y2 - y1) == pytest.approx(0, abs=1e-9)
