@@ -455,6 +455,13 @@ def show_palette():
         # Alta yapisik (docked) halde Fusion paneli daraltip "kaybedebiliyordu": serbest pencere
         pal.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateFloating
         pal.setSize(1100, 320)
+        # A new floating palette opens at (0, 0), hidden behind Fusion's toolbar: put it near the
+        # bottom of the model view instead
+        try:
+            vp = app.activeViewport
+            pal.setPosition(200, max(150, vp.height - 250))
+        except Exception:
+            pal.setPosition(200, 400)
     pal.isVisible = True
 
 
