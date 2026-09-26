@@ -16,6 +16,7 @@ import coupler
 import function_gen
 import geneva
 import gears
+import helical
 import interference
 import kinematics as kin
 import shafts
@@ -38,6 +39,16 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "helical_gear": {
+        "title": "Helical gear pair",
+        "params": [
+            {"key": "gear_ratio", "label": "Ratio", "unit": "", "min": 1, "max": 8, "step": 0.1, "default": 3},
+            {"key": "torque_Nm", "label": "Input torque", "unit": "N·m", "min": 0.5, "max": 500, "step": 0.5, "default": 10},
+            {"key": "helix_deg", "label": "Helix angle", "unit": "°", "min": 5, "max": 45, "step": 1, "default": 20},
+            {"key": "speed_rpm", "label": "Input speed", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
+             "zero_label": "not given"},
+        ],
+    },
     "planetary": {
         "title": "Planetary gear set",
         "params": [
@@ -293,7 +304,7 @@ _INPUT_TURN = re.compile(
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
 _SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
-                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary")
+                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary", "helical_gear")
 
 
 def input_turn_backstop(text, spec):
@@ -417,10 +428,13 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        follower_mass_kg=None, follower_load_N=None, slots=None, center_distance_mm=None,
                        load_mass_kg=None, load_diameter_mm=None, opening_deg=None, handle_travel_deg=None,
                        arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None,
-                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None, planets=None):
+                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None, planets=None, helix_deg=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "helical_gear":
+        return design_from_spec({"mechanism_type": "helical_gear", "gear_ratio": gear_ratio, "torque_Nm": torque_Nm,
+                                 "helix_deg": helix_deg, "speed_rpm": speed_rpm or None, "material": material})
     if kind == "planetary":
         return design_from_spec({"mechanism_type": "planetary", "gear_ratio": gear_ratio, "torque_Nm": torque_Nm,
                                  "power_kW": power_kW, "speed_rpm": speed_rpm or None, "material": material,
@@ -518,6 +532,8 @@ def design_from_spec(spec, on_status=None):
         return _flex_drive(result, spec, say)
     if mtype == "planetary":
         return _planetary(result, spec, say)
+    if mtype == "helical_gear":
+        return _helical_gear(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -533,7 +549,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical gears, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1373,6 +1389,51 @@ def _planetary(result, spec, say):
            f"{d['T_out'] / 1000:.1f} N·m{at_rpm}; "
            f"planet pins Ø{d['pin']:g}, carrier shaft Ø{d['bore_carrier']:g}.")
     result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _helical_gear(result, spec, say):
+    """G1a: helical gear pair. Required: ratio and input torque; the helix angle defaults to 20 deg (reported)."""
+    result["mechanism_type"] = "helical_gear"
+    missing = [name for key, name in (("gear_ratio", "ratio"), ("torque_Nm", "input torque (N·m)")) if not spec.get(key)]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the helical gears: {', '.join(missing)}.")
+    ratio, T1 = float(spec["gear_ratio"]), float(spec["torque_Nm"]) * 1000.0
+    if ratio < 1:
+        ratio = 1 / ratio
+    if not 1 <= ratio <= 8:
+        return dict(result, status="missing", message=f"A single helical stage needs a ratio of 1–8 (given: {ratio:g}).")
+    notes = []
+    psi = spec.get("helix_deg")
+    if not psi:
+        psi = helical.PSI_DEFAULT
+        notes.append(f"Helix angle not given: {psi:g}° assumed.")
+    psi = float(psi)
+    if not 5 <= psi <= 45:
+        return dict(result, status="missing", message=f"Helix angles of 5–45° are covered (given: {psi:g}°).")
+    mat_key = spec.get("material")
+    if mat_key not in strength.MATERIALS:
+        mat_key = "steel"
+        notes.append("Material not given: steel assumed.")
+    mat = strength.MATERIALS[mat_key]
+    rpm = spec.get("speed_rpm")
+    say("Helical gears: normal module, virtual teeth, contact ratios...")
+    g, g_checks = helical.design(ratio, T1, mat, rpm, psi)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in g_checks]
+    result.update(checks=checks, notes=notes)
+    if g is None:
+        return dict(result, status="failed", message=" ".join(notes + [
+            f"No {mat['name']} helical pair carries {T1 / 1000:g} N·m. Suggestion: a stronger material or a smaller torque."]))
+    checks.insert(0, {"name": "Ratio", "ok": g["ratio_err_pct"] <= 2.0,
+                      "detail": f"{g['z2']}/{g['z1']} = {g['ratio']:.3f} (target {ratio:g})"})
+    result.update(helical=dict(g, material=mat["name"], rpm=rpm), target={"ratio": ratio, "torque_Nm": T1 / 1000},
+                  fusion={"type": "helical_gear", "passed_checks": True, **g}, status="ok",
+                  message=" ".join(notes + [
+                      f"All checks passed. Normal module {g['module']:g}, helix {psi:g}° (pinion right hand, gear left), "
+                      f"z = {g['z1']}/{g['z2']}, face {g['face_width']:g} mm, centre distance {g['center_distance']:.2f} mm, "
+                      f"shafts Ø{g['bore1']:g}/Ø{g['bore2']:g} mm. Axial thrust {g['Wa']:.0f} N on the bearings; output "
+                      f"{T1 * g['ratio'] / 1000:.2f} N·m."]))
     return result
 
 

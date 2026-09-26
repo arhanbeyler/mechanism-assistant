@@ -242,7 +242,8 @@ def build(mech, reuse=True):
              "power_screw": "power_screw",      # G5: power screw
              "rack_pinion": "rack_pinion",      # G4: rack and pinion
              "chain_drive": "flex_drive", "belt_drive": "flex_drive",   # G3: chain / V-belt
-             "planetary": "planetary"}.get(mech.get("type"))   # G2: planetary gear set
+             "planetary": "planetary",          # G2: planetary gear set
+             "helical_gear": "helical"}.get(mech.get("type"))   # G1a: helical gear pair
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)
