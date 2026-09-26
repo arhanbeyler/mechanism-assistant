@@ -256,7 +256,8 @@ def build(mech, reuse=True):
              "flywheel": "flywheel", "clutch": "clutch",   # H5: flywheel, disc clutch
              "snap_fit": "snap_fit",            # I1: printed snap-fit
              "flexure": "flexure",              # I2: living hinge
-             "press": "press"}.get(mech.get("type"))   # E4: crank press (slider-crank + flywheel)
+             "press": "press",                  # E4: crank press (slider-crank + flywheel)
+             "six_bar": "sixbar"}.get(mech.get("type"))   # F4b: Watt II six-bar
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

@@ -27,6 +27,7 @@ import helical
 import interference
 import kinematics as kin
 import shafts
+import sixbar
 import slotted
 import slider_crank
 import snapfit
@@ -780,10 +781,15 @@ def design_from_spec(spec, on_status=None):
                     message=f"Missing for the design: {', '.join(missing)}.")
 
     a, psi = spec["crank_length_mm"], spec["output_swing_deg"]
+    notes = []
+    if not rr and 180 <= psi <= 300 and not (spec.get("time_ratio") or 1) > 1:
+        six = _six_bar(result, spec, notes, say, a, psi)          # F4b: beyond any four-bar's swing
+        if six:
+            return six
     if not 0 < psi < 180:
         return dict(result, status="missing",
-                    message=f"The swing angle must be between 0 and 180° (given: {psi:g}°).")
-    notes = []
+                    message=f"The swing angle must be between 0 and 180° (given: {psi:g}°)"
+                            + (" and no six-bar reaches it either." if not rr and psi <= 300 else "."))
     if rr:
         t_in = spec["input_swing_deg"]
         if not 0 < t_in < 360:
@@ -2428,7 +2434,74 @@ def _crank_rocker(result, spec, notes, say, a, psi):
     if Q > 1.0:
         checks.append({"name": "Time ratio Q (simulation)", "ok": q_ok,
                        "detail": f"{meas['Q']:.2f} (target {Q:g})"})
+    if not passed and Q == 1.0 and psi > 90:
+        six = _six_bar(result, spec, notes, say, a, psi)          # F4b: two four-bars in series
+        if six:
+            return six
     return _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi, Q, False)
+
+
+_SIX_CACHE = {}
+
+
+def _six_bar(result, spec, notes, say, a, psi):
+    """F4b: Watt II six-bar for a swing a four-bar cannot give with a good transmission angle."""
+    say("Watt six-bar: crank-rocker + function generator in series, simulated as a whole...")
+    key = (round(float(a), 3), round(float(psi), 3))
+    if key not in _SIX_CACHE:                         # slider previews ask again and again (4-7 s each)
+        _SIX_CACHE[key] = sixbar.synthesize(a, psi)
+    m, frames = _SIX_CACHE[key]
+    if m is None or not m["ok"]:
+        return None
+    me = m["measured"]
+    checks = [{"name": "Output swing (six-bar simulation)", "ok": True, "detail": f"{me['swing']:.1f}° (target {psi:g}°)"},
+              {"name": "Transmission angle, first loop", "ok": True, "detail": f"{me['mu1_min']:.1f}° – {me['mu1_max']:.1f}°"},
+              {"name": "Transmission angle, second loop", "ok": True, "detail": f"{me['mu2_min']:.1f}° – {me['mu2_max']:.1f}°"}]
+    section = strength.DEFAULT_SECTION
+    F, mat_key = spec.get("max_load_N"), spec.get("material")
+    torque = None
+    if F:
+        if mat_key not in strength.MATERIALS:
+            mat_key = "PLA"
+            notes.append("Material not given: PLA (3D print) assumed.")
+        mat = strength.MATERIALS[mat_key]
+        f1, f2, F1 = sixbar.forces(m, frames, float(F))
+        forc = dict(f1, F_ab_max=max(f1["F_ab_max"], f2["F_ab_max"]), M_rocker=max(f1["M_rocker"], f2["M_rocker"]))
+        lengths = {"a": m["m1"]["a"], "b": max(m["m1"]["b"], m["b2"]), "c": max(m["m1"]["c"], m["c2"], m["a2"]),
+                   "d": max(m["m1"]["d"], m["d2"])}
+        sec, s_checks = strength.size_links(forc, lengths, mat)
+        if sec is None:
+            return dict(result, status="failed", checks=checks, notes=notes, mechanism_type="six_bar",
+                        message=" ".join(notes + [f"No {mat['name']} section carries {F:g} N on the six-bar."]))
+        section = sec
+        worst = {}
+        for c in s_checks:
+            if c["group"] not in worst or c["util"] > worst[c["group"]]["util"]:
+                worst[c["group"]] = c
+        checks += [{"name": f"{g}: {c['name']}", "ok": c["util"] <= 1.0,
+                    "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for g, c in worst.items()]
+        torque = f1["M_crank_max"]
+    section = strength.section_with_bosses(section)
+    f0 = frames[0]
+    r3 = lambda p: [round(p[0], 3), round(p[1], 3)]
+    pts = {"O2": r3(m["m1"]["o2"]), "O4": [0.0, 0.0], "O6": r3(m["O6"]), "A": r3(f0["A"]), "B": r3(f0["B"]),
+           "A2": r3(f0["A2"]), "B2": r3(f0["B2"])}
+    L = {"a": m["m1"]["a"], "b": m["m1"]["b"], "c": m["m1"]["c"], "d": m["m1"]["d"],
+         "a2": m["a2"], "b2": m["b2"], "c2": m["c2"], "d2": m["d2"]}
+    info = dict({k: round(v, 2) for k, v in L.items()}, psi1=m["psi1"], swing=me["swing"], points=pts,
+                mu1=[me["mu1_min"], me["mu1_max"]], mu2=[me["mu2_min"], me["mu2_max"]], torque_Nmm=torque,
+                phi_curve=[(round(f["theta"], 1), round(f["phi"], 2)) for f in frames[::6]])
+    result.update(mechanism_type="six_bar", sixbar=info, checks=checks, notes=notes, section_mm=section,
+                  target={"swing": psi},
+                  fusion={"type": "six_bar", "passed_checks": True, "points_mm": pts, "section_mm": section})
+    msg = (f"A four-bar cannot swing {psi:g}° with the transmission angle in limits, so this is a Watt six-bar: a "
+           f"crank-rocker (crank {L['a']:g}, coupler {L['b']:.1f}, rocker {L['c']:.1f}, ground {L['d']:.1f} mm, "
+           f"{m['psi1']}° swing) drives, through the rocker's second arm ({L['a2']:.1f} mm), a second four-bar "
+           f"(coupler {L['b2']:.1f}, output {L['c2']:.1f}, ground {L['d2']:.1f} mm): output swing {me['swing']:.1f}°.")
+    if torque:
+        msg += f" Max crank torque {torque / 1000:.2f} N·m."
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
 
 
 def _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi, Q, rr):

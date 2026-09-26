@@ -61,6 +61,8 @@ CASES = [
     ("PETG kutu kapağı için 1.5 mm tırnaklı geçme, sökülebilir olsun", dict(mechanism_type="snap_fit", undercut_mm=1.5,
                                                                           material="PETG", releasable=True)),
     ("snap-fit clip with a 1 mm undercut that holds 20 N", dict(mechanism_type="snap_fit", undercut_mm=1, hold_force_N=20)),
+    ("30 mm krank, çıkış kolu 180 derece sallansın", dict(mechanism_type="crank_rocker", crank_length_mm=30,
+                                                        output_swing_deg=180)),
     ("bir nokta (0,0), (40,10) ve (80,0) noktalarından geçsin", dict(mechanism_type="path_synthesis",
                                                                    path_points=[[0, 0], [40, 10], [80, 0]])),
     ("design a linkage whose point passes through (0,0), (30,15), (60,20), (90,10)",

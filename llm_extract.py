@@ -101,7 +101,7 @@ ROUTER_PROMPT = (
     "'motora bağlı', motor power in kW). "
     "'spur_gear': only a gear pair (dişli, dişli çifti, çevrim oranı, 'X kat yavaşlatsın' without a gearbox). "
     "'fourbar': a linkage / mechanism with links, crank, lever or swinging arm (krank, kol, biyel, dört çubuk, "
-    "salınım, 'kolu X derece çevirince'). 'unknown': anything else.")
+    "altı çubuk / six-bar / Watt for a large swing, salınım, 'kolu X derece çevirince'). 'unknown': anything else.")
 
 # ---------------------------------------------------------------- 2) module extractors
 FOURBAR = (_schema({
