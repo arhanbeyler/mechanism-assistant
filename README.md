@@ -3,9 +3,13 @@
 Describe a machine element in plain language and get a **sized, checked and drawn** Fusion 360 assembly
 that you can rotate. Everything runs locally: a local LLM (Ollama), deterministic Python engines and local FEA.
 
-> *"4 cm kolu 45° çevirince diğer kol 120° dönsün, PETG, 2 kg"*
-> ("rotating a 4 cm input arm by 45° should turn the output arm by 120°, PETG, 2 kg load")
+> *"turn a 4 cm arm 45° and the other arm turns 120°, PETG, 2 kg"*
 > → Freudenstein function generator, strength and interference checks → four-bar in Fusion with joint limits
+>
+> *"1.5 kW 1450 rpm motor, 1:4 gearbox"*
+> → gear pair, both shafts, bearings, keys and housing sized together → a reducer you can turn in Fusion
+
+Sentences can be written in English or Turkish.
 
 | Four-bar (crank-rocker / rocker-rocker) | Spur gear pair | Conical compression spring |
 |---|---|---|
@@ -29,7 +33,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles the model misses. The evaluation set is `tools/llm_eval.py` (22/22).
+  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (25/25).
 * **Engines:** Textbook methods (Norton, Shigley) in plain Python. Every result is re-verified by a method that
   is *independent* of the one that produced it. For example, synthesis is checked by position-loop simulation.
 * **Fusion:** The add-in only draws what the engines decided. It reuses one tagged document instead of opening
@@ -70,7 +74,7 @@ Sliders in the panel re-run the engine live and colour the swing slider by feasi
   gap is 0.000 mm with 0 mm³ overlap at 8 angles. Spring length and diameter match the design. Shaft length,
   diameter and volume match the layout for all 5 notch types.
 
-More findings are in [ROADMAP.md](ROADMAP.md) (Turkish).
+More findings are in [ROADMAP.md](ROADMAP.md).
 
 ## Setup (Windows)
 
@@ -89,13 +93,14 @@ More findings are in [ROADMAP.md](ROADMAP.md) (Turkish).
 
 ## Usage
 
-* **In Fusion:** Use the *Mekanizma Asistanı* panel. Type a sentence or pick a type and use the sliders, then
-  press *Fusion'da çiz* (draw in Fusion), *1 tur* / *Sürekli* (1 turn / continuous) and *FEA*.
-* **Terminal:** `python main.py "30 mm krank, 60° salınım, uçta 5 kg, PETG"` writes `output/mechanism.json`.
+* **In Fusion:** Use the *Mechanism Assistant* panel. Type a sentence or pick a type and use the sliders, then
+  press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
+* **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
+  (the *FourBar* script in `fusion_scripts/` draws it).
 * **Tests:** `python -m pytest`. This runs 143 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
-The panel UI and the code comments are in Turkish.
+Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
 
 ## Repository layout
 
@@ -124,4 +129,5 @@ tools/               hub-compliance calibration, LLM evaluation
 * The development bridge (127.0.0.1, token-protected) executes Python inside Fusion. It exists for automated
   testing and should stay local.
 
-Planned next: print-in-place pins with clearances and a physical print, then FreeCAD support.
+Planned next: see [ROADMAP.md](ROADMAP.md): more systems (multi-stage reducer, cam + spring, press), slider-crank and
+path synthesis, edits in the chat, print-in-place pins and a physical print.

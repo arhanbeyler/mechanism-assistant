@@ -1,138 +1,138 @@
-# Yol Haritası
+# Roadmap
 
-**Proje:** AI-Driven Autonomous Kinematic Synthesis and Parametric CAD Generation System
+**Project:** AI-Driven Autonomous Kinematic Synthesis and Parametric CAD Generation System
 
-**Temel kural:** LLM sadece isteği anlar ve JSON'a çevirir, hiçbir ölçü üretmez.
-Sayıları deterministik motor hesaplar, bağımsız simülasyon doğrular, Fusion çizer.
+**Core rule:** the LLM only understands the request and turns it into JSON; it produces no dimension.
+Deterministic engines compute the numbers, an independent simulation verifies them, Fusion draws.
 
 ```
-Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.json → Fusion 360
+Sentence → LLM (Ollama, local) → engines + checks → Fusion 360
 ```
 
-## A. Altyapı
-- [x] **A1. Git.** Sürüm kontrolü, her adım kayıtlı
-- [x] **A2. Testler.** `python -m pytest`, formüller ve simülasyon otomatik kontrol ediliyor
-- [x] **A3. NumPy'siz motor.** Fusion'ın kendi Python'unda NumPy yok
-- [x] **A4. Fusion paneli ve köprü.** Alt panelde sohbet + sonuç kartı; köprü ile Claude Fusion'da kod çalıştırıp ekran görüntüsü alabiliyor
+## A. Infrastructure
+- [x] **A1. Git.** Version control, every step committed
+- [x] **A2. Tests.** `python -m pytest`: formulas and simulations are checked automatically
+- [x] **A3. Engines without NumPy.** Fusion's own Python has no NumPy
+- [x] **A4. Fusion panel and bridge.** Chat + result card in a panel; through the bridge Claude can run code in Fusion and take screenshots
 
-## B. Dört çubuğu bitirmek
-- [x] **B5. Q'yu cümleye bağlamak.** "Hızlı dönüşlü olsun" dendiğinde anlasın
-- [x] **B6. LLM şemasını sıkılaştırmak.** Gereksiz "eksik bilgi" uyarılarını kesmek
-- [x] **B7. Mukavemet.** Yük ve malzemeye göre kesit (burkulma, net kesit, eğilme, pim kayma/ezilme), emniyet katsayısı, tahrik torku
-- [x] **B7b. Uzuv başına ayrı kesit.** Ortak pim çapı, uzuv başına genişlik/kalınlık; tek kesite göre %32 daha az malzeme
-- [x] **B7c. Parametre kaydırıcıları.** Panelde anında hesaplanan kaydırıcılar, salınımda uygun bölge renkleri; Fusion'da "1 tur" ve sürekli döndürme
-- [x] **B7d. Gerilme yığılması (Kt) ve sehim.** Roark Kt (kırılgan malzemede, eksenel gerilmeye); L/200 sehim sınırı (konsol eğilme / eksenel uzama)
-- [x] **B7e. Fusion FEA ile doğrulama (niteliksel).** Al 6061 kol konsol, 49 N: kökte FEA n = 2–4, el hesabı n ≈ 3.6 ✓. Sim API önizlemede çalışmıyor, çözüm buluta gitti, sonuç sayısal okunamıyor
-- [x] **B7f. Yerel, otomatik FEA.** gmsh + scikit-fem (tamamen yerel); kol ve krank için FEA ile el hesabı karşılaştırması; panelde "FEA" düğmesi (Fusion içinde deneme bekliyor)
-- [x] **B7g. Göbek esnekliği.** Model δ_göbek = P·L²/(C·E·t·r²), C FEA ile kalibre (21 geometri, C = 6–9, L'den bağımsız); güvenli taraf için C = 6
-- [x] **B7h. Mil ve pim çaplarını ayırmak.** O2/O4 çelik mil (burulma + kayma kontrolü), A/B pim; Fusion her uçta doğru deliği çiziyor. PETG 5 kg: biyel 25→13 mm, hacim −%12
-- [x] **B8a. Yerel göbek (boss).** Delikler kendi göbeğinde (D = 2.5·d), gövde kontrollerin gerektirdiği kadar ince; göbek ve gövde kesitleri ayrı kontrol; Fusion'da dolu extrude + delik kesme. PETG hacim −%29, Al −%59
-- [x] **B8b. Katman çakışması.** Ara katmandan geçen milin, hareketli uzuvlardan (gövde + göbek) çevrim boyunca en az 1 mm uzak kalması; gerekirse katman sırası değişir, olmazsa tasarım reddedilir
-- [ ] **B8c. Pimler ve boşluk (print-in-place).** Pim/başlık geometrisi, radyal ve eksenel boşluk (baskı zamanı, D12 ile birlikte)
-- [x] **B9. Tam tur atmayan dört çubuklar.** Freudenstein fonksiyon üreteci (3 Chebyshev hassas noktası, θ₀/φ₀ taraması, yapısal hata ≤ 1°); mukavemet + çakışmadan geçen ilk aday; LLM "rocker_rocker"; panelde "Giriş hareketi"; Fusion'da mafsal sınırı ve ileri-geri salınım
+## B. Finishing the four-bar
+- [x] **B5. Q from the sentence.** Understands "make it quick-return"
+- [x] **B6. Tighter LLM schema.** No needless "missing information" warnings
+- [x] **B7. Strength.** Sections from load and material (buckling, net section, bending, pin shear / bearing), safety factor, drive torque
+- [x] **B7b. A section per link.** Common pin diameter, width / thickness per link; 32 % less material than one shared section
+- [x] **B7c. Parameter sliders.** Sliders computed live in the panel, feasibility colours on the swing slider; "1 turn" and continuous turning in Fusion
+- [x] **B7d. Stress concentration (Kt) and deflection.** Roark Kt (brittle materials, axial stress); L/200 deflection limit (cantilever bending / axial stretch)
+- [x] **B7e. Verification with Fusion FEA (qualitative).** Al 6061 rocker as a cantilever, 49 N: FEA n = 2–4 at the root, hand calculation n ≈ 3.6 ✓. The Simulation API does not work in preview, the solve went to the cloud, results could not be read as numbers
+- [x] **B7f. Local, automatic FEA.** gmsh + scikit-fem (fully local); FEA vs hand calculation for the rocker and the crank; an "FEA" button in the panel
+- [x] **B7g. Hub compliance.** Model δ_hub = P·L²/(C·E·t·r²), C calibrated with FEA (21 geometries, C = 6–9, independent of L); C = 6 on the safe side
+- [x] **B7h. Separate shaft and pin diameters.** O2/O4 steel shafts (torsion + shear), A/B pins; Fusion draws the right hole at each end. PETG 5 kg: coupler 25 → 13 mm, volume −12 %
+- [x] **B8a. Local bosses.** Every hole in its own boss (D = 2.5·d), the web only as thick as the checks need; boss and web sections checked separately; solid extrude + hole cut in Fusion. PETG volume −29 %, Al −59 %
+- [x] **B8b. Layer interference.** A shaft through a middle layer must stay at least 1 mm from the moving links (web + boss) over the cycle; the layer order changes if needed, otherwise the design is rejected
+- [ ] **B8c. Pins and clearances (print-in-place).** Pin / head geometry, radial and axial clearance (at print time, with D12)
+- [x] **B9. Four-bars without a full-turn input.** Freudenstein function generator (3 Chebyshev precision points, θ₀/φ₀ sweep, structural error ≤ 1°); first candidate passing strength + interference; LLM "rocker_rocker"; "Input motion" in the panel; joint limits and back-and-forth motion in Fusion
 
-## C. Yeni modüller
-- [x] **C0. Modüle özel kaydırıcılar.** pipeline.MODULES (ad, birim, aralık); panel "Tür" seçicisi ve kaydırıcıları tanımdan kuruyor; sohbetten gelen tasarım doğru modüle geçiyor
-- [x] **C9. Düz dişli.** Lewis eğilme, kavrama oranı, alttan kesme, Hertz (bilgi), çelik mil ve göbek; Fusion'da evolvent dişler, dairesel çoklama, motion link (diş kesişimi 0, oran doğrulandı)
-- [x] **C10. Helis ve konik yay.** Shigley: Bergsträsser, S_ut = A/dᵐ, tam sıkışmada akma yok, burkulma; konik k = G·d⁴/(16·Nₐ(R₁+R₂)(R₁²+R₂²)); Fusion'da helis sweep + taşlanmış uçlar
-- [x] **L1. İki aşamalı LLM.** Yönlendirici (tür) + modüle özel kısa çıkarıcı; tek uzun istem 9B modelde ayrıntı kaçırıyordu; llm_eval 16/16
-- [x] **C11a. Kam.** Sikloidal / harmonik / 3-4-5; basınç açısı ≤ 30°, alttan kesme yok, ρ ≥ 2·R_makara; en küçük temel daire; Fusion'da kam + makaralı itici + s(θ) animasyonu (8 açıda temas boşluğu 0, kesişim 0)
-- [x] **C11b. Mil.** Shigley 7. bölüm, DE-Goodman yorulma (Marin faktörleri, k_b iterasyonu, Tablo 7-1 K_t), von Mises akma; standart çapa yuvarlama. Fusion'da iki yataklı mil: sadece hesaptaki gerilme yığılması çizilir (DIN 6885 kama + parmak freze yuvası / segman kanalı / D/d = 1.5 omuz, r/d 0.02 veya 0.1). 5 türde boy, çap ve hacim hesapla birebir; mafsalla döner
+## C. New modules
+- [x] **C0. Module-specific sliders.** pipeline.MODULES (name, unit, range); the panel builds its "Type" selector and sliders from it; a design from the chat switches to the right module
+- [x] **C9. Spur gears.** Lewis bending, contact ratio, undercut, Hertz (info), steel shaft and hub; involute teeth, circular pattern, motion link in Fusion (tooth overlap 0, ratio verified)
+- [x] **C10. Helical and conical springs.** Shigley: Bergsträsser, S_ut = A/dᵐ, no yield when solid, buckling; conical k = G·d⁴/(16·Nₐ(R₁+R₂)(R₁²+R₂²)); helix sweep + ground ends in Fusion
+- [x] **L1. Two-stage LLM.** Router (kind) + short module-specific extractor; one long prompt made the 9B model miss details; llm_eval 16/16
+- [x] **C11a. Cam.** Cycloidal / harmonic / 3-4-5; pressure angle ≤ 30°, no undercut, ρ ≥ 2·R_roller; smallest base circle; cam + roller follower + s(θ) animation in Fusion (contact gap 0 and overlap 0 at 8 angles)
+- [x] **C11b. Shaft.** Shigley ch. 7, DE-Goodman fatigue (Marin factors, k_b iteration, Table 7-1 K_t), von Mises yield; rounded up to a standard diameter. Two-bearing shaft in Fusion: only the analysed stress raiser is drawn (DIN 6885 key + end-milled keyseat / retaining-ring groove / D/d = 1.5 shoulder, r/d 0.02 or 0.1). Length, diameter and volume match the calculation for all 5 kinds; turns on its joint
+- [x] **C11c. Shaft completed.** Catalogue bearings (62/63 series, shoulder rule, L10 ≥ 20 000 h), torque-carrying bearing seat (sharp shoulder, DE-Goodman), DIN 6885 key length (shear + crushing, ≤ 1.5·d), numerical deflection / slope of the stepped shaft (Table 7-2), Rayleigh critical speed (≥ 2× running speed); a failing check moves to the next standard diameter. Bearing seats + catalogue-size bearings in Fusion
 
-- [x] **C11c. Mil tamamlama.** Katalogdan rulman (62/63 serisi, omuz kuralı, L10 ≥ 20 000 saat), torku taşıyan oturma kademesi (keskin omuz, DE-Goodman), DIN 6885 kama boyu (kesme + ezilme, ≤ 1.5·d), kademeli milde sayısal sehim/eğim (Tablo 7-2), Rayleigh kritik hız (≥ 2× devir); geçmeyen kontrol olursa bir üst standart çap. Fusion'da oturma kademeleri + katalog ölçülü rulmanlar
+## E. Systems (connecting modules)
+In a system one module's output is another's input (forces, diameters and masses are never typed in twice).
+- [x] **E1. Single-stage reducer.** Motor (power, speed) → gear pair → two shafts (gear forces → M, T; gear mass → critical speed) → bearings → keys → housing. The constraints (gear bore = shaft diameter, key ≤ face width, bearings side by side in one wall, common span) are iterated until nothing changes. Housing + bearings + keyed shafts + gears with keyways in Fusion; tooth overlap 0 at 6 angles, ratio 1/3 verified
+- [ ] **E2. Multi-stage reducer.** Splitting the ratio over the stages, intermediate shaft
+- [ ] **E3. Cam + spring assembly.** Follower spring sized with the cam; jump check at high speed
+- [ ] **E4. Press.** Slider-crank + flywheel (energy fluctuation from the torque curve) + motor
+- [ ] **E5. Folding platform** (senior-project candidate). Four-bar + counterbalance spring + beam / plate + pins
 
-## E. Sistemler (modülleri birleştirmek)
-Her sistemde bir modülün çıktısı diğerinin girdisi olur (kuvvetler, çaplar, kütleler elle girilmez).
-- [x] **E1. Tek kademeli redüktör.** Motor (güç, devir) → dişli çifti → iki mil (dişli kuvvetleri → M, T; dişli kütlesi → kritik hız) → rulmanlar → kamalar → gövde. Kısıtlar (dişli deliği = mil çapı, kama ≤ dişli genişliği, rulmanlar aynı duvarda yan yana, ortak açıklık) değişmeyene kadar yinelenir. Fusion'da gövde + rulmanlar + kamalı miller + kama kanallı dişliler; 6 açıda diş kesişimi 0, oran 1/3 doğrulandı
-- [ ] **E2. Çok kademeli redüktör.** Kademe oranı dağılımı, ara mil
-- [ ] **E3. Kam + yay tertibatı.** İtici yayı kamla birlikte; yüksek hızda kopma (jump) kontrolü
-- [ ] **E4. Pres.** Krank-biyel + volan (tork grafiğinden enerji dalgalanması) + motor
-- [ ] **E5. Katlanır platform** (bitirme projesi adayı). Dört çubuk + dengeleme yayı + kiriş/plaka + pimler
+## F. New mechanisms (motion)
+- [ ] **F1. Slider-crank (piston).** Position / velocity / acceleration, sliding piston in Fusion
+- [ ] **F2. Coupler curves and path synthesis.** "This point should follow that path"; Chebyshev / Hoeckens straight-line linkages
+- [ ] **F3. Geneva mechanism.** Intermittent rotation
+- [ ] **F4. Scotch yoke, Whitworth quick return, six-bar (Watt / Stephenson)**
+- [ ] **F5. Toggle clamp.** Dead-centre locking, mechanical advantage
+- [ ] **F6. Ratchet and pawl**
 
-## F. Yeni mekanizmalar (hareket)
-- [ ] **F1. Krank-biyel (piston).** Konum/hız/ivme, Fusion'da kayan piston
-- [ ] **F2. Biyel noktası eğrisi ve yol sentezi.** "Bu nokta şu yoldan geçsin"; Chebyshev/Hoeckens düz çizgi
-- [ ] **F3. Cenevre mekanizması.** Adım adım dönme
-- [ ] **F4. Scotch yoke, Whitworth hızlı dönüş, altı çubuk (Watt/Stephenson)**
-- [ ] **F5. Toggle kelepçe.** Ölü nokta kilitlemesi, kuvvet kazancı
-- [ ] **F6. Mandal-tırnak (ratchet)**
+## G. Power transmission
+- [ ] **G1. Helical and bevel gears, worm gear** (self-locking)
+- [ ] **G2. Planetary gear set**
+- [ ] **G3. Belt and pulley (V, timing), chain and sprocket**
+- [ ] **G4. Rack and pinion**
+- [ ] **G5. Power screw (trapezoidal).** Raising torque, self-locking, efficiency
 
-## G. Güç iletimi
-- [ ] **G1. Helis ve konik dişli, sonsuz vida** (kendi kendini kilitleme)
-- [ ] **G2. Planet dişli**
-- [ ] **G3. Kayış-kasnak (V, triger), zincir-dişli**
-- [ ] **G4. Kramayer-pinyon**
-- [ ] **G5. Güç vidası (trapez).** Kaldırma torku, kendi kendini kilitleme, verim
+## H. Machine elements
+- [ ] **H1. Bolted joint.** Preload, separation, fatigue (Shigley ch. 8)
+- [ ] **H2. Welded joint**
+- [ ] **H3. Splined shaft, fits (H7/k6)**
+- [ ] **H4. Torsion, extension and disc (Belleville) springs; spring fatigue (Zimmerli)**
+- [ ] **H5. Coupling, brake / clutch, flywheel**
 
-## H. Makine elemanları
-- [ ] **H1. Cıvatalı bağlantı.** Ön yükleme, ayrılma, yorulma (Shigley 8. bölüm)
-- [ ] **H2. Kaynaklı bağlantı**
-- [ ] **H3. Kamalı mil, geçmeler (H7/k6)**
-- [ ] **H4. Burulma, çekme ve disk (Belleville) yayı; yay yorulması (Zimmerli)**
-- [ ] **H5. Kaplin, fren/kavrama, volan**
+## I. For 3D printing
+- [ ] **I1. Snap-fit**
+- [ ] **I2. Flexure / living hinge**
+- [ ] Print-ready pin clearances (B8c)
 
-## I. 3D baskıya özel
-- [ ] **I1. Snap-fit (geçme tırnak)**
-- [ ] **I2. Esnek mafsal (flexure / living hinge)**
-- [ ] Baskıya hazır pim boşlukları (B8c)
+## L. Repository
+- [x] **L2. The whole repository in English.** Code, comments, panel texts, messages, ROADMAP, docs (Turkish sentences are still understood)
+- [ ] **L3. Rename the add-in folder / id** to `MechanismAssistant` (needs re-registering the add-in in Fusion; the document tag group changes with it)
 
-## L. Repo
-- [ ] **L2. Repo tamamen İngilizce.** Kod yorumları, panel metinleri, mesajlar, ROADMAP, demo.md (Türkçe cümleler anlaşılmaya devam eder)
+## K. Usability
+- [ ] **K1. Edits in the chat.** "Make it a bit longer", "use aluminium": changes the previous design
+- [ ] **K2. Torque curve and dynamic forces for the four-bar** (also needed for the flywheel)
 
-## K. Kullanım
-- [ ] **K1. Sohbette düzeltme.** "Biraz daha uzun yap", "alüminyum olsun": önceki tasarımı değiştirir
-- [ ] **K2. Dört çubukta tork grafiği ve dinamik kuvvetler** (volan için de gerekli)
+## D. Outside world
+- [ ] **D12. Physical print** (a friend's printer)
+- [ ] **D13. README and demo video** (portfolio). README + Fusion images done (parts in the panel colours); the video is to be recorded: shot list in `docs/demo.md`
+- [ ] **D14. Later:** FreeCAD / AutoCAD support, a "free mode" (unverified, clearly labelled)
 
-## D. Dış dünya
-- [ ] **D12. Fiziksel baskı** (arkadaşın yazıcısı)
-- [ ] **D13. README ve demo videosu** (portföy). README + Fusion görselleri hazır (parçalar panel renklerinde); video çekimi senin: senaryo `docs/demo.md`
-- [ ] **D14. İleride:** FreeCAD/AutoCAD desteği, "serbest mod" (doğrulamasız, etiketli)
-
-## Bulgular (rapor için)
-- **Q = 1** için bağıntı `c = a / sin(ψ/2)`. Kompaktlık ile iletim açısı arasında ödünleşim var.
-  Biyel uzadıkça μ_min, 90 − ψ/2 değerine yaklaşır. Bu yüzden ψ > 90° iken 45° hedefi sağlanamaz.
-- **Hızlı dönüş (Q > 1)** iletim açısını **kötüleştiriyor.** Örneğin ψ = 90° için μ_min değerleri
-  Q = 1.1 / 1.2 / 1.3 iken 34° / 30° / 27°. Büyük salınım için çözüm dişli kademesi ya da altı uzuvlu mekanizma.
-- **Sentez tek başına güvenilir değil.** İlk hızlı dönüş sürümü "110° ✓" dedi, simülasyon 47.7° ölçtü
-  (uç konumlar farklı montaj kollarına düşmüştü). Bu yüzden her tasarım bağımsız simülasyonla doğrulanıyor.
-- **Üçlü doğrulama:** 35 mm krank, 55° salınım için formül (Norton), bağımsız simülasyon (55.00°) ve
-  Fusion'ın montaj çözücüsü (krank mafsalı köprüyle döndürüldü, 54.99°) aynı sonucu veriyor.
-- **Biyel kuvveti F_AB = F / sin μ:** İletim açısı düştükçe biyel ve pim yükü artıyor (μ = 45° → 1.41F).
-  Mukavemet hesabı, iletim açısı kontrolünün neden gerekli olduğunu sayısal olarak gösteriyor.
-- **Yanlış sezgi, doğru motor:** "Kısa krank daha küçük kesit almalı" varsayımı yanlış çıktı. Krank tahrik torkuyla
-  eğilmeye çalışıyor (genişlik ister), sabit uzuv ise sadece eksenel yük taşıyor (burkulma, kalınlık ister).
-  5 kg / PETG örneği: Krank 21×3, Biyel 13×3, Kol 24×3, Sabit 11×4 mm.
-- **Alüminyumda rijitlik belirleyici:** 5 kg örneğinde kolda gerilme kullanımı %57 iken sehim kullanımı %94.
-  Metalde parçayı kırılma değil esneme sınırı boyutlandırıyor. PETG'de sehim sınırı kolu 24'ten 29 mm genişliğe çıkardı.
-- **Yerel FEA (gmsh + scikit-fem, P2 tetra) doğrulaması:** Orta kesit gerilmesi el hesabıyla %0.1–5 uyumlu
-  (kiriş teorisi doğrulandı). Sehim ise ideal ankastre varsayımından büyük: Al 9×3 kol +%13, PETG 29×3 kol +%311.
-  Sebep: geniş ve rijit uzuv, küçük (Ø4) delik çevresinde dönüyor (göbek esnekliği). Ağ yakınsaması kontrol edildi.
-- **Göbek modeli (FEA kalibrasyonu):** Delikten tutulan uzvun dönme rijitliği k = C·E·t·r². 21 FEA çözümünde
-  C, uzunluktan bağımsız (±%3, L² ölçeklemesi doğrulandı) ve d/w ≤ 0.3 için 5.96–9.17. Güvenli taraf için C = 6.
-  Etkisi: 40 mm, 29 mm genişlik, Ø3 pim uzuvda göbek sehimi kiriş eğilmesinin 11 katı.
-- **Gizli güvensizlik yakalandı:** Mil burulma kontrolü eklenince, önceki alüminyum tasarımdaki Ø3 ortak pimin
-  2.94 N·m çıkış torkunda τ ≈ 555 MPa'ya çıkacağı görüldü (çelik bile kopar). Tork taşıyan mafsal ile serbest pim
-  ayrı düşünülmeli. PETG örneği (mil Ø12, pim Ø4): FEA ile model sehimi %24–35 güvenli tarafta, gerilme %6–11 uyumlu.
-- **Göbekli geometri FEA'sı:** Model sehimi FEA'nın %24–54 üstünde (göbek, mil çevresini rijitleştiriyor; model güvenli tarafta),
-  gerilme %1–12 uyumlu. Kalın mil sadece kendi göbeğini büyütüyor: PETG biyel ve sabit uzuv 6 mm gövdeye indi.
-- **Fonksiyon üreteci (Freudenstein):** 40 mm giriş kolu, 60° giriş → 90° çıkış: simülasyon 89.0°, Fusion çözücüsü 89.4°
-  (yapısal hata < 1°, hassas noktalarda sıfır). Çıkan mekanizmalar çoğunlukla Grashof değil (üçlü kol): giriş tam tur atmıyor.
-  "En kompakt" seçimi göbeklerin sığmayacağı kısa uzuvlar üretti; seçim ölçütü "dengeli oran" yapıldı.
-- **Dişli doğrulaması (Fusion):** Oran 3 / 2 N·m / PLA → m = 2, z = 18/54, b = 16 mm. Beş dönüş konumunda pinyon ile çark
-  arasındaki kesişim hacmi 0 mm³ (evolvent fazı doğru); pinyon 90° → çark −30° (oran ve yön doğru).
-- **Yay doğrulaması (Fusion):** 100 N / 20 mm → Ø1.6 tel, D = 9.6 mm, 15 sarım; Fusion'da boy 50.2 mm (L₀ = 50.2), dış çap 11.2 mm.
-  Konik yay (50 N / 15 mm, D₂/D₁ = 0.5): boy 30.71 mm, dış çap 16.1 mm, tasarımla aynı. Konik yay sabiti formülü
-  sarım sarım sayısal integralle doğrulandı (test).
-- **Tek uzun LLM istemi ölçeklenmiyor:** Yay alanları eklenince eski bir dört çubuk cümlesi bozuldu (15/16).
-  İki aşamalı yapı (yönlendirici + modül çıkarıcısı) hem 16/16 verdi hem de istemleri kısalttığı için ~6 s'de kaldı.
-- **Kam doğrulaması (Fusion):** 20 mm kalkma, 120/60/120° sikloidal → R_b hesaplandı; kam 8 farklı açıya döndürülüp itici
-  s(θ) tablosundan konumlandırıldığında makara-kam arası en kısa mesafe 0.000 mm ve kesişim 0.00 mm³ (tam temas).
-  Ters yönde döndürünce 1.8–15.5 mm boşluk / 640 mm³ kesişim: test ayırt edici. Yolda bulunan hata: kayar mafsalda
-  özel yön (kök ekseni) verilince Fusion onu yok sayıp z yönünde kaydırıyordu; itici hiç hareket etmiyor görünüyordu.
-- **Mil: kritik kesit göbek değil, rulman oturması olabiliyor.** 60 N·m eğilme + 100 N·m tork, düz mil: göbek için
-  Ø20.6 mm yeterli, ama torku taşıyan Ø20 rulman oturması (keskin omuz, K_f 2.7/2.2) n_f = 2'yi ancak Ø28 gövdeyle
-  sağlıyor (rulman omzu Ø25.4 ister). Sehim (16 µm) ve eğim (0.35 mrad) sınırların çok altında. Sayısal sehim
-  kapalı çözümle 1e-4 içinde; Rayleigh kritik hızı tam çözümün %0.7 üstünde (beklenen: üst sınır).
-- **Sistemde gizli çakışma:** Redüktörü Fusion'da kurarken dişlinin mil deliği kesimi, içinden geçen mili de kesip ikiye
-  ayırdı (Fusion'da kesme varsayılan olarak değdiği her gövdeyi keser). Tek başına dişli modülünde görünmeyen hata,
-  modüller birleşince ortaya çıktı; kesimler artık sadece kendi gövdesine uygulanıyor.
+## Findings (for the report)
+- **For Q = 1** the relation is `c = a / sin(ψ/2)`. There is a trade-off between compactness and transmission angle.
+  As the coupler gets longer, μ_min approaches 90 − ψ/2. So for ψ > 90° the 45° target cannot be met.
+- **Quick return (Q > 1) makes the transmission angle worse.** For ψ = 90°, μ_min is
+  34° / 30° / 27° at Q = 1.1 / 1.2 / 1.3. For a large swing the answer is a gear stage or a six-bar linkage.
+- **Synthesis alone is not reliable.** The first quick-return version said "110° ✓" while the simulation measured 47.7°
+  (the extreme positions had fallen on different assembly branches). This is why every design is verified by an independent simulation.
+- **Three-way agreement:** for a 35 mm crank and 55° swing, the formula (Norton), an independent simulation (55.00°) and
+  Fusion's assembly solver (crank joint turned through the bridge, 54.99°) give the same result.
+- **Coupler force F_AB = F / sin μ:** as the transmission angle falls the coupler and pin loads rise (μ = 45° → 1.41F).
+  The strength calculation shows in numbers why the transmission-angle check is needed.
+- **Wrong intuition, right engine:** the assumption "a short crank should get a smaller section" was wrong. The crank is bent by the
+  drive torque (needs width), while the ground link carries only axial load (buckling, needs thickness).
+  5 kg / PETG example: crank 21×3, coupler 13×3, rocker 24×3, ground 11×4 mm.
+- **Stiffness governs in aluminium:** in the 5 kg example the rocker's stress utilisation is 57 % while its deflection utilisation is 94 %.
+  In metal the part is sized by the deflection limit, not by breaking. In PETG the deflection limit widened the rocker from 24 to 29 mm.
+- **Local FEA (gmsh + scikit-fem, P2 tetrahedra) verification:** the mid-section stress agrees with the hand calculation within 0.1–5 %
+  (beam theory confirmed). The deflection is larger than the ideal clamp: Al 9×3 rocker +13 %, PETG 29×3 rocker +311 %.
+  Reason: a wide, stiff link rotates around a small (Ø4) hole (hub compliance). Mesh convergence was checked.
+- **Hub model (FEA calibration):** a link held at a hole has rotational stiffness k = C·E·t·r². Over 21 FEA runs
+  C is independent of the length (±3 %, L² scaling confirmed) and 5.96–9.17 for d/w ≤ 0.3. C = 6 on the safe side.
+  Effect: for a 40 mm link, 29 mm wide, on a Ø3 pin the hub deflection is 11 times the beam bending.
+- **A hidden unsafe design caught:** once shaft torsion was checked, the Ø3 common pin of an earlier aluminium design turned out to reach
+  τ ≈ 555 MPa at 2.94 N·m output torque (even steel breaks). Torque-carrying joints and free pins must be treated
+  separately. PETG example (shaft Ø12, pin Ø4): model deflection 24–35 % on the safe side of the FEA, stress within 6–11 %.
+- **FEA with bosses:** the model deflection is 24–54 % above the FEA (the boss stiffens the area around the shaft; the model is on the safe side),
+  stress within 1–12 %. A thick shaft only enlarges its own boss: the PETG coupler and ground link came down to a 6 mm web.
+- **Function generator (Freudenstein):** 40 mm input arm, 60° input → 90° output: simulation 89.0°, Fusion solver 89.4°
+  (structural error < 1°, zero at the precision points). The mechanisms found are mostly non-Grashof (triple rockers): the input does not turn fully.
+  "Most compact" produced links too short for their bosses; the choice was changed to "balanced ratio".
+- **Gear verification (Fusion):** ratio 3 / 2 N·m / PLA → m = 2, z = 18/54, b = 16 mm. At five turning positions the overlap volume
+  between pinion and gear is 0 mm³ (correct involute phase); pinion 90° → gear −30° (ratio and direction correct).
+- **Spring verification (Fusion):** 100 N / 20 mm → Ø1.6 wire, D = 9.6 mm, 15 coils; in Fusion length 50.2 mm (L₀ = 50.2), outer diameter 11.2 mm.
+  Conical spring (50 N / 15 mm, D₂/D₁ = 0.5): length 30.71 mm, outer diameter 16.1 mm, same as the design. The conical rate formula
+  was checked coil by coil with a numerical integral (test).
+- **One long LLM prompt does not scale:** adding the spring fields broke an older four-bar sentence (15/16).
+  The two-stage structure (router + module extractor) gave 16/16 and, with shorter prompts, stayed at ~6 s.
+- **Cam verification (Fusion):** 20 mm lift, 120/60/120° cycloidal → R_b computed; with the cam turned to 8 angles and the follower
+  placed from the s(θ) table, the smallest roller-cam distance is 0.000 mm and the overlap 0.00 mm³ (exact contact).
+  Turning the other way gives 1.8–15.5 mm gaps / 640 mm³ overlap: the test discriminates. A bug found on the way: given a custom
+  direction (root axis) the slider joint ignored it and slid along z; the follower seemed not to move at all.
+- **Shaft: the critical section may be the bearing seat, not the hub.** 60 N·m bending + 100 N·m torque, plain shaft: Ø20.6 mm is enough
+  at the hub, but the torque-carrying Ø20 bearing seat (sharp shoulder, K_f 2.7/2.2) reaches n_f = 2 only with a Ø28 body
+  (the bearing shoulder needs Ø25.4). Deflection (16 µm) and slope (0.35 mrad) are far below the limits. The numerical deflection
+  matches the closed form within 1e-4; the Rayleigh critical speed is 0.7 % above the exact one (expected: an upper bound).
+- **A hidden clash in the system:** while building the reducer in Fusion, the gear's bore cut also cut the shaft running through it
+  and split it in two (in Fusion a cut hits every body it touches by default). A bug invisible in the gear module alone appeared
+  once the modules were combined; every cut is now limited to its own body.

@@ -1,23 +1,23 @@
-# Demo videosu: çekim senaryosu (~2 dakika)
+# Demo video: shot list (~2 minutes)
 
-**Kayıt:** Windows'ta `Win + Alt + R` (Xbox Game Bar), Fusion penceresini kaydeder. Tekrar bas: durur.
-Kayıttan önce Ollama açık olsun ve bir cümle deneyip modeli ısıt (ilk istek yavaş olur).
-Panel serbest pencere; Fusion'un altına yerleştir, model görünümü üstte kalsın.
+**Recording:** on Windows `Win + Alt + R` (Xbox Game Bar) records the Fusion window; press it again to stop.
+Before recording, start Ollama and send one sentence to warm the model up (the first request is slow).
+The panel is a floating window; place it below Fusion so that the model view stays on top.
 
-| # | Süre | Ne yapılır | Ekranda görünen / söylenecek (altyazı) |
+| # | Time | What to do | On screen / caption |
 |---|---|---|---|
-| 1 | 0:00–0:10 | Boş Fusion + panel | "Mekanizmayı cümleyle tarif et; yerel yapay zekâ anlar, hesapları Python yapar, Fusion çizer." |
-| 2 | 0:10–0:35 | Sohbete yaz: `30 mm krank, 60° salınım, uçta 5 kg, PETG` → Gönder | Sonuç kartı: uzuv boyları, iletim açısı grafiği, ✓ kontroller. Fusion'da renkli dört çubuk. |
-| 3 | 0:35–0:45 | **▶ Sürekli** | Mekanizma döner. "Salınım Fusion'ın kendi çözücüsüyle de 55/55° doğrulandı." |
-| 4 | 0:45–1:00 | Salınım kaydırıcısını 60 → 120'ye çek | Kırmızı bölgeye girince ✗ ve neden (iletim açısı). "Olmayan tasarımı çizmiyor, nedenini söylüyor." |
-| 5 | 1:00–1:15 | Yaz: `4 cm kolu 45° çevirince diğer kol 120° dönsün, PETG, 2 kg` → çiz → **⟳ 1 tur** | Sınırlı açıda ileri-geri salınan dört çubuk. |
-| 6 | 1:15–1:25 | Tür: **Dişli** → çiz → Sürekli | Dişler birbirine girmeden döner. |
-| 7 | 1:25–1:35 | Tür: **Yay**, konik oranı 0.5, görünüm "Plakalarla" → çiz → 1 tur | Konik yay sıkışıp açılır. |
-| 8 | 1:35–1:45 | Tür: **Kam** → çiz → Sürekli | İtici kam profilini takip eder. |
-| 9 | 1:45–1:55 | Tür: **Mil**, gerilme yığılması: kama yuvası → segman kanalı | Çap büyür (K_t 2.14 → 5.0). Çiz: kama yuvalı mil. |
-| 10 | 1:55–2:05 | Terminalde `python -m pytest` (isteğe bağlı) | "113 test geçti." Son kare: README'deki görsel tablosu. |
+| 1 | 0:00–0:10 | Empty Fusion + panel | "Describe a mechanism in plain language; a local AI reads it, Python engines size and check it, Fusion draws it." |
+| 2 | 0:10–0:35 | Type `30 mm crank, 60° swing, 5 kg at the tip, PETG` → Send | Result card: link lengths, transmission-angle chart, ✓ checks. The coloured four-bar in Fusion. |
+| 3 | 0:35–0:45 | **▶ Loop** | The mechanism turns. "The swing was also confirmed by Fusion's own solver: 55/55°." |
+| 4 | 0:45–1:00 | Drag the swing slider from 60 to 120 | It enters the red band: ✗ and the reason (transmission angle). "It does not draw an infeasible design; it says why." |
+| 5 | 1:00–1:15 | Type `turn a 4 cm arm 45° and the other arm turns 120°, PETG, 2 kg` → draw → **⟳ 1 turn** | A limited-angle four-bar swinging back and forth. |
+| 6 | 1:15–1:30 | Type `1.5 kW 1450 rpm motor, 1:4 gearbox` → **▶ Loop** | Housing, bearings, keyed shafts and gears; the output turns 4× slower. "Gear forces become shaft loads automatically." |
+| 7 | 1:30–1:40 | Type: **Compression spring**, taper 0.5, view "With plates" → draw → 1 turn | The conical spring compresses and releases. |
+| 8 | 1:40–1:50 | Type: **Cam** → draw → Loop | The follower tracks the cam profile. |
+| 9 | 1:50–2:00 | Type: **Shaft**, stress raiser: keyseat → retaining-ring groove | The diameter grows (K_t 2.14 → 5.0). Draw: the stepped, keyed shaft on its bearings. |
+| 10 | 2:00–2:10 | `python -m pytest` in a terminal (optional) | "143 tests passed." Last frame: the image table in the README. |
 
-**İpuçları**
-- Her sahneden önce görünümü "Home" (ev simgesi) yap; kamera sabit kalsın.
-- Uzun bekleme olursa videoda kes (LLM ~5 s).
-- Ses yerine altyazı daha kolay: kaydı Clipchamp'e (Windows'ta hazır) at, metinleri tablodaki gibi ekle.
+**Tips**
+- Press "Home" (the house icon) before each scene so the camera stays the same.
+- Cut long waits in editing (the LLM takes ~5 s).
+- Captions are easier than a voice-over: open the recording in Clipchamp (built into Windows) and add the captions above.
