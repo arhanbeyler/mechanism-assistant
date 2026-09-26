@@ -168,6 +168,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   (the *FourBar* script in `fusion_scripts/` draws it).
 * **Tests:** `python -m pytest`. This runs 337 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
+* **Fusion smoke test:** `python tools/fusion_smoke.py` builds every module's default design in Fusion through the add-in's bridge (36/36 build).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
 
@@ -194,7 +195,7 @@ reducer.py reducer2.py cam_system.py   systems: modules sized together until the
 fusion_lib/          Fusion builders (one per module) + shared document handling
 fusion_addins/       the add-in: palette (HTML), animation, local HTTP bridge used during development
 tests/               pytest suite
-tools/               hub-compliance calibration, LLM evaluation
+tools/               hub-compliance calibration, LLM evaluation, Fusion smoke test
 ```
 
 ## Limitations
