@@ -32,8 +32,8 @@ Sentences can be written in English or Turkish.
 | ![press fit](docs/img/press_fit.png) | ![torsion spring](docs/img/torsion_spring.png) | ![flywheel](docs/img/flywheel.png) |
 | **Disc clutch** | **Snap-fit (printed)** | **Living hinge (printed)** |
 | ![disc clutch](docs/img/clutch.png) | ![snap-fit](docs/img/snap_fit.png) | ![living hinge](docs/img/flexure.png) |
-| **Crank press (system)** | | |
-| ![crank press](docs/img/press.png) | | |
+| **Crank press (system)** | **Path synthesis (through given points)** | |
+| ![crank press](docs/img/press.png) | ![path synthesis](docs/img/path_synthesis.png) | |
 
 ## Core rule: the LLM never produces a number
 
@@ -51,7 +51,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (92/92, incl. 12
+  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (94/94, incl. 12
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -68,6 +68,7 @@ flowchart LR
 | Four-bar, limited input | Freudenstein function generator, 3 Chebyshev precision points | Structural error ≤ 1°, transmission angle over the range, Fusion joint limits |
 | Slider-crank (piston) | Stroke given; crank from the exact stroke formula (with offset), rod the shortest whole mm with b/a ≥ 3 and rod angle ≤ 20° | Simulated stroke, rod ratio, rod angle (side load), quick-return Q with offset; crank torque by virtual work T = F·|dx/dθ| (tested against the rod-force moment); crank and rod sized like the four-bar links; piston speed / acceleration; in Fusion the solver's piston position equals x(θ) at 36 angles |
 | Straight-line linkage | Hoeckens four-bar (a : b : c : d = 1 : 2.5 : 2.5 : 2, point at 2 × AB) scaled to the asked straight path; the straight part is found on the simulated coupler curve (longest run within 0.2 % of its length from its best-fit line), not taken from a table | Straight length, deviation, crank-rotation share and speed variation on the line, lift on return, transmission angle on the working stroke; crank torque from coupler statics equals virtual work; links sized with the coupler also bending (point overhangs B); layer clearance; in Fusion the drawn point stays within 0.003 mm of the engine curve over a full turn |
+| Path synthesis | 3–8 points (x, y) the coupler point must pass through; a crank-rocker with the point on the coupler's line (a three-hole bar) | Nelder–Mead from 40 seeded starts on the squared distances to the coupler curve with penalties for Grashof, transmission angle 30–150° and link ratios; the report re-measures the misses on a finer curve; in Fusion the solver-driven point, traced over a turn, passes the points within 0.2 mm (1° steps) |
 | Geneva | Slots (or step angle) and centre distance; tangential pin entry a = C·sin(π/n); wheel with slots and locking arcs, driver with locking disk whose relief is sized by sweeping the wheel outline over the index; with speed and a load (disk mass + diameter) the pin and wheel thickness are sized | Index / dwell split, closed-form ω and α (tested against numerical derivatives), peak ω = λ/(1−λ), pin force from J·α, pin shear and bending, slot bearing, both shafts, lock engaged < 1° after the pin leaves, material under the slots, rim vs driver shaft; point-sampled interference test; in Fusion zero overlap over two turns driven by the add-in |
 | Toggle clamp | Arm opening, spindle distance (handle travel, handle length defaulted and reported); dead-centre synthesis (handle link and coupler in line at the clamped pose) swept and refined for the transmission angle, then 3° over centre onto a stop | Opening (simulation), arm back-off past the dead centre, transmission angle near the lock (40..140°) and over the stroke (≥ 20°); handle torque from statics equals virtual work and falls to 0 at the dead centre; locked-pose statics (coupler, arm pivot, stop torque), steel pins, arm bending at B; split base plates + post clear of the sweep; in Fusion zero overlap over the stroke, arm swing exactly as asked |
 | Scotch yoke | Stroke (or crank); crank r = S/2, pin in a slot square to the slide | Exactly harmonic x = r cos θ (a_max against a slider-crank's), crank torque F·r, slotted yoke bar in bending + slot bearing, pins, shaft; in Fusion the yoke follows r cos θ exactly over a turn, no overlap |
@@ -144,7 +145,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 312 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 315 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -159,7 +160,7 @@ function_gen.py      Freudenstein function generator (limited-input four-bar)
 strength.py          link, pin and shaft sizing; hub compliance; K_t; deflection
 interference.py      layer order and shaft-to-link clearance over the cycle
 fea_local.py         gmsh + scikit-fem link model (with hub) vs hand calculation
-gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py press.py   module engines
+gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py press.py pathsynth.py   module engines
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)
 reducer.py reducer2.py cam_system.py   systems: modules sized together until their constraints agree
 fusion_lib/          Fusion builders (one per module) + shared document handling

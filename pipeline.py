@@ -37,6 +37,7 @@ import welded
 import worm
 import llm_extract
 import planetary
+import pathsynth
 import power_screw
 import press
 import rack_pinion
@@ -583,10 +584,12 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
                        arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
                        undercut_mm=None, hold_force_N=None, releasable=None, repeated=None,
-                       working_stroke_mm=None):
+                       working_stroke_mm=None, path_points=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "path_synthesis":
+        return design_from_spec({"mechanism_type": "path_synthesis", "path_points": path_points})
     if kind == "press":
         return design_from_spec({"mechanism_type": "press", "force_N": force_N, "stroke_mm": stroke_mm,
                                  "working_stroke_mm": working_stroke_mm or None, "speed_rpm": speed_rpm})
@@ -746,6 +749,8 @@ def design_from_spec(spec, on_status=None):
         return _flexure(result, spec, say)
     if mtype == "press":
         return _press(result, spec, say)
+    if mtype == "path_synthesis":
+        return _path_synthesis(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -763,7 +768,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -2074,6 +2079,63 @@ def _press(result, spec, say):
            f"{d['flywheel_rpm']:.0f} rpm a {d['P_motor'] / 1000:.2f} kW motor is enough (without it "
            f"{d['P_no_flywheel'] / 1000:.1f} kW); gears {d['gear_ratio']:.1f}:1 to the crankshaft.")
     result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _path_synthesis(result, spec, say):
+    """F2b: a crank-rocker whose coupler point passes through the given points (path generation, no timing)."""
+    result["mechanism_type"] = "path_synthesis"
+    raw = spec.get("path_points") or []
+    targets = [(float(q[0]), float(q[1])) for q in raw if isinstance(q, (list, tuple)) and len(q) == 2]
+    if len(targets) < 3:
+        return dict(result, status="missing",
+                    message="Missing for path synthesis: at least 3 points (x, y in mm) the point should pass through.")
+    if len(targets) > 8:
+        return dict(result, status="missing", message="Path synthesis takes 3 to 8 points.")
+    notes = ["Coupler point on the coupler's line (a straight three-hole bar); no timing asked for."]
+    say(f"Path synthesis: searching crank-rockers through {len(targets)} points (Nelder-Mead, many starts)...")
+    x, val, scale = pathsynth.synthesize(targets)
+    r = pathsynth.report(x, targets)
+    tol = max(0.2, 0.005 * scale)
+    checks = [{"name": "Passes through the points", "ok": r["max_dev"] <= tol,
+               "detail": f"largest miss {r['max_dev']:.3f} mm (limit {tol:.2f} mm); crank at "
+                         + ", ".join(f"{t:.0f}°" for t in r["theta_at"])},
+              {"name": "Crank turns fully (Grashof)", "ok": r["grashof"],
+               "detail": f"a {r['a']:.1f}, b {r['b']:.1f}, c {r['c']:.1f}, d {r['d']:.1f} mm"},
+              {"name": "Transmission angle", "ok": pathsynth.MU_MIN <= r["mu_min"] and r["mu_max"] <= 180 - pathsynth.MU_MIN,
+               "detail": f"{r['mu_min']:.0f}° – {r['mu_max']:.0f}° (limits {pathsynth.MU_MIN:g}–{180 - pathsynth.MU_MIN:g}°)"}]
+    section = strength.section_with_bosses(strength.DEFAULT_SECTION)
+    O4 = r["O4"]
+    sh = lambda p: (p[0] - O4[0], p[1] - O4[1])
+    lay_frames = [{"A": sh(f["A"]), "B": sh(f["B"]), "P": sh(f["P"])} for f in r["frames"][::8]]
+    order_pts = sorted((("A", 0.0), ("B", r["b"]), ("P", r["p"])), key=lambda t: t[1])
+    ends = (order_pts[0][0], order_pts[-1][0])
+    order, clearances, layers_ok = interference.choose_layer_order(
+        {"o2": sh(r["O2"])}, lay_frames, section, dict(strength.LINK_ENDS, Coupler=ends))
+    margin = min((c[2] for c in clearances), default=0.0)
+    checks.append({"name": "Layers (a shaft passes a moving link)", "ok": layers_ok,
+                   "detail": f"smallest gap {margin + interference.CLEARANCE:.1f} mm (needed {interference.CLEARANCE:g})"})
+    passed = all(c["ok"] for c in checks)
+    k = min(range(len(r["frames"])), key=lambda i: abs(r["frames"][i]["theta"] - r["theta_at"][0]))
+    fr = r["frames"][k]
+    r3 = lambda p: [round(p[0], 3), round(p[1], 3)]
+    pts = {"O2": r3(r["O2"]), "O4": r3(O4), "A": r3(fr["A"]), "B": r3(fr["B"]), "P": r3(fr["P"])}
+    path = [r3(p) for p in r["path"][::6]]
+    lengths = {k2: round(r[k2], 3) for k2 in ("a", "b", "c", "d", "p")}
+    info = dict(lengths, targets=[list(t) for t in targets], deviations=r["deviations"], max_dev=r["max_dev"],
+                theta_at=r["theta_at"], mu_min=r["mu_min"], mu_max=r["mu_max"], path=path, points=pts)
+    result.update(pathsynth=info, checks=checks, notes=notes, section_mm=section,
+                  target={"points": [list(t) for t in targets]},
+                  fusion={"type": "straight_line", "passed_checks": passed, "lengths_mm": lengths, "points_mm": pts,
+                          "section_mm": section, "layer_order": list(order), "path": path, "line": None,
+                          "targets": [list(t) for t in targets], "coupler_ends": list(ends)})
+    if passed:
+        msg = (f"All checks passed. Crank {r['a']:.1f} mm, coupler {r['b']:.1f} mm with the point {r['p']:.1f} mm from "
+               f"the crank pin along it, rocker {r['c']:.1f} mm, ground {r['d']:.1f} mm; the point passes all "
+               f"{len(targets)} points within {r['max_dev']:.3f} mm.")
+    else:
+        msg = "The best linkage found does not meet the checks above: move the points closer together or give fewer."
+    result.update(status="ok" if passed else "failed", message=" ".join(notes + [msg]))
     return result
 
 

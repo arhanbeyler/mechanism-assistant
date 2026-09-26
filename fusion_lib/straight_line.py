@@ -32,8 +32,11 @@ def _path_sketch(root, mech, z):
         pts.add(to(p))
     spline = sk.sketchCurves.sketchFittedSplines.add(pts)
     spline.isClosed = True
-    a, b = mech["line"]
-    sk.sketchCurves.sketchLines.addByTwoPoints(to(a), to(b))
+    if mech.get("line"):
+        a, b = mech["line"]
+        sk.sketchCurves.sketchLines.addByTwoPoints(to(a), to(b))
+    for q in mech.get("targets", []):                 # F2b: the points the path must pass through
+        sk.sketchCurves.sketchCircles.addByCenterRadius(to(q), mm(1.0))
     sk.arePointsShown = False                  # the spline's fit points and the closed-profile shading
     sk.areProfilesShown = False
     return sk
@@ -45,13 +48,19 @@ def build(mech, root, design=None):
     section = mech["section_mm"]
     d_pin, d_shaft = section["hole"], section.get("shaft", section["hole"])
     hole_at = lambda p: d_shaft if p in SHAFT_POINTS else d_pin
+    # the coupler is one straight bar through A, B and P; its ends are the outer two (F2b: P may lie between
+    # A and B or behind A), the third point is a middle hole
+    links = dict(LINKS, Coupler=tuple(mech.get("coupler_ends", ("A", "P"))))
+    c0, c1 = links["Coupler"]
+    mid = next(q for q in ("A", "B", "P") if q not in (c0, c1))
+    dist = lambda u, v: ((pts[u][0] - pts[v][0]) ** 2 + (pts[u][1] - pts[v][1]) ** 2) ** 0.5
     secs = {n: dict(section["links"][n], hole=d_pin, hole0=hole_at(s), hole1=hole_at(e))
-            for n, (s, e) in LINKS.items()}
-    secs["Coupler"]["mid_holes"] = [L["b"]]                 # B, between A (x = 0) and P (x = p)
+            for n, (s, e) in links.items()}
+    secs["Coupler"]["mid_holes"] = [dist(c0, mid)]
 
     occs, lengths, z, z_path = {}, {}, 0.0, 0.0
     for name in mech["layer_order"]:
-        s, e = LINKS[name]
+        s, e = links[name]
         occs[name], lengths[name] = make_link(root, name, pts[s], pts[e], z, secs[name])
         z += secs[name]["thickness"] + GAP
         if name == "Coupler":
@@ -59,9 +68,9 @@ def build(mech, root, design=None):
     occs["Ground"].isGrounded = True
 
     def local_x(link, point):
-        if link == "Coupler" and point == "B":
-            return L["b"]
-        return 0.0 if point == LINKS[link][0] else lengths[link]
+        if link == "Coupler":
+            return dist(c0, point)
+        return 0.0 if point == links[link][0] else lengths[link]
 
     for l1, l2, p in JOINTS:
         geo = adsk.fusion.JointGeometry.createByCurve(hole_edge(occs[l1], local_x(l1, p), secs[l1]),
