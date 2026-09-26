@@ -16,6 +16,8 @@ Sentences can be written in English or Turkish.
 | ![four-bar](docs/img/fourbar.png) | ![gear](docs/img/gear.png) | ![spring](docs/img/spring.png) |
 | **Disk cam + roller follower** | **Two-bearing shaft (fatigue)** | **Single-stage reducer (system)** |
 | ![cam](docs/img/cam.png) | ![shaft](docs/img/shaft.png) | ![reducer](docs/img/reducer.png) |
+| **Slider-crank (piston)** | | |
+| ![slider-crank](docs/img/slider_crank.png) | | |
 
 ## Core rule: the LLM never produces a number
 
@@ -33,7 +35,10 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (25/25).
+  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (40/40, incl. 11
+  edits of an existing design).
+* **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
+  The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
 * **Engines:** Textbook methods (Norton, Shigley) in plain Python. Every result is re-verified by a method that
   is *independent* of the one that produced it. For example, synthesis is checked by position-loop simulation.
 * **Fusion:** The add-in only draws what the engines decided. It reuses one tagged document instead of opening
@@ -45,6 +50,7 @@ flowchart LR
 |---|---|---|
 | Four-bar, full rotation | Crank-rocker Q = 1 (c = a / sin(ψ/2)), quick-return Q > 1 (Norton) | Grashof, transmission angle 40–140° (synthesis targets 45°), branch consistency, simulated swing and Q |
 | Four-bar, limited input | Freudenstein function generator, 3 Chebyshev precision points | Structural error ≤ 1°, transmission angle over the range, Fusion joint limits |
+| Slider-crank (piston) | Stroke given; crank from the exact stroke formula (with offset), rod the shortest whole mm with b/a ≥ 3 and rod angle ≤ 20° | Simulated stroke, rod ratio, rod angle (side load), quick-return Q with offset; crank torque by virtual work T = F·|dx/dθ| (tested against the rod-force moment); crank and rod sized like the four-bar links; piston speed / acceleration; in Fusion the solver's piston position equals x(θ) at 36 angles |
 | Link sizing | Per-link width/thickness for load and material (PLA, PETG, Al 6061, steel), local bosses D = 2.5d | Euler buckling, net section, bending, pin shear and bearing, Roark K_t, L/200 deflection incl. FEA-calibrated hub compliance, steel shaft torsion, layer interference ≥ 1 mm |
 | Spur gears | Lewis bending (Shigley Y table, Barth K_v), involute teeth | Contact ratio ≥ 1.2, undercut z ≥ 17, Hertz contact stress (info), shaft and hub |
 | Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)) |
@@ -97,7 +103,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 143 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 164 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.

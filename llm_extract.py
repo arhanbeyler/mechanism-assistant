@@ -35,12 +35,15 @@ def _schema(props):
 
 # ---------------------------------------------------------------- 1) router
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
-                                   "enum": ["fourbar", "reducer", "spur_gear", "spring", "cam", "shaft", "unknown"]}})
+                                   "enum": ["fourbar", "slider_crank", "reducer", "spur_gear", "spring", "cam", "shaft",
+                                            "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
     "'shaft': sizing a rotating shaft / axle (mil, şaft, aks, 'mil çapı', torque and bending on a shaft, yorulma). "
     "'cam': a cam and follower (kam, eksantrik, itici, 'X mm kaldırsın', yükselme/bekleme/dönüş açıları). "
     "'spring': a spring (yay, basma yayı, konik yay). "
+    "'slider_crank': a piston or slider moved back and forth by a crank (piston, pistonlu, krank-biyel, strok, "
+    "stroke, 'ileri geri giden', reciprocating slider, 'X mm strok'). "
     "'reducer': a complete gearbox with shafts, bearings and housing (redüktör, dişli kutusu, şanzıman, "
     "'motora bağlı', motor power in kW). "
     "'spur_gear': only a gear pair (dişli, dişli çifti, çevrim oranı, 'X kat yavaşlatsın' without a gearbox). "
@@ -96,6 +99,20 @@ REDUCER = (_schema({
     "d/d is ALWAYS speed_rpm, even when the ratio is also described with 'devri X kat düşüren'. "
     "material: gear material only if named. shaft_material: '1020' or '1045' only if named."))
 
+SLIDER_CRANK = (_schema({
+    "stroke_mm": {"type": ["number", "null"]},
+    "crank_length_mm": {"type": ["number", "null"]},
+    "rod_length_mm": {"type": ["number", "null"]},
+    "offset_mm": {"type": ["number", "null"]},
+    "max_load_N": {"type": ["number", "null"]},
+    "speed_rpm": {"type": ["number", "null"]},
+    "material": MATERIAL,
+}), COMMON + (
+    "The user wants a slider-crank (piston) mechanism. stroke_mm: piston stroke ('60 mm strok', 'stroke 6 cm'). "
+    "crank_length_mm: crank length only if given. rod_length_mm: connecting rod (biyel) length only if given. "
+    "offset_mm: offset (kaçıklık, eksantriklik) of the slide axis only if given. max_load_N: force on the piston "
+    "('pistona 500 N', '20 kg bassın' -> 196.2). speed_rpm: crank speed if given. material only if named."))
+
 SPRING = (_schema({
     "spring_force_N": {"type": ["number", "null"]},
     "spring_deflection_mm": {"type": ["number", "null"]},
@@ -142,20 +159,20 @@ SHAFT = (_schema({
     "'plain' (düz) only if named. shaft_material: '1020' or '1045' only if named. safety_n: required safety "
     "factor if given ('emniyet katsayısı 2.5')."))
 
-MODULE_EXTRACTORS = {"fourbar": FOURBAR, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
+MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # All fields (the pipeline expects one dict; fields of other modules are None)
 ALL_FIELDS = {"mechanism_type": "unknown", "quick_return": False}
 for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
-KIND_TO_TYPE = {"reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
+KIND_TO_TYPE = {"slider_crank": "slider_crank", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
 # ---------------------------------------------------------------- 3) edits of the current design (K1)
-KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "reducer": "reducer", "spur_gear": "spur_gear",
+KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "slider_crank": "slider_crank", "reducer": "reducer", "spur_gear": "spur_gear",
                 "spring": "spring", "cam": "cam", "shaft": "shaft"}
-DESCRIPTION = {"fourbar": "four-bar linkage", "reducer": "single-stage gear reducer (gearbox)",
+DESCRIPTION = {"fourbar": "four-bar linkage", "slider_crank": "slider-crank (piston) mechanism", "reducer": "single-stage gear reducer (gearbox)",
                "spur_gear": "spur gear pair", "spring": "compression spring", "cam": "disk cam with roller follower",
                "shaft": "rotating shaft"}
 NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}

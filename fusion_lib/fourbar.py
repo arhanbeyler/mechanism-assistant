@@ -150,6 +150,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Crank": "Plastic - Matte (Red)", "Pinion": "Plastic - Matte (Red)", "Cam": "Plastic - Matte (Red)",
                "Coupler": "Plastic - Matte (Blue)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
+               "Piston": "Plastic - Matte (Green)",
                "Shaft": "Steel - Satin", "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin",
                "Spring": "Steel - Satin", "Key": "Brass - Matte"}
 
@@ -200,7 +201,8 @@ def build(mech, reuse=True):
              "spring": "spring",              # C10: compression spring (+ compression animation frames)
              "cam": "cam",                    # C11a: cam + follower
              "shaft": "shaft",                # C11b: two-bearing shaft
-             "reducer": "reducer"}.get(mech.get("type"))   # E1: single-stage reducer (system)
+             "reducer": "reducer",            # E1: single-stage reducer (system)
+             "slider_crank": "slider_crank"}.get(mech.get("type"))   # F1: slider-crank (piston)
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

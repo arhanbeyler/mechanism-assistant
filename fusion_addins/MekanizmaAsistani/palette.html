@@ -365,7 +365,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.slider) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -374,7 +374,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.slider) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -568,7 +568,54 @@ Everything is computed on this computer, with a local AI.</div>
       <text class="lbl" x="${X(xl) - 2}" y="${Y(g.center_distance) - 4}" text-anchor="end">out</text></svg>`;
   }
 
+  function renderSliderCard(d) {             // F1: slider-crank (piston)
+    const s = d.slider;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const sec = (d.section_mm && d.section_mm.links) || {};
+    const secTxt = (n) => sec[n] ? ` (${f(sec[n].width, 0)}×${f(sec[n].thickness, 0)})` : "";
+    const rows = [["Crank a", `${f(s.a, 2)} mm${secTxt("Crank")}`], ["Rod b", `${f(s.b, 0)} mm${secTxt("Coupler")}`],
+                  ["Rod / crank", f(s.ratio, 2)], ["Offset e", `${f(s.e, 0)} mm`], ["Stroke", `${f(s.stroke, 1)} mm`],
+                  ["Rod angle max", `${f(s.phi_max)}°`], ["Time ratio Q", f(s.Q, 3)]];
+    if (s.motion) rows.push(["v / a max", `${f(s.motion.v_max, 2)} m/s / ${f(s.motion.a_max, 0)} m/s²`]);
+    if (d.strength) rows.push(["Crank torque", `${f(d.strength.input_torque_max_Nmm / 1000, 2)} N·m`],
+                              ["Pin / shaft", `Ø${f(d.section_mm.hole, 0)} / Ø${f(d.section_mm.shaft, 0)}`]);
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Slider-crank</h3><table>${rows.map(([k, v]) =>
+          `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Mechanism · piston x(θ)</h3>${sliderSvg(d.fusion.points_mm, s)}${xSvg(d.x_curve, s.stroke)}</div>
+      </div>`;
+  }
+
+  function sliderSvg(p, s) {                 // crank, rod, piston block on the slide axis (to scale)
+    const W = 220, H = 70, pad = 8, xmax = s.x_max + 8, xmin = -s.a - 4;
+    const ymin = Math.min(-s.a, s.e) - 8, ymax = Math.max(s.a, s.e) + 8;
+    const sc = Math.min((W - 2 * pad) / (xmax - xmin), (H - 2 * pad) / (ymax - ymin));
+    const X = (x) => pad + (x - xmin) * sc, Y = (y) => H - pad - (y - ymin) * sc;
+    const ln = (a, b, c, w) => `<line x1="${X(a[0])}" y1="${Y(a[1])}" x2="${X(b[0])}" y2="${Y(b[1])}" stroke="var(${c})" stroke-width="${w}" stroke-linecap="round"/>`;
+    const B = p.B, bw = 8;                     // piston block half-width (px)
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <line class="axis" x1="${X(s.x_min - 6)}" y1="${Y(s.e)}" x2="${X(xmax)}" y2="${Y(s.e)}" stroke-dasharray="4 3"/>
+      ${ln(p.O2, p.A, "--crank", 4)}${ln(p.A, B, "--coupler", 3)}
+      <rect x="${X(B[0]) - bw}" y="${Y(B[1]) - 5}" width="${2 * bw}" height="10" rx="2" fill="var(--rocker)"/>
+      <circle cx="${X(0)}" cy="${Y(0)}" r="3.5" fill="var(--panel)" stroke="var(--text)" stroke-width="1.5"/></svg>`;
+  }
+
+  function xSvg(curve, stroke) {             // piston position over one crank turn
+    const W = 220, H = 80, l = 26, r = 6, t = 6, b = 16;
+    const X = (th) => l + th / 360 * (W - l - r), Y = (x) => t + (1 - x / (stroke || 1)) * (H - t - b);
+    const line = curve.map(([th, x]) => `${X(th).toFixed(1)},${Y(x).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(360)}" y2="${Y(0)}"/>
+      <text class="lbl" x="${l - 4}" y="${Y(stroke) + 3}" text-anchor="end">${Math.round(stroke)}</text>
+      <text class="lbl" x="${l - 4}" y="${Y(0) + 3}" text-anchor="end">0</text>
+      ${[0, 180, 360].map((v) => `<text class="lbl" x="${X(v)}" y="${H - 4}" text-anchor="middle">${v}°</text>`).join("")}
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "slider_crank") return renderSliderCard(d);
     if (d.mechanism_type === "reducer") return renderReducerCard(d);
     if (d.mechanism_type === "shaft") return renderShaftCard(d);
     if (d.mechanism_type === "spur_gear") return renderGearCard(d);

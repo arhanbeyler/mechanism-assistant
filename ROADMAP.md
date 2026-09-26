@@ -49,7 +49,7 @@ In a system one module's output is another's input (forces, diameters and masses
 - [ ] **E5. Folding platform** (senior-project candidate). Four-bar + counterbalance spring + beam / plate + pins
 
 ## F. New mechanisms (motion)
-- [ ] **F1. Slider-crank (piston).** Position / velocity / acceleration, sliding piston in Fusion
+- [x] **F1. Slider-crank (piston).** Stroke → crank (exact formula, offset by bisection), rod = shortest whole mm with b/a ≥ 3 and rod angle ≤ 20°; x, v, a over the cycle; crank torque by virtual work (checked against the moment of the rod force); crank and rod sized with the four-bar strength checks; Fusion: base + rails + crank + rod + piston with a slider joint, the solver's piston position equals x(θ) at 36 angles (0.000 mm)
 - [ ] **F2. Coupler curves and path synthesis.** "This point should follow that path"; Chebyshev / Hoeckens straight-line linkages
 - [ ] **F3. Geneva mechanism.** Intermittent rotation
 - [ ] **F4. Scotch yoke, Whitworth quick return, six-bar (Watt / Stephenson)**

@@ -6,6 +6,7 @@ Used by both the terminal (main.py) and the Fusion panel.
 Standard library only: it also runs in Fusion's own Python.
 """
 
+import math
 import re
 
 import cams
@@ -14,6 +15,7 @@ import gears
 import interference
 import kinematics as kin
 import shafts
+import slider_crank
 import springs
 import reducer
 import llm_extract
@@ -24,6 +26,18 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "slider_crank": {
+        "title": "Slider-crank (piston)",
+        "params": [
+            {"key": "stroke_mm", "label": "Stroke", "unit": "mm", "min": 10, "max": 200, "step": 1, "default": 60},
+            {"key": "offset_mm", "label": "Offset", "unit": "mm", "min": 0, "max": 40, "step": 1, "default": 0,
+             "zero_label": "in-line"},
+            {"key": "max_load_N", "label": "Piston force", "unit": "N", "min": 0, "max": 2000, "step": 10, "default": 0,
+             "zero_label": "none"},
+            {"key": "speed_rpm", "label": "Crank speed", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
+             "zero_label": "not given"},
+        ],
+    },
     "reducer": {
         "title": "Reducer (system)",
         "params": [
@@ -137,7 +151,7 @@ _INPUT_TURN = re.compile(
 
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
-_SPEED_KINDS = ("reducer", "spur_gear", "shaft")
+_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank")
 
 
 def input_turn_backstop(text, spec):
@@ -257,10 +271,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None,
                        cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None,
                        bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None,
-                       span_mm=None, power_kW=None):
+                       span_mm=None, power_kW=None, stroke_mm=None, offset_mm=None, rod_length_mm=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "slider_crank":
+        return design_from_spec({"mechanism_type": "slider_crank", "stroke_mm": stroke_mm, "offset_mm": offset_mm,
+                                 "rod_length_mm": rod_length_mm, "max_load_N": max_load_N or None,
+                                 "speed_rpm": speed_rpm or None, "material": material})
     if kind == "reducer":
         return design_from_spec({"mechanism_type": "reducer", "torque_Nm": torque_Nm, "power_kW": power_kW,
                                  "speed_rpm": speed_rpm, "gear_ratio": gear_ratio, "material": material,
@@ -297,6 +315,8 @@ def design_from_spec(spec, on_status=None):
     result = {"spec": spec}
 
     mtype = spec["mechanism_type"]
+    if mtype == "slider_crank":
+        return _slider_crank(result, spec, say)
     if mtype == "reducer":
         return _reducer(result, spec, say)
     if mtype == "spur_gear":
@@ -407,6 +427,92 @@ def _reducer(result, spec, say):
             f"face {g['face_width']:g} mm, centre distance {g['center_distance']:g} mm. Shafts Ø{s1['d']:g} / "
             f"Ø{s2['d']:g} mm on bearings {s1['bearing']['name']} / {s2['bearing']['name']}. Output "
             f"{r['T2'] / 1000:.1f} N·m at {r['rpm2']:.0f} rpm ({r['power_W'] / 1000:.2f} kW)."]))
+    return result
+
+
+def _slider_crank(result, spec, say):
+    """F1: slider-crank (piston). Required: the stroke (or the crank length of an in-line slider-crank)."""
+    result["mechanism_type"] = "slider_crank"
+    S, a_in, e = spec.get("stroke_mm"), spec.get("crank_length_mm"), float(spec.get("offset_mm") or 0.0)
+    notes = []
+    if S is None and a_in is not None:
+        if e:
+            return dict(result, status="missing", message="With an offset, please give the stroke (mm).")
+        S = 2.0 * a_in
+        notes.append(f"Stroke from the crank: S = 2a = {S:g} mm.")
+    if S is None:
+        return dict(result, status="missing", message="Missing for the slider-crank: stroke (mm) or crank length.")
+    S = float(S)
+    say("Slider-crank synthesis (stroke, rod ratio, rod angle)...")
+    g = slider_crank.synthesize(S, e, spec.get("rod_length_mm"))
+    if g is None:
+        return dict(result, status="failed", message=f"No crank turns fully with a {S:g} mm stroke"
+                    + (f", {e:g} mm offset" if e else "") + " and this rod. Suggestion: a longer rod or less offset.")
+    frames = slider_crank.simulate(g["a"], g["b"], g["e"])
+    m = slider_crank.measure(frames)
+    checks = [
+        {"name": "Stroke (simulation)", "ok": abs(m["stroke"] - S) < 0.1, "detail": f"{m['stroke']:.2f} mm (target {S:g})"},
+        {"name": "Rod / crank ratio", "ok": g["ratio"] >= slider_crank.RATIO_MIN - 1e-9,
+         "detail": f"{g['ratio']:.2f} (at least {slider_crank.RATIO_MIN:g} for smooth running)"},
+        {"name": "Rod angle (side load)", "ok": m["phi_max"] <= slider_crank.PHI_MAX + 1e-9,
+         "detail": f"{m['phi_max']:.1f}° (at most {slider_crank.PHI_MAX:g}°)"},
+    ]
+    if e:
+        checks.append({"name": "Time ratio Q (offset)", "ok": True, "detail": f"{m['Q']:.3f} (quick return from the offset)"})
+    passed = all(c["ok"] for c in checks)
+    section, strength_ok, F = strength.DEFAULT_SECTION, True, spec.get("max_load_N")
+    mat_key = spec.get("material")
+    if passed and F:
+        if mat_key not in strength.MATERIALS:
+            mat_key = "PLA"
+            notes.append("Material not given: PLA (3D print) assumed.")
+        mat = strength.MATERIALS[mat_key]
+        say("Strength and section sizing...")
+        forc = slider_crank.forces(frames, g["a"], float(F))
+        sec, s_checks = slider_crank.size(forc, g["a"], g["b"], mat)
+        strength_ok = sec is not None
+        section = sec or section
+        worst = {}
+        for c in s_checks:
+            if c["group"] not in worst or c["util"] > worst[c["group"]]["util"]:
+                worst[c["group"]] = c
+        checks += [{"name": f"{k}: {c['name']}", "ok": c["util"] <= 1.0,
+                    "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for k, c in worst.items()]
+        result["strength"] = {"material": mat["name"], "safety_factor": mat["n"], "load_N": float(F),
+                              "rod_force_max_N": forc["F_ab_max"], "input_torque_max_Nmm": forc["M_crank_max"]}
+    elif passed:
+        notes.append("No piston force given, so no strength calculation: default section (10×4 mm, Ø4 pin) used.")
+    section = strength.section_with_bosses({"hole": section["hole"], "shaft": section.get("shaft", section["hole"]),
+                                            "links": {n: section["links"][n] for n in ("Crank", "Coupler")}})
+    motion = None
+    if spec.get("speed_rpm"):
+        v, acc = slider_crank.kinematics_at(frames, float(spec["speed_rpm"]))
+        motion = {"rpm": float(spec["speed_rpm"]), "v_max": max(abs(x) for x in v), "a_max": max(abs(x) for x in acc)}
+        checks.append({"name": "Piston speed / acceleration", "ok": True,
+                       "detail": f"v_max {motion['v_max']:.2f} m/s, a_max {motion['a_max']:.0f} m/s² at {motion['rpm']:g} rpm"})
+    k = len(frames) // 8                                      # drawn pose: 45° past the outer dead centre
+    x0, phi0 = frames[k]["x"], math.radians(frames[k]["phi"])
+    th0 = math.radians(frames[k]["theta"])
+    pts = {"O2": [0.0, 0.0], "A": [g["a"] * math.cos(th0), g["a"] * math.sin(th0)], "B": [x0, g["e"]]}
+    curve = [(round(f["theta"], 1), round(f["x"] - m["x_min"], 3)) for f in frames[::4]]
+    ok = passed and strength_ok
+    result.update(slider=dict(g, **m, motion=motion), checks=checks, notes=notes, x_curve=curve,
+                  section_mm=section, target={"stroke": S, "offset": e},
+                  fusion={"type": "slider_crank", "passed_checks": ok, **g, "x_min": m["x_min"], "x_max": m["x_max"],
+                          "points_mm": pts, "section_mm": section})
+    if not passed:
+        msg = "The design does not meet the checks above."
+    elif not strength_ok:
+        msg = (f"No {strength.MATERIALS[mat_key]['name']} section carries {F:g} N. "
+               "Suggestion: a stronger material or a smaller force.")
+    else:
+        msg = (f"All checks passed. Crank {g['a']:.2f} mm, rod {g['b']:g} mm (ratio {g['ratio']:.2f})"
+               + (f", offset {e:g} mm" if e else "") + f", stroke {m['stroke']:.1f} mm, rod angle ≤ {m['phi_max']:.1f}°.")
+        if "strength" in result:
+            st = result["strength"]
+            msg += (f" Max rod force {st['rod_force_max_N']:.0f} N, max crank torque "
+                    f"{st['input_torque_max_Nmm'] / 1000:.2f} N·m.")
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
     return result
 
 
