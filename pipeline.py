@@ -11,6 +11,7 @@ import re
 
 import cam_system
 import cams
+import chain
 import coupler
 import function_gen
 import geneva
@@ -29,12 +30,37 @@ import ratchet
 import reducer
 import reducer2
 import strength
+import vbelt
 from llm_extract import extract_spec
 
 
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "chain_drive": {
+        "title": "Roller chain drive",
+        "params": [
+            {"key": "power_kW", "label": "Power", "unit": "kW", "min": 0.1, "max": 50, "step": 0.1, "default": 1.5},
+            {"key": "speed_rpm", "label": "Input speed", "unit": "rpm", "min": 10, "max": 3000, "step": 10, "default": 1400},
+            {"key": "gear_ratio", "label": "Speed ratio", "unit": "", "min": 0.2, "max": 6, "step": 0.1, "default": 2.5},
+            {"key": "shock", "label": "Load", "default": "moderate",
+             "options": [["smooth", "Smooth"], ["moderate", "Moderate shock"], ["heavy", "Heavy shock"]]},
+            {"key": "center_distance_mm", "label": "Centre distance", "unit": "mm", "min": 0, "max": 2000, "step": 10,
+             "default": 0, "zero_label": "auto"},
+        ],
+    },
+    "belt_drive": {
+        "title": "V-belt drive",
+        "params": [
+            {"key": "power_kW", "label": "Power", "unit": "kW", "min": 0.1, "max": 50, "step": 0.1, "default": 1.5},
+            {"key": "speed_rpm", "label": "Input speed", "unit": "rpm", "min": 10, "max": 3000, "step": 10, "default": 1400},
+            {"key": "gear_ratio", "label": "Speed ratio", "unit": "", "min": 0.2, "max": 6, "step": 0.1, "default": 2.5},
+            {"key": "shock", "label": "Load", "default": "moderate",
+             "options": [["smooth", "Smooth"], ["moderate", "Moderate shock"], ["heavy", "Heavy shock"]]},
+            {"key": "center_distance_mm", "label": "Centre distance", "unit": "mm", "min": 0, "max": 2000, "step": 10,
+             "default": 0, "zero_label": "auto"},
+        ],
+    },
     "rack_pinion": {
         "title": "Rack and pinion",
         "params": [
@@ -255,7 +281,7 @@ _INPUT_TURN = re.compile(
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
 _SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
-                "quick_return", "power_screw", "rack_pinion")
+                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive")
 
 
 def input_turn_backstop(text, spec):
@@ -379,10 +405,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        follower_mass_kg=None, follower_load_N=None, slots=None, center_distance_mm=None,
                        load_mass_kg=None, load_diameter_mm=None, opening_deg=None, handle_travel_deg=None,
                        arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None,
-                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None):
+                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind in ("chain_drive", "belt_drive"):
+        return design_from_spec({"mechanism_type": kind, "power_kW": power_kW, "torque_Nm": torque_Nm,
+                                 "speed_rpm": speed_rpm, "gear_ratio": gear_ratio, "shock": shock,
+                                 "center_distance_mm": center_distance_mm or None})
     if kind == "rack_pinion":
         return design_from_spec({"mechanism_type": "rack_pinion", "force_N": force_N, "travel_mm": travel_mm,
                                  "speed_rpm": speed_rpm or None, "material": material})
@@ -468,6 +498,8 @@ def design_from_spec(spec, on_status=None):
         return _power_screw(result, spec, say)
     if mtype == "rack_pinion":
         return _rack_pinion(result, spec, say)
+    if mtype in ("chain_drive", "belt_drive"):
+        return _flex_drive(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -483,7 +515,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1215,6 +1247,67 @@ def _rack_pinion(result, spec, say):
            f"face {d['face_width']:g} mm: the rack moves {d['per_turn']:.1f} mm per pinion turn ({d['turns']:.2f} turns for "
            f"{S:g} mm); holding {F:g} N takes {d['T'] / 1000:.2f} N·m on a Ø{d['bore']:g} steel shaft.")
     result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _flex_drive(result, spec, say):
+    """G3: roller chain or V-belt drive. Required: input speed, power (or torque) and the speed ratio;
+    the load's shock class defaults to moderate (reported), the centre distance to the engine's default."""
+    kind = spec["mechanism_type"]
+    result["mechanism_type"] = kind
+    what = "chain drive" if kind == "chain_drive" else "V-belt drive"
+    T, P, rpm, ratio = spec.get("torque_Nm"), spec.get("power_kW"), spec.get("speed_rpm"), spec.get("gear_ratio")
+    notes = []
+    if P is None and T is not None and rpm:
+        P = float(T) * float(rpm) / 9550.0
+        notes.append(f"Power from the torque: P = T n / 9550 = {P:.2f} kW.")
+    missing = [n for v, n in ((rpm, "input speed (rpm)"), (P, "power or torque"), (ratio, "speed ratio"))
+               if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the {what}: {', '.join(missing)}.")
+    P_W, rpm, ratio = float(P) * 1000.0, float(rpm), float(ratio)
+    if not 1 / 6 <= ratio <= 6:
+        return dict(result, status="missing", message=f"One {what} covers speed ratios up to 6 (given: {ratio:g}).")
+    shock = spec.get("shock")
+    table = chain.SERVICE if kind == "chain_drive" else vbelt.SERVICE
+    if shock not in table:
+        shock = "moderate"
+        notes.append(f"Load type not given: moderate shock assumed (service factor {table[shock]:g}).")
+    Ks = table[shock]
+    C = spec.get("center_distance_mm")
+    if kind == "chain_drive":
+        say("Chain drive: pitch, strands, sprocket teeth, chain length...")
+        d, s_checks = chain.design(P_W, rpm, ratio, Ks, C)
+    else:
+        say("V-belt drive: section, sheave diameters, belt length, number of belts...")
+        d, s_checks = vbelt.design(P_W, rpm, ratio, Ks, C)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if d is None:
+        bad = [c["name"] for c in checks if not c["ok"]]
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            f"No {what} passes all checks (failing: {', '.join(bad) or 'no candidate'})."]))
+    if not C:
+        notes.append(f"Centre distance not given: {d['C']:.0f} mm from the engine's default and the standard length.")
+    n_out = rpm / d["ratio"]
+    info = dict(d, P=P_W, rpm_in=rpm, rpm_out=n_out, shock=shock)
+    fusion = {"type": kind, "passed_checks": True, "C": d["C"], "bore1": d["bore1"], "bore2": d["bore2"],
+              "small_is_input": d["small_is_input"]}
+    if kind == "chain_drive":
+        fusion.update(p=d["p"], Dr=d["Dr"], W=d["W"], pt=d["pt"], strands=d["strands"], N1=d["N1"], N2=d["N2"])
+        msg = (f"All checks passed. {'Single' if d['strands'] == 1 else ('Double' if d['strands'] == 2 else 'Triple')}"
+               f"-strand chain no. {d['no']} (ISO {d['iso']}{'' if d['strands'] == 1 else '-' + str(d['strands'])}, "
+               f"pitch {d['p']:.2f} mm), sprockets {d['N1']}/{d['N2']} teeth (Ø{d['D1']:.0f} / Ø{d['D2']:.0f} mm), "
+               f"{d['links']} links, centre distance {d['C']:.1f} mm. Output {n_out:.0f} rpm; chain speed "
+               f"{d['V']:.1f} m/s, pull {d['F']:.0f} N.")
+    else:
+        fusion.update(d=d["d"], D=d["D"], belts=d["belts"], e=d["e"], top=d["top"], thick=d["thick"],
+                      width=d["width"])
+        msg = (f"All checks passed. {d['belts']} × {d['belt']} V-belt{'s' if d['belts'] > 1 else ''} on sheaves "
+               f"Ø{d['d']:.0f} / Ø{d['D']:.0f} mm, centre distance {d['C']:.0f} mm. Output {n_out:.0f} rpm; belt "
+               f"speed {d['V']:.1f} m/s, safety {d['n_fs']:.2f}; set the initial tension to {d['Fi']:.0f} N per belt.")
+    result.update(drive=info, checks=checks, notes=notes, fusion=fusion, target={"power_W": P_W, "rpm": rpm},
+                  status="ok", message=" ".join(notes + [msg]))
     return result
 
 
