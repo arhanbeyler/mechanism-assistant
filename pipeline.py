@@ -18,6 +18,7 @@ import clutch
 import chain
 import coupling
 import disc_spring
+import extension_spring
 import coupler
 import fits
 import flywheel
@@ -55,6 +56,13 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "extension_spring": {
+        "title": "Extension spring",
+        "params": [
+            {"key": "spring_force_N", "label": "Force", "unit": "N", "min": 1, "max": 500, "step": 1, "default": 50},
+            {"key": "spring_deflection_mm", "label": "Extension", "unit": "mm", "min": 2, "max": 200, "step": 1, "default": 20},
+        ],
+    },
     "disc_spring": {
         "title": "Disc spring stack",
         "params": [
@@ -609,6 +617,9 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "extension_spring":
+        return design_from_spec({"mechanism_type": "extension_spring", "spring_force_N": spring_force_N,
+                                 "spring_deflection_mm": spring_deflection_mm})
     if kind == "disc_spring":
         return design_from_spec({"mechanism_type": "disc_spring", "spring_force_N": spring_force_N,
                                  "spring_deflection_mm": spring_deflection_mm, "arbor_mm": arbor_mm or None})
@@ -782,6 +793,8 @@ def design_from_spec(spec, on_status=None):
         return _coupling(result, spec, say)
     if mtype == "disc_spring":
         return _disc_spring(result, spec, say)
+    if mtype == "extension_spring":
+        return _extension_spring(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -799,7 +812,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, disc springs, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, disc and extension springs, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -2226,6 +2239,30 @@ def _disc_spring(result, spec, say):
     msg = (f"All checks passed. Disc springs {b['De']:g} × {b['Di']:g} × {b['t']:g} mm (series {b['series']}, h0 {b['h0']:g}), "
            f"{stack}: {b['y']:.2f} mm at {float(F):g} N, stress {b['sigma_om']:.0f} MPa; stack {b['L0']:.1f} mm free, "
            f"{b['L_loaded']:.1f} mm loaded.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _extension_spring(result, spec, say):
+    """H4c: extension spring with full-loop hooks. Required: the force and how far it extends to reach it."""
+    result["mechanism_type"] = "extension_spring"
+    F, y = spec.get("spring_force_N"), spec.get("spring_deflection_mm")
+    missing = [n for v, n in ((F, "force"), (y, "extension at that force (mm)")) if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the extension spring: {', '.join(missing)}.")
+    notes = ["Music wire, close-wound with initial tension (middle of the preferred range), full-loop hooks."]
+    say("Extension spring: initial tension, rate, body and hook stresses...")
+    s, s_checks = extension_spring.design(float(F), float(y))
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if s is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "No extension spring found: allow more extension or less force."]))
+    result.update(extension=s, checks=checks, notes=notes, target={"force_N": float(F), "extension_mm": float(y)},
+                  fusion={"type": "extension_spring", "passed_checks": True, "d": s["d"], "D": s["D"], "Nb": s["Nb"]})
+    msg = (f"All checks passed. Wire Ø{s['d']:g} mm, coil Ø{s['D']:.1f} mm, {s['Nb']:g} body coils, free length {s['L0']:.1f} mm "
+           f"inside the hooks; it starts to open at {s['Fi']:.1f} N (initial tension), k = {s['k']:.2f} N/mm, "
+           f"{s['F']:.1f} N at {float(y):g} mm. The hooks decide: bending {s['sigma_A']:.0f} MPa.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 

@@ -76,7 +76,7 @@ In a system one module's output is another's input (forces, diameters and masses
 - [ ] **H3b. Splined shaft** (ISO 14 straight-sided / DIN 5480 involute)
 - [x] **H4. Torsion spring; compression-spring fatigue.** Torsion spring (Shigley 10-12, example 10-8 reproduced), arbor clearance when wound; Zimmerli + Gerber fatigue when the force cycles (a new 'cycles down to' input). Fusion: helix sweep with legs. Finding: adding the new field's description at the START of the spring prompt made the model drop an old case's force ('30 N'da'); placed at the end it works
 - [x] **H4b. Disc (Belleville) springs.** DIN 2092 force and stress, DIN 2093 proportions, series / parallel stacking; catalogue forces reproduced
-- [ ] **H4c. Extension springs** (initial tension, hook stresses)
+- [x] **H4c. Extension springs.** Initial tension, active coils with the hooks, body and hook stresses (Shigley 10-10). Fusion: helix + half-circle loop hooks (a first hook path jumped at its start and the sweep failed: 'the body would intersect itself')
 - [x] **H5. Flywheel and disc clutch.** Flywheel from the energy fluctuation (or a press stroke) and C_s; dry disc clutch / brake by uniform wear, faces added when the diameter is limited. Fusion: flywheel on pedestals (turns), engaged clutch with input and output linked 1:1. Finding: an 'all' symmetric extrude-cut from a sketch on the mid plane cut only one pedestal's hole fully; cutting on an offset plane through the thickness works
 - [x] **H5b. Rigid flange coupling.** Key, friction-type bolts, hub and flange; the flywheel from a torque curve came with K2 (four-bar) and E4 (press)
 - [ ] **H5c. Jaw / elastic couplings** (maker data)

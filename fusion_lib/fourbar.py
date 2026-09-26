@@ -259,7 +259,8 @@ def build(mech, reuse=True):
              "press": "press",                  # E4: crank press (slider-crank + flywheel)
              "six_bar": "sixbar",               # F4b: Watt II six-bar
              "coupling": "coupling",            # H5b: flange coupling
-             "disc_spring": "disc_spring"}.get(mech.get("type"))   # H4b: disc spring stack
+             "disc_spring": "disc_spring",      # H4b: disc spring stack
+             "extension_spring": "extension_spring"}.get(mech.get("type"))   # H4c: extension spring
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)
