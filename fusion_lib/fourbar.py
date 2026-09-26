@@ -174,7 +174,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Carrier": "Plastic - Matte (Blue)", "Ring": "Plastic - Matte (Gray)", "Worm": "Steel - Satin", "Bolt": "Steel - Satin", "Hex": "Steel - Satin",
                "Plate": "Plastic - Matte (Gray)",
                "Wall": "Plastic - Matte (Gray)", "Bar": "Steel - Satin", "Weld": "Coating - Black Oxide", "Hub": "Plastic - Matte (Green)", "Arbor": "Plastic - Matte (Gray)", "Flywheel": "Plastic - Matte (Red)",
-               "Input": "Plastic - Matte (Red)", "Snap": "Plastic - Matte (Red)", "Catch": "Plastic - Matte (Gray)", "Output": "Plastic - Matte (Green)", "Chain": "Coating - Black Oxide", "Belt": "Rubber - Hard",
+               "Input": "Plastic - Matte (Red)", "Snap": "Plastic - Matte (Red)", "Hinge": "Plastic - Matte (Blue)", "Catch": "Plastic - Matte (Gray)", "Output": "Plastic - Matte (Green)", "Chain": "Coating - Black Oxide", "Belt": "Rubber - Hard",
                "Yoke": "Plastic - Matte (Green)", "Ram": "Plastic - Matte (Green)", "Lever": "Plastic - Matte (Blue)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
@@ -254,7 +254,8 @@ def build(mech, reuse=True):
              "press_fit": "press_fit",          # H3: press fit
              "torsion_spring": "torsion_spring",   # H4: torsion spring
              "flywheel": "flywheel", "clutch": "clutch",   # H5: flywheel, disc clutch
-             "snap_fit": "snap_fit"}.get(mech.get("type"))   # I1: printed snap-fit
+             "snap_fit": "snap_fit",            # I1: printed snap-fit
+             "flexure": "flexure"}.get(mech.get("type"))   # I2: living hinge
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

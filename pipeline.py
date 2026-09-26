@@ -18,6 +18,7 @@ import chain
 import coupler
 import fits
 import flywheel
+import flexure
 import function_gen
 import geneva
 import gears
@@ -48,6 +49,14 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "flexure": {
+        "title": "Living hinge (printed)",
+        "params": [
+            {"key": "spring_angle_deg", "label": "Bend angle", "unit": "°", "min": 5, "max": 180, "step": 5, "default": 90},
+            {"key": "material", "label": "Material", "default": "PETG", "options": [["PETG", "PETG"], ["PLA", "PLA"]]},
+            {"key": "repeated", "label": "Use", "default": "no", "options": [["no", "A few times"], ["yes", "Many cycles"]]},
+        ],
+    },
     "snap_fit": {
         "title": "Snap-fit (printed)",
         "params": [
@@ -561,10 +570,13 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        fluctuating=None, arm_mm=None, bar_width_mm=None, bar_height_mm=None, weld_pattern=None,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
                        arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
-                       undercut_mm=None, hold_force_N=None, releasable=None):
+                       undercut_mm=None, hold_force_N=None, releasable=None, repeated=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "flexure":
+        return design_from_spec({"mechanism_type": "flexure", "spring_angle_deg": spring_angle_deg, "material": material,
+                                 "repeated": repeated in (True, "yes")})
     if kind == "snap_fit":
         return design_from_spec({"mechanism_type": "snap_fit", "undercut_mm": undercut_mm, "material": material,
                                  "hold_force_N": hold_force_N or None, "releasable": releasable in (True, "yes")})
@@ -714,6 +726,8 @@ def design_from_spec(spec, on_status=None):
         return _flywheel(result, spec, say)
     if mtype == "snap_fit":
         return _snap_fit(result, spec, say)
+    if mtype == "flexure":
+        return _flexure(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -731,7 +745,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1961,6 +1975,37 @@ def _snap_fit(result, spec, say):
     hold = "it cannot be pulled out (locked)" if d["locked"] else f"it pulls out at {d['W_out']:.1f} N"
     msg = (f"All checks passed. Beam {d['l']:g} × {d['h']:g} × {d['w']:g} mm (length × thickness × width) with a {d['y']:g} mm hook: "
            f"root strain {100 * d['eps']:.2f} % of {100 * d['eps_allow']:.1f} %; it snaps in with {d['W_in']:.1f} N and {hold}.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _flexure(result, spec, say):
+    """I2: printed living hinge / flexure. Required: the angle it bends through."""
+    result["mechanism_type"] = "flexure"
+    th = spec.get("spring_angle_deg")
+    if not th:
+        return dict(result, status="missing", message="Missing for the living hinge: the angle it must bend through (°).")
+    notes = []
+    mat = spec.get("material") if spec.get("material") in flexure.STRAIN else None
+    if mat is None:
+        mat = "PETG"
+        notes.append("Material not given: PETG assumed (tougher than PLA for hinges; print the strip flat).")
+    w = float(spec.get("snap_width_mm") or 10.0)
+    if not spec.get("snap_width_mm"):
+        notes.append("Width not given: 10 mm.")
+    cyclic = bool(spec.get("repeated"))
+    say("Living hinge: strip strain, length and thickness, stiffness...")
+    d, s_checks = flexure.design(float(th), mat, w, cyclic)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if d is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "No printable strip up to 80 mm bends that far within the elastic range."]))
+    result.update(flexure=d, checks=checks, notes=notes, target={"theta": float(th)},
+                  fusion={"type": "flexure", "passed_checks": True, "L": d["L"], "t": d["t"], "w": d["w"]})
+    msg = (f"All checks passed. Strip {d['L']:g} × {d['t']:g} mm, {d['w']:g} mm wide: {d['theta_deg']:g}° gives "
+           f"{100 * d['eps']:.2f} % strain (limit {100 * d['eps_allow']:.2f} %) and takes {d['M']:.1f} N·mm "
+           f"({d['k_Nmm_deg']:.3f} N·mm/°); its pivot wanders about {d['pivot_shift']:.0f} mm along the strip.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 

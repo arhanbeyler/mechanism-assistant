@@ -80,7 +80,7 @@ In a system one module's output is another's input (forces, diameters and masses
 
 ## I. For 3D printing
 - [x] **I1. Snap-fit.** Printed cantilever (PLA 2 %, PETG 3 % strain, 60 % for repeated use), forces over the ramp and the retaining face, printable wall ≥ 3 perimeters. Fusion: snap and catch touching. Finding: a locked hook's pull-out force is infinite, which JSON cannot carry to the panel; it is sent as null with locked = true
-- [ ] **I2. Flexure / living hinge**
+- [x] **I2. Living hinge.** Strip in pure bending kept elastic (S_y/E, not a snap-fit's momentary allowance: a hinge stays bent), halved for many cycles; stiffness and pivot wander. Fusion: printed flat, panels and strip in one body
 - [ ] Print-ready pin clearances (B8c)
 
 ## L. Repository
