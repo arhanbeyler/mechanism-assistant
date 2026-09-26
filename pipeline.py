@@ -18,6 +18,7 @@ import gears
 import interference
 import kinematics as kin
 import shafts
+import slotted
 import slider_crank
 import springs
 import toggle
@@ -31,6 +32,28 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "scotch_yoke": {
+        "title": "Scotch yoke",
+        "params": [
+            {"key": "stroke_mm", "label": "Stroke", "unit": "mm", "min": 10, "max": 200, "step": 1, "default": 60},
+            {"key": "max_load_N", "label": "Slide force", "unit": "N", "min": 0, "max": 2000, "step": 10, "default": 0,
+             "zero_label": "none"},
+            {"key": "speed_rpm", "label": "Crank speed", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
+             "zero_label": "not given"},
+        ],
+    },
+    "quick_return": {
+        "title": "Quick return (shaper)",
+        "params": [
+            {"key": "stroke_mm", "label": "Stroke", "unit": "mm", "min": 20, "max": 400, "step": 5, "default": 150},
+            {"key": "time_ratio", "label": "Time ratio Q", "unit": "", "min": 1.1, "max": 2.5, "step": 0.05,
+             "default": 1.5},
+            {"key": "max_load_N", "label": "Cutting force", "unit": "N", "min": 0, "max": 3000, "step": 10, "default": 0,
+             "zero_label": "none"},
+            {"key": "speed_rpm", "label": "Crank speed", "unit": "rpm", "min": 0, "max": 200, "step": 5, "default": 0,
+             "zero_label": "not given"},
+        ],
+    },
     "toggle_clamp": {
         "title": "Toggle clamp",
         "params": [
@@ -197,7 +220,8 @@ _INPUT_TURN = re.compile(
 
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
-_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva")
+_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
+                "quick_return")
 
 
 def input_turn_backstop(text, spec):
@@ -324,6 +348,11 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind in ("scotch_yoke", "quick_return"):
+        return design_from_spec({"mechanism_type": kind, "stroke_mm": stroke_mm,
+                                 "time_ratio": time_ratio if time_ratio and time_ratio > 1 else None,
+                                 "max_load_N": max_load_N or None, "speed_rpm": speed_rpm or None,
+                                 "material": material})
     if kind == "toggle_clamp":
         return design_from_spec({"mechanism_type": "toggle_clamp", "opening_deg": opening_deg,
                                  "handle_travel_deg": handle_travel_deg, "arm_length_mm": arm_length_mm,
@@ -387,6 +416,10 @@ def design_from_spec(spec, on_status=None):
         return _geneva(result, spec, say)
     if mtype == "toggle_clamp":
         return _toggle_clamp(result, spec, say)
+    if mtype == "scotch_yoke":
+        return _scotch_yoke(result, spec, say)
+    if mtype == "quick_return":
+        return _quick_return(result, spec, say)
     if mtype == "reducer":
         return _reducer(result, spec, say)
     if mtype == "spur_gear":
@@ -400,7 +433,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -852,6 +885,135 @@ def _toggle_clamp(result, spec, say):
         if F:
             msg += (f" Holding {F:g} N: coupler {an['F_AB']:.0f} N, arm pivot {an['R_O4']:.0f} N, "
                     f"stop torque {an['T_stop'] / 1000:.2f} N·m.")
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _slot_checks(s_checks):
+    """Worst check per group (the card shows one line each)."""
+    worst = {}
+    for c in s_checks:
+        if c["group"] not in worst or c["util"] > worst[c["group"]]["util"]:
+            worst[c["group"]] = c
+    return [{"name": f"{k}: {c['name']}", "ok": c["util"] <= 1.0, "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"}
+            for k, c in worst.items()]
+
+
+def _slot_material(spec, F, notes):
+    mat_key = spec.get("material")
+    if F and mat_key not in strength.MATERIALS:
+        mat_key = "PLA"
+        notes.append("Material not given: PLA (3D print) assumed.")
+    return strength.MATERIALS.get(mat_key or "PLA", strength.MATERIALS["PLA"])
+
+
+def _scotch_yoke(result, spec, say):
+    """F4: Scotch yoke. Required: the stroke (or the crank length)."""
+    result["mechanism_type"] = "scotch_yoke"
+    S, a = spec.get("stroke_mm"), spec.get("crank_length_mm")
+    notes = []
+    if not S and a:
+        S = 2.0 * a
+        notes.append(f"Stroke from the crank: S = 2r = {S:g} mm.")
+    if not S:
+        return dict(result, status="missing", message="Missing for the Scotch yoke: stroke (mm) or crank length.")
+    S, F, rpm = float(S), float(spec.get("max_load_N") or 0.0), spec.get("speed_rpm")
+    mat = _slot_material(spec, F, notes)
+    say("Scotch yoke: harmonic motion, slot force, sizing...")
+    d, s_checks = slotted.yoke_design(S, mat, F)
+    r = d["r"]
+    checks = [{"name": "Stroke", "ok": True, "detail": f"{S:g} mm = 2 × crank {r:g} mm (exactly harmonic: x = r cos θ)"}]
+    ok = True
+    if F:
+        checks += _slot_checks(s_checks)
+        ok = d["section"] is not None
+        result["strength"] = {"material": mat["name"], "load_N": F, "input_torque_max_Nmm": d["T_max"]}
+    else:
+        notes.append("No slide force given, so no strength calculation: default section (10×4 mm, Ø4 pin).")
+    section = d["section"] or {"hole": 4.0, "shaft": 4.0, "links": {"Crank": {"width": 10.0, "thickness": 4.0},
+                                                                   "Yoke": {"width": 14.0, "thickness": 4.0}}}
+    motion = None
+    if rpm:
+        w = rpm * 2 * math.pi / 60
+        motion = {"rpm": float(rpm), "v_max": r * w / 1000, "a_max": r * w * w / 1000,
+                  "a_max_slider_crank": r * w * w * (1 + 1 / slider_crank.RATIO_MIN) / 1000}
+        checks.append({"name": "Speed / acceleration", "ok": True,
+                       "detail": f"v_max {motion['v_max']:.2f} m/s, a_max {motion['a_max']:.1f} m/s² "
+                                 f"(a slider-crank with b = 3r: {motion['a_max_slider_crank']:.1f} m/s²)"})
+    th0 = math.radians(90)                     # drawn with the crank square to the slide: joint axes along the slot
+    curve = [(round(f["theta"], 1), round(f["x"] + r, 3)) for f in d["frames"][::4]]
+    result.update(yoke={"r": r, "stroke": S, "motion": motion, "T_max": d.get("T_max")}, checks=checks, notes=notes,
+                  section_mm=section, x_curve=curve, target={"stroke": S},
+                  fusion={"type": "scotch_yoke", "passed_checks": ok, "r": r, "theta0": 90.0,
+                          "points_mm": {"O2": [0.0, 0.0], "A": [r * math.cos(th0), r * math.sin(th0)]},
+                          "section_mm": section})
+    if not ok:
+        msg = f"No {mat['name']} section carries {F:g} N. Suggestion: a stronger material or a smaller force."
+    else:
+        msg = (f"All checks passed. Scotch yoke: crank {r:g} mm, stroke {S:g} mm, pure harmonic motion; the pin "
+               f"runs in a {2 * r + section['hole']:.0f} mm slot square to the slide.")
+        if F:
+            msg += f" Max crank torque {d['T_max'] / 1000:.2f} N·m."
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _quick_return(result, spec, say):
+    """F4: crank and slotted lever quick return (shaper). Required: the stroke; time ratio defaults to 1.5."""
+    result["mechanism_type"] = "quick_return"
+    S = spec.get("stroke_mm")
+    if not S:
+        return dict(result, status="missing", message="Missing for the quick-return mechanism: stroke (mm).")
+    notes = []
+    Q = spec.get("time_ratio")
+    if not Q:
+        Q = 1.5
+        notes.append("Time ratio not given: Q = 1.5 assumed (shapers use about 1.4..1.8).")
+    S, Q, F, rpm = float(S), float(Q), float(spec.get("max_load_N") or 0.0), spec.get("speed_rpm")
+    if not 1.05 <= Q <= 3.0:
+        return dict(result, status="failed", message=f"Time ratio {Q:g}: this linkage gives 1.05..3.")
+    mat = _slot_material(spec, F, notes)
+    say("Crank and slotted lever: geometry from the stroke and the time ratio, forces...")
+    d, s_checks = slotted.lever_design(S, Q, mat, F)
+    m = d["measure"]
+    checks = [{"name": "Stroke (simulation)", "ok": abs(m["stroke"] - S) < 0.1, "detail": f"{m['stroke']:.2f} mm (target {S:g})"},
+              {"name": "Time ratio (simulation)", "ok": abs(m["Q"] - Q) < 0.02,
+               "detail": f"{m['Q']:.3f} (target {Q:g}): {max(m['to_minus'], m['to_plus']):.0f}° slow, "
+                         f"{min(m['to_minus'], m['to_plus']):.0f}° fast"}]
+    ok = all(c["ok"] for c in checks)
+    if F:
+        checks += _slot_checks(s_checks)
+        ok = ok and d["section"] is not None
+        result["strength"] = {"material": mat["name"], "load_N": F, "input_torque_max_Nmm": d["T_max"]}
+    else:
+        notes.append("No cutting force given, so no strength calculation: default section (10×4 mm, Ø4 pin).")
+    section = d["section"] or {"hole": 4.0, "shaft": 4.0, "links": {"Crank": {"width": 10.0, "thickness": 4.0},
+                                                                   "Lever": {"width": 14.0, "thickness": 4.0}}}
+    speeds = None
+    if rpm:
+        t_turn = 60.0 / rpm
+        slow, fast = max(m["to_minus"], m["to_plus"]), min(m["to_minus"], m["to_plus"])
+        speeds = {"rpm": float(rpm), "v_cut": S / (t_turn * slow / 360) / 1000, "v_return": S / (t_turn * fast / 360) / 1000}
+        checks.append({"name": "Mean speeds", "ok": True,
+                       "detail": f"cutting {speeds['v_cut']:.2f} m/s, return {speeds['v_return']:.2f} m/s at {rpm:g} rpm"})
+    x0 = min(f["x"] for f in d["frames"])
+    curve = [(round(f["theta"], 1), round(f["x"] - x0, 3)) for f in d["frames"][::4]]
+    th0 = 90.0                                                  # drawn with the crank pin at the top
+    result.update(lever={k: d[k] for k in ("r", "d", "L", "Q", "stroke", "slow_direction")} | {"Q_meas": m["Q"],
+                  "slow_deg": max(m["to_minus"], m["to_plus"]), "speeds": speeds, "T_max": d.get("T_max"),
+                  "N_max": d.get("N_max")}, checks=checks, notes=notes, section_mm=section, x_curve=curve,
+                  target={"stroke": S, "Q": Q},
+                  fusion={"type": "quick_return", "passed_checks": ok, "r": d["r"], "d": d["d"], "L": d["L"],
+                          "theta0": th0, "psi_max": math.degrees(math.asin(d["r"] / d["d"])), "section_mm": section})
+    if not ok:
+        msg = (f"No {mat['name']} section carries {F:g} N. Suggestion: a stronger material or a smaller force."
+               if F and d["section"] is None else "The design does not meet the checks above.")
+    else:
+        msg = (f"All checks passed. Crank {d['r']:.1f} mm at {d['d']:.1f} mm above the lever pivot, lever {d['L']:.1f} mm: "
+               f"stroke {m['stroke']:.1f} mm, time ratio {m['Q']:.2f} (the slow stroke runs towards {d['slow_direction']} "
+               f"with the crank turning counter-clockwise).")
+        if F:
+            msg += f" Max crank torque {d['T_max'] / 1000:.2f} N·m, max pin force on the lever {d['N_max']:.0f} N."
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
     return result
 

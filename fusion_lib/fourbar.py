@@ -168,6 +168,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Crank": "Plastic - Matte (Red)", "Pinion": "Plastic - Matte (Red)", "Cam": "Plastic - Matte (Red)",
                "Coupler": "Plastic - Matte (Blue)", "Driver": "Plastic - Matte (Red)", "Wheel": "Plastic - Matte (Green)",
                "Handle": "Plastic - Matte (Red)", "Arm": "Plastic - Matte (Green)",
+               "Yoke": "Plastic - Matte (Green)", "Ram": "Plastic - Matte (Green)", "Lever": "Plastic - Matte (Blue)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
                "Shaft": "Steel - Satin", "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin",
@@ -196,7 +197,7 @@ def paint(design):
                     body.appearance = _appearance(design, APPEARANCES["Key"])
                 elif body.name == "Top plate":
                     body.appearance = _appearance(design, APPEARANCES["Base"])
-                elif body.name.startswith(("Shaft", "Pin", "Spindle")) and name in ("Driver", "Wheel", "Arm"):
+                elif body.name.startswith(("Shaft", "Pin", "Spindle")) and name in ("Driver", "Wheel", "Arm", "Crank", "Lever"):
                     body.appearance = _appearance(design, APPEARANCES["Shaft"])
     except Exception:
         pass
@@ -231,7 +232,8 @@ def build(mech, reuse=True):
              "reducer2": "reducer2",          # E2: two-stage reducer
              "straight_line": "straight_line",  # F2: Hoeckens straight-line linkage
              "geneva": "geneva",                # F3: Geneva (wheel driven from a table by the add-in)
-             "toggle_clamp": "toggle_clamp"}.get(mech.get("type"))   # F5: toggle clamp
+             "toggle_clamp": "toggle_clamp",    # F5: toggle clamp
+             "scotch_yoke": "slotted", "quick_return": "slotted"}.get(mech.get("type"))   # F4: slot mechanisms
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)
