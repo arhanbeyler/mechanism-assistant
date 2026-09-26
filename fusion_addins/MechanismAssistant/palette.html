@@ -366,7 +366,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion || d.flywheel || d.clutch) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -375,7 +375,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion || d.flywheel || d.clutch) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -1123,7 +1123,37 @@ Everything is computed on this computer, with a local AI.</div>
       </div>`;
   }
 
+  function simpleCard(title, rows, d) {      // table + checks, the common layout
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>${title}</h3><table>${rows.map(([k, v]) =>
+          `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+      </div>`;
+  }
+
+  function renderFlywheelCard(d) {           // H5a: flywheel
+    const s = d.flywheel;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    simpleCard("Flywheel", [["Energy fluctuation", `${f(s.dE, 0)} J`], ["Speed / C_s", `${f(s.rpm, 0)} rpm, ${f(s.Cs, 3)}`],
+      ["Speed range", `${f(s.rpm_min, 0)} – ${f(s.rpm_max, 0)} rpm`], ["Inertia", `${f(s.I, 3)} kg·m²`],
+      ["Steel disk", `Ø${f(s.D, 0)} × ${f(s.t, 1)} mm, ${f(s.mass, 1)} kg`], ["Energy stored", `${f(s.E_stored / 1000, 2)} kJ`],
+      ["Rim speed / stress", `${f(s.rim_speed, 1)} m/s, ${f(s.sigma, 1)} MPa`]], d);
+  }
+
+  function renderClutchCard(d) {             // H5b: disc clutch
+    const s = d.clutch;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    simpleCard("Disc clutch", [["Friction faces", `Ø${f(2 * s.ro, 0)} / Ø${f(2 * s.ri, 0)} mm, ${s.N} faces`],
+      ["Lining", `${s.lining}, f = ${f(s.f, 2)}, p_max ${f(s.pa, 1)} MPa`],
+      ["Torque", `${f(s.T_cap / 1000, 1)} N·m capacity for ${f(s.T / 1000, 1)} × ${f(s.K, 1)}`],
+      ["Clamp force", `${f(s.F / 1000, 2)} kN`], ["Pressure at r_o", `${f(s.p_min, 2)} MPa (uniform wear)`],
+      ["Shafts", `Ø${f(s.bore || 0, 0)} steel`]], d);
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "flywheel") return renderFlywheelCard(d);
+    if (d.mechanism_type === "clutch") return renderClutchCard(d);
     if (d.mechanism_type === "torsion_spring") return renderTorsionCard(d);
     if (d.mechanism_type === "press_fit") return renderFitCard(d);
     if (d.mechanism_type === "welded_joint") return renderWeldCard(d);

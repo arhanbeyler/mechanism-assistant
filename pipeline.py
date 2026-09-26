@@ -13,9 +13,11 @@ import bevel
 import bolted
 import cam_system
 import cams
+import clutch
 import chain
 import coupler
 import fits
+import flywheel
 import function_gen
 import geneva
 import gears
@@ -45,6 +47,26 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "flywheel": {
+        "title": "Flywheel",
+        "params": [
+            {"key": "energy_J", "label": "Energy fluctuation", "unit": "J", "min": 10, "max": 20000, "step": 10, "default": 500},
+            {"key": "speed_rpm", "label": "Mean speed", "unit": "rpm", "min": 50, "max": 3000, "step": 10, "default": 300},
+            {"key": "speed_fluctuation", "label": "C_s", "unit": "", "min": 0.005, "max": 0.3, "step": 0.005, "default": 0.05},
+            {"key": "outer_diameter_max_mm", "label": "Max diameter", "unit": "mm", "min": 0, "max": 2000, "step": 10,
+             "default": 0, "zero_label": "free"},
+        ],
+    },
+    "clutch": {
+        "title": "Disc clutch",
+        "params": [
+            {"key": "torque_Nm", "label": "Torque", "unit": "N·m", "min": 1, "max": 2000, "step": 1, "default": 100},
+            {"key": "lining", "label": "Lining", "default": "molded",
+             "options": [["molded", "Molded"], ["woven", "Woven"], ["sintered", "Sintered metal"]]},
+            {"key": "outer_diameter_max_mm", "label": "Max diameter", "unit": "mm", "min": 0, "max": 600, "step": 5,
+             "default": 0, "zero_label": "free"},
+        ],
+    },
     "torsion_spring": {
         "title": "Torsion spring",
         "params": [
@@ -527,10 +549,16 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        self_locking=None, grip_mm=None, bolts=None, member_material=None, bolt_class=None,
                        fluctuating=None, arm_mm=None, bar_width_mm=None, bar_height_mm=None, weld_pattern=None,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
-                       arbor_mm=None, spring_force_min_N=None):
+                       arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "flywheel":
+        return design_from_spec({"mechanism_type": "flywheel", "energy_J": energy_J, "speed_rpm": speed_rpm,
+                                 "speed_fluctuation": speed_fluctuation, "outer_diameter_max_mm": outer_diameter_max_mm or None})
+    if kind == "clutch":
+        return design_from_spec({"mechanism_type": "clutch", "torque_Nm": torque_Nm, "lining": lining,
+                                 "outer_diameter_max_mm": outer_diameter_max_mm or None})
     if kind == "torsion_spring":
         return design_from_spec({"mechanism_type": "torsion_spring", "torque_Nm": torque_Nm,
                                  "spring_angle_deg": spring_angle_deg, "arbor_mm": arbor_mm or None})
@@ -667,6 +695,10 @@ def design_from_spec(spec, on_status=None):
         return _press_fit(result, spec, say)
     if mtype == "torsion_spring":
         return _torsion_spring(result, spec, say)
+    if mtype == "flywheel":
+        return _flywheel(result, spec, say)
+    if mtype == "clutch":
+        return _clutch(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -682,7 +714,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1810,6 +1842,76 @@ def _torsion_spring(result, spec, say):
     msg = (f"All checks passed. Wire Ø{s['d']:g} mm, coil Ø{s['D']:.1f} mm (OD {s['OD']:.1f}), {s['Nb']:g} body turns, legs "
            f"{s['legs']:.0f} mm: {s['k_deg'] * 1000 / 1000:.1f} N·mm/°, {M / 1000:g} N·m at {s['theta_deg']:.0f}° (asked {th:g}°); "
            f"stress {s['sigma']:.0f} of {s['Sy']:.0f} MPa; the inside diameter closes from {s['D'] - s['d']:.1f} to {s['ID_wound']:.1f} mm.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _flywheel(result, spec, say):
+    """H5a: flywheel. Required: speed and the energy fluctuation (or the work of one stroke and the share of
+    the cycle it takes); C_s from the application or 0.05 (reported)."""
+    result["mechanism_type"] = "flywheel"
+    rpm, dE = spec.get("speed_rpm"), spec.get("energy_J")
+    notes = []
+    work, frac = spec.get("work_J"), spec.get("work_fraction")
+    if not dE and work:
+        frac = float(frac) if frac else 0.1
+        if not spec.get("work_fraction"):
+            notes.append("Share of the cycle the work takes not given: 10 % assumed (a punch).")
+        dE = flywheel.press_energy(float(work), frac)
+        notes.append(f"Energy the flywheel gives up: {float(work):g} J × (1 − {frac:g}) = {dE:.0f} J.")
+    missing = [n for v, n in ((rpm, "speed (rpm)"), (dE, "energy fluctuation (J) or the work per stroke")) if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the flywheel: {', '.join(missing)}.")
+    Cs = spec.get("speed_fluctuation")
+    app = spec.get("application")
+    if not Cs:
+        Cs = flywheel.CS_TYPICAL.get(app, 0.05)
+        notes.append(f"Speed fluctuation C_s = {Cs:g} ({'typical for ' + app.replace('_', ' ') if app in flywheel.CS_TYPICAL else 'not given'}).")
+    say("Flywheel: inertia from the energy fluctuation, disk size, rotating stress...")
+    info, s_checks = flywheel.analyse(float(dE), float(rpm), float(Cs), spec.get("outer_diameter_max_mm") or None)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    result.update(flywheel=info, checks=checks, notes=notes, target={"dE": float(dE)},
+                  fusion={"type": "flywheel", "passed_checks": True, "D": info["D"], "t": info["t"], "bore": info["bore"]})
+    if not all(c["ok"] for c in checks):
+        return dict(result, status="failed", message=" ".join(notes + [
+            f"A Ø{info['D']:.0f} mm disk would have to be {info['t']:.0f} mm thick: allow a larger diameter or more speed fluctuation."]))
+    msg = (f"All checks passed. I = {info['I']:.3f} kg·m²: steel disk Ø{info['D']:.0f} × {info['t']:.0f} mm, {info['mass']:.1f} kg; "
+           f"the speed stays within {info['rpm_min']:.0f}–{info['rpm_max']:.0f} rpm; rim speed {info['rim_speed']:.1f} m/s, "
+           f"stress {info['sigma']:.1f} MPa.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _clutch(result, spec, say):
+    """H5b: dry disc clutch / brake (uniform wear). Required: the torque (or power and speed)."""
+    result["mechanism_type"] = "clutch"
+    T, P, rpm = spec.get("torque_Nm"), spec.get("power_kW"), spec.get("speed_rpm")
+    notes = []
+    if not T and P and rpm:
+        T = 9550.0 * float(P) / float(rpm)
+        notes.append(f"Torque from the power: {T:.1f} N·m.")
+    if not T:
+        return dict(result, status="missing", message="Missing for the clutch: the torque (or power and speed).")
+    lining = spec.get("lining") if spec.get("lining") in clutch.LININGS else None
+    if lining is None:
+        lining = "molded"
+        notes.append("Lining not given: molded (f 0.35, 1.0 MPa).")
+    notes.append(f"Service factor {clutch.K_SERVICE:g} on the torque.")
+    say("Disc clutch: uniform wear, optimum inner radius, faces...")
+    c, s_checks = clutch.design(float(T) * 1000.0, lining, spec.get("outer_diameter_max_mm") or None)
+    checks = [{"name": f"{x['group']}: {x['name']}", "ok": x["util"] <= 1.0,
+               "detail": f"{x['detail']} · use {x['util'] * 100:.0f}%"} for x in s_checks]
+    if c is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "Even 6 friction faces do not fit that diameter: allow a larger clutch."]))
+    bore = chain.shaft_bore(float(T) * 1000.0)
+    result.update(clutch=dict(c, bore=bore), checks=checks, notes=notes, target={"torque_Nm": float(T)},
+                  fusion={"type": "clutch", "passed_checks": True, "ro": c["ro"], "ri": c["ri"], "N": c["N"],
+                          "bore": bore or 20.0})
+    msg = (f"All checks passed. {'Single' if c['N'] == 2 else str(c['N'] // 2)}-plate clutch, friction faces Ø{2 * c['ro']:.0f} / "
+           f"Ø{2 * c['ri']:.0f} mm ({c['N']} faces, {c['lining']}): holds {c['T_cap'] / 1000:.0f} N·m with a clamp force of "
+           f"{c['F'] / 1000:.2f} kN.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 

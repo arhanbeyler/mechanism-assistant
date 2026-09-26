@@ -75,7 +75,8 @@ In a system one module's output is another's input (forces, diameters and masses
 - [ ] **H3b. Splined shaft** (ISO 14 straight-sided / DIN 5480 involute)
 - [x] **H4. Torsion spring; compression-spring fatigue.** Torsion spring (Shigley 10-12, example 10-8 reproduced), arbor clearance when wound; Zimmerli + Gerber fatigue when the force cycles (a new 'cycles down to' input). Fusion: helix sweep with legs. Finding: adding the new field's description at the START of the spring prompt made the model drop an old case's force ('30 N'da'); placed at the end it works
 - [ ] **H4b. Extension and disc (Belleville) springs**
-- [ ] **H5. Coupling, brake / clutch, flywheel**
+- [x] **H5. Flywheel and disc clutch.** Flywheel from the energy fluctuation (or a press stroke) and C_s; dry disc clutch / brake by uniform wear, faces added when the diameter is limited. Fusion: flywheel on pedestals (turns), engaged clutch with input and output linked 1:1. Finding: an 'all' symmetric extrude-cut from a sketch on the mid plane cut only one pedestal's hole fully; cutting on an offset plane through the thickness works
+- [ ] **H5b. Couplings** (rigid flange, jaw); flywheel sized from the four-bar / slider-crank torque curve (needs K2)
 
 ## I. For 3D printing
 - [ ] **I1. Snap-fit**
