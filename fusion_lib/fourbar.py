@@ -244,7 +244,8 @@ def build(mech, reuse=True):
              "chain_drive": "flex_drive", "belt_drive": "flex_drive",   # G3: chain / V-belt
              "planetary": "planetary",          # G2: planetary gear set
              "helical_gear": "helical",         # G1a: helical gear pair
-             "worm_gear": "worm"}.get(mech.get("type"))   # G1b: worm gear set
+             "worm_gear": "worm",               # G1b: worm gear set
+             "bevel_gear": "bevel"}.get(mech.get("type"))   # G1c: bevel gear pair
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

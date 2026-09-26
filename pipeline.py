@@ -9,6 +9,7 @@ Standard library only: it also runs in Fusion's own Python.
 import math
 import re
 
+import bevel
 import cam_system
 import cams
 import chain
@@ -40,6 +41,15 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "bevel_gear": {
+        "title": "Bevel gear pair",
+        "params": [
+            {"key": "gear_ratio", "label": "Ratio", "unit": "", "min": 1, "max": 6, "step": 0.1, "default": 2},
+            {"key": "torque_Nm", "label": "Input torque", "unit": "N·m", "min": 0.5, "max": 300, "step": 0.5, "default": 10},
+            {"key": "speed_rpm", "label": "Input speed", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
+             "zero_label": "not given"},
+        ],
+    },
     "worm_gear": {
         "title": "Worm gear",
         "params": [
@@ -315,7 +325,7 @@ _INPUT_TURN = re.compile(
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
 _SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
-                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear")
+                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear", "bevel_gear")
 
 
 def input_turn_backstop(text, spec):
@@ -444,6 +454,9 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "bevel_gear":
+        return design_from_spec({"mechanism_type": "bevel_gear", "gear_ratio": gear_ratio, "torque_Nm": torque_Nm,
+                                 "speed_rpm": speed_rpm or None, "material": material})
     if kind == "worm_gear":
         return design_from_spec({"mechanism_type": "worm_gear", "gear_ratio": gear_ratio, "speed_rpm": speed_rpm,
                                  "output_torque_Nm": output_torque_Nm, "torque_Nm": torque_Nm, "power_kW": power_kW,
@@ -552,6 +565,8 @@ def design_from_spec(spec, on_status=None):
         return _helical_gear(result, spec, say)
     if mtype == "worm_gear":
         return _worm_gear(result, spec, say)
+    if mtype == "bevel_gear":
+        return _bevel_gear(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -567,7 +582,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical and worm gears, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1508,6 +1523,46 @@ def _worm_gear(result, spec, say):
            f"{lock_txt}. Output {d['T_out'] / 1000:.1f} N·m at {d['rpm_out']:.1f} rpm; input {d['P_in']:.0f} W, "
            f"{d['P_loss']:.0f} W becomes heat.")
     result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _bevel_gear(result, spec, say):
+    """G1c: straight bevel gear pair, shafts at 90 deg. Required: ratio and input torque."""
+    result["mechanism_type"] = "bevel_gear"
+    missing = [name for key, name in (("gear_ratio", "ratio"), ("torque_Nm", "input torque (N·m)")) if not spec.get(key)]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the bevel gears: {', '.join(missing)}.")
+    ratio, T1 = float(spec["gear_ratio"]), float(spec["torque_Nm"]) * 1000.0
+    if ratio < 1:
+        ratio = 1 / ratio
+    if not 1 <= ratio <= 6:
+        return dict(result, status="missing", message=f"A bevel pair covers ratios of 1–6 (given: {ratio:g}).")
+    notes = []
+    mat_key = spec.get("material")
+    if mat_key not in strength.MATERIALS:
+        mat_key = "steel"
+        notes.append("Material not given: steel assumed.")
+    mat = strength.MATERIALS[mat_key]
+    rpm = spec.get("speed_rpm")
+    say("Bevel gears: pitch cones, virtual (Tredgold) teeth, Lewis at the mean section...")
+    g, g_checks = bevel.design(ratio, T1, mat, rpm)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in g_checks]
+    result.update(checks=checks, notes=notes)
+    if g is None:
+        return dict(result, status="failed", message=" ".join(notes + [
+            f"No {mat['name']} bevel pair carries {T1 / 1000:g} N·m. Suggestion: a stronger material or a smaller torque."]))
+    checks.insert(0, {"name": "Ratio", "ok": g["ratio_err_pct"] <= 2.0,
+                      "detail": f"{g['z2']}/{g['z1']} = {g['ratio']:.3f} (target {ratio:g})"})
+    result.update(bevel=dict(g, material=mat["name"], rpm=rpm), target={"ratio": ratio, "torque_Nm": T1 / 1000},
+                  fusion={"type": "bevel_gear", "passed_checks": True, "m": g["module"], "z1": g["z1"], "z2": g["z2"],
+                          "F": g["face_width"], "bore1": g["bore1"], "bore2": g["bore2"]},
+                  status="ok",
+                  message=" ".join(notes + [
+                      f"All checks passed. Module {g['module']:g} (large end), z = {g['z1']}/{g['z2']}, pitch cones "
+                      f"{g['gamma1_deg']:.1f}° / {g['gamma2_deg']:.1f}°, face {g['face_width']:g} mm, cone distance "
+                      f"{g['Ao']:.1f} mm, shafts Ø{g['bore1']:g}/Ø{g['bore2']:g} mm at 90°. Thrust on the pinion "
+                      f"{g['Wa1']:.0f} N, on the gear {g['Wa2']:.0f} N; output {T1 * g['ratio'] / 1000:.2f} N·m."]))
     return result
 
 
