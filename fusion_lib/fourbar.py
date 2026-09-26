@@ -144,7 +144,9 @@ APPEARANCES = {"Sabit": "Plastic - Matte (Gray)", "Taban": "Plastic - Matte (Gra
                "Krank": "Plastic - Matte (Red)", "Pinyon": "Plastic - Matte (Red)", "Kam": "Plastic - Matte (Red)",
                "Biyel": "Plastic - Matte (Blue)",
                "Kol": "Plastic - Matte (Green)", "Cark": "Plastic - Matte (Green)", "Itici": "Plastic - Matte (Green)",
-               "Mil": "Steel - Satin", "Yay": "Steel - Satin", "Kama": "Brass - Matte"}
+               "Mil": "Steel - Satin", "Yay": "Steel - Satin", "Kama": "Brass - Matte",
+               "Housing": "Plastic - Matte (Gray)", "Pinion": "Plastic - Matte (Red)", "Gear": "Plastic - Matte (Green)",
+               "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin"}
 
 
 def _appearance(design, name):
@@ -163,7 +165,7 @@ def paint(design):
             if key in APPEARANCES:
                 occ.appearance = _appearance(design, APPEARANCES[key])
             for body in occ.component.bRepBodies:
-                if body.name.startswith("Kama"):
+                if body.name.startswith(("Kama", "Key ")):
                     body.appearance = _appearance(design, APPEARANCES["Kama"])
                 elif body.name == "Basma plakası":
                     body.appearance = _appearance(design, APPEARANCES["Taban"])
@@ -192,7 +194,8 @@ def build(mech, reuse=True):
     other = {"spur_gear": "gear",             # C9: disli cifti
              "spring": "spring",              # C10: basma yayi (+ sikisma animasyonu kareleri)
              "cam": "cam",                    # C11a: kam + itici
-             "shaft": "shaft"}.get(mech.get("type"))   # C11b: iki yatakli mil
+             "shaft": "shaft",                # C11b: iki yatakli mil
+             "reducer": "reducer"}.get(mech.get("type"))   # E1: single-stage reducer (system)
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

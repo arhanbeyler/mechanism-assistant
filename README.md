@@ -10,8 +10,8 @@ that you can rotate. Everything runs locally: a local LLM (Ollama), deterministi
 | Four-bar (crank-rocker / rocker-rocker) | Spur gear pair | Conical compression spring |
 |---|---|---|
 | ![four-bar](docs/img/fourbar.png) | ![gear](docs/img/gear.png) | ![spring](docs/img/spring.png) |
-| **Disk cam + roller follower** | **Two-bearing shaft (fatigue)** | |
-| ![cam](docs/img/cam.png) | ![shaft](docs/img/shaft.png) | |
+| **Disk cam + roller follower** | **Two-bearing shaft (fatigue)** | **Single-stage reducer (system)** |
+| ![cam](docs/img/cam.png) | ![shaft](docs/img/shaft.png) | ![reducer](docs/img/reducer.png) |
 
 ## Core rule: the LLM never produces a number
 
@@ -29,7 +29,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles the model misses. The evaluation set is `tools/llm_eval.py` (20/20).
+  catches input angles the model misses. The evaluation set is `tools/llm_eval.py` (22/22).
 * **Engines:** Textbook methods (Norton, Shigley) in plain Python. Every result is re-verified by a method that
   is *independent* of the one that produced it. For example, synthesis is checked by position-loop simulation.
 * **Fusion:** The add-in only draws what the engines decided. It reuses one tagged document instead of opening
@@ -45,7 +45,8 @@ flowchart LR
 | Spur gears | Lewis bending (Shigley Y table, Barth K_v), involute teeth | Contact ratio ≥ 1.2, undercut z ≥ 17, Hertz contact stress (info), shaft and hub |
 | Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)) |
 | Disk cam | Cycloidal, harmonic or 3-4-5 motion; smallest base circle | Pressure angle ≤ 30°, no undercut, ρ ≥ 2·R_roller |
-| Shaft | DE-Goodman fatigue with Marin factors, k_b iteration, Table 7-1 K_t; rounded up to a standard diameter | Fatigue n_f, first-cycle yield (von Mises); only the analysed notch is drawn (DIN 6885 keyseat, retaining-ring groove, sharp or rounded shoulder) |
+| Shaft | DE-Goodman fatigue with Marin factors, k_b iteration, Table 7-1 K_t; catalogue ball bearings; DIN 6885 key; diameter raised until every check passes | Fatigue n_f and yield at the hub and at the torque-carrying bearing seat, L10 life ≥ 20 000 h, key shear and crushing, slope ≤ 1 mrad and deflection ≤ 0.13 mm (numerical integration on the stepped shaft), Rayleigh critical speed ≥ 2× running speed |
+| **Reducer (system)** | Gear pair → gear forces and masses → both shafts → bearings → keys → housing, iterated until the constraints agree (gear bore = shaft, key ≤ face width, bearings side by side, common span) | All of the above + housing web; in Fusion, tooth overlap 0 mm³ at 6 angles and the output turns at exactly 1/i |
 
 In Fusion: **⟳ 1 turn** and **▶ continuous** buttons drive the input joint (gear motion link, cam follower from
 the s(θ) table, rocker-rocker oscillation within limits). The spring is animated as pre-built compression frames.
@@ -91,7 +92,7 @@ More findings are in [ROADMAP.md](ROADMAP.md) (Turkish).
 * **In Fusion:** Use the *Mekanizma Asistanı* panel. Type a sentence or pick a type and use the sliders, then
   press *Fusion'da çiz* (draw in Fusion), *1 tur* / *Sürekli* (1 turn / continuous) and *FEA*.
 * **Terminal:** `python main.py "30 mm krank, 60° salınım, uçta 5 kg, PETG"` writes `output/mechanism.json`.
-* **Tests:** `python -m pytest`. This runs 113 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 143 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 The panel UI and the code comments are in Turkish.
@@ -115,7 +116,7 @@ tools/               hub-compliance calibration, LLM evaluation
 
 ## Limitations
 
-* The scope is narrow on purpose: five element types, each with a textbook method. Anything else gets
+* The scope is narrow on purpose: a handful of element types, each with a textbook method. Anything else gets
   "unsupported" instead of a guess.
 * Four-bar sizing is for quasi-static loads (no dynamic or inertia forces). Plastics use a single yield value
   with no creep or anisotropy from printing.

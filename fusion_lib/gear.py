@@ -59,7 +59,10 @@ def build_gear_body(comp, m, z, width, bore):
 
     tooth_sk = comp.sketches.add(comp.xYConstructionPlane)
     tooth_sk.name = "Dis profili (evolvent)"
-    tooth = ext.addSimple(_tooth_profile(tooth_sk, m, z), dist, adsk.fusion.FeatureOperations.JoinFeatureOperation)
+    tin = ext.createInput(_tooth_profile(tooth_sk, m, z), adsk.fusion.FeatureOperations.JoinFeatureOperation)
+    tin.setDistanceExtent(False, dist)
+    tin.participantBodies = [body]         # only this gear (in an assembly other bodies may touch)
+    tooth = ext.add(tin)
 
     ents = adsk.core.ObjectCollection.create()
     ents.add(tooth)
@@ -72,7 +75,10 @@ def build_gear_body(comp, m, z, width, bore):
     hole = comp.sketches.add(comp.xYConstructionPlane)
     hole.name = "Mil deligi"
     hole.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0, 0, 0), mm(bore / 2))
-    ext.addSimple(hole.profiles.item(0), dist, adsk.fusion.FeatureOperations.CutFeatureOperation)
+    cut = ext.createInput(hole.profiles.item(0), adsk.fusion.FeatureOperations.CutFeatureOperation)
+    cut.setDistanceExtent(False, dist)
+    cut.participantBodies = [body]         # default would also cut a shaft running through the bore
+    ext.add(cut)
     return body
 
 

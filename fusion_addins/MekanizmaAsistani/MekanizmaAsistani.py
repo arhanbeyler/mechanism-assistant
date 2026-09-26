@@ -235,7 +235,7 @@ def crank_motion():
     if not design:
         return None
     for j in design.rootComponent.asBuiltJoints:
-        if j.name.startswith("Sabit-Krank") or j.name in ("Sabit-Pinyon", "Sabit-Kam", "Sabit-Mil"):   # giris mafsali
+        if j.name.startswith("Sabit-Krank") or j.name in ("Sabit-Pinyon", "Sabit-Kam", "Sabit-Mil", "Ground-Input"):   # giris mafsali
             return adsk.fusion.RevoluteJointMotion.cast(j.jointMotion)
     return None
 

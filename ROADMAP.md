@@ -43,7 +43,7 @@ Cümle → LLM (Ollama, yerel) → Kinematik motor + kontroller → mechanism.js
 
 ## E. Sistemler (modülleri birleştirmek)
 Her sistemde bir modülün çıktısı diğerinin girdisi olur (kuvvetler, çaplar, kütleler elle girilmez).
-- [ ] **E1. Tek kademeli redüktör.** Motor (güç, devir) → dişli çifti → iki mil (dişli kuvvetleri → M, T; dişli kütlesi → kritik hız) → rulmanlar → kamalar → gövde
+- [x] **E1. Tek kademeli redüktör.** Motor (güç, devir) → dişli çifti → iki mil (dişli kuvvetleri → M, T; dişli kütlesi → kritik hız) → rulmanlar → kamalar → gövde. Kısıtlar (dişli deliği = mil çapı, kama ≤ dişli genişliği, rulmanlar aynı duvarda yan yana, ortak açıklık) değişmeyene kadar yinelenir. Fusion'da gövde + rulmanlar + kamalı miller + kama kanallı dişliler; 6 açıda diş kesişimi 0, oran 1/3 doğrulandı
 - [ ] **E2. Çok kademeli redüktör.** Kademe oranı dağılımı, ara mil
 - [ ] **E3. Kam + yay tertibatı.** İtici yayı kamla birlikte; yüksek hızda kopma (jump) kontrolü
 - [ ] **E4. Pres.** Krank-biyel + volan (tork grafiğinden enerji dalgalanması) + motor
@@ -75,6 +75,9 @@ Her sistemde bir modülün çıktısı diğerinin girdisi olur (kuvvetler, çapl
 - [ ] **I1. Snap-fit (geçme tırnak)**
 - [ ] **I2. Esnek mafsal (flexure / living hinge)**
 - [ ] Baskıya hazır pim boşlukları (B8c)
+
+## L. Repo
+- [ ] **L2. Repo tamamen İngilizce.** Kod yorumları, panel metinleri, mesajlar, ROADMAP, demo.md (Türkçe cümleler anlaşılmaya devam eder)
 
 ## K. Kullanım
 - [ ] **K1. Sohbette düzeltme.** "Biraz daha uzun yap", "alüminyum olsun": önceki tasarımı değiştirir
@@ -130,3 +133,6 @@ Her sistemde bir modülün çıktısı diğerinin girdisi olur (kuvvetler, çapl
   Ø20.6 mm yeterli, ama torku taşıyan Ø20 rulman oturması (keskin omuz, K_f 2.7/2.2) n_f = 2'yi ancak Ø28 gövdeyle
   sağlıyor (rulman omzu Ø25.4 ister). Sehim (16 µm) ve eğim (0.35 mrad) sınırların çok altında. Sayısal sehim
   kapalı çözümle 1e-4 içinde; Rayleigh kritik hızı tam çözümün %0.7 üstünde (beklenen: üst sınır).
+- **Sistemde gizli çakışma:** Redüktörü Fusion'da kurarken dişlinin mil deliği kesimi, içinden geçen mili de kesip ikiye
+  ayırdı (Fusion'da kesme varsayılan olarak değdiği her gövdeyi keser). Tek başına dişli modülünde görünmeyen hata,
+  modüller birleşince ortaya çıktı; kesimler artık sadece kendi gövdesine uygulanıyor.

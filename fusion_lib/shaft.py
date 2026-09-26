@@ -71,54 +71,51 @@ def _extrude(comp, prof, dist_mm, op, body=None):
     return ext.add(inp)
 
 
-def _bearings(comp, lay):
-    """Rulmanlar (gorsel, sabit; katalog olculeri): x = xc'de genislik B, delik = oturma capi, dis cap Do."""
+def _bearings(comp, lay, dx=0.0, dy=0.0, suffix=""):
+    """Bearings (visual, grounded; catalogue sizes): width B at x = xc + dx, bore = seat diameter, outer Do.
+    dx, dy: where the shaft's local frame sits in the assembly (reducer: several shafts)."""
     P = adsk.core.Point3D.create
     for i, (xc, B, Do) in enumerate(lay["bearings"], 1):
+        x = xc + dx
         pin = comp.constructionPlanes.createInput()
-        pin.setByOffset(comp.yZConstructionPlane, adsk.core.ValueInput.createByReal(mm(xc)))
+        pin.setByOffset(comp.yZConstructionPlane, adsk.core.ValueInput.createByReal(mm(x)))
         sk = comp.sketches.add(comp.constructionPlanes.add(pin))
-        c = sk.modelToSketchSpace(P(mm(xc), 0, 0))
-        ri = lay["journal"] / 2 + 0.05            # oturma capi; mil ile temas etmesin
+        c = sk.modelToSketchSpace(P(mm(x), mm(dy), 0))
+        ri = lay["journal"] / 2 + 0.05            # seat diameter; must not touch the shaft
         sk.sketchCurves.sketchCircles.addByCenterRadius(c, mm(Do / 2))
         sk.sketchCurves.sketchCircles.addByCenterRadius(c, mm(ri))
         ring = min(sk.profiles, key=lambda p: abs(p.areaProperties().area - math.pi * (mm(Do / 2) ** 2 - mm(ri) ** 2)))
         ext = comp.features.extrudeFeatures
         inp = ext.createInput(ring, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        inp.setSymmetricExtent(adsk.core.ValueInput.createByReal(mm(B)), True)   # toplam B, xc'ye simetrik
-        ext.add(inp).bodies.item(0).name = f"Rulman {i} ({lay['bearing_name']})" if lay["bearing_name"] else f"Yatak {i}"
+        inp.setSymmetricExtent(adsk.core.ValueInput.createByReal(mm(B)), True)   # total B, centred on x
+        name = f"Bearing {i}{suffix} ({lay['bearing_name']})" if lay["bearing_name"] else f"Bearing {i}{suffix}"
+        ext.add(inp).bodies.item(0).name = name
 
 
-def build(g, root, design=None):
-    """g: pipeline'in fusion sozlugu (d, feature, span_mm ...). Dondurur: mil bileseni (Occurrence)."""
-    lay = g.get("layout") or shafts.layout(g["d"], g["feature"], g.get("span_mm"))   # motorun sectigi rulman/kama
-    ident = adsk.core.Matrix3D.create()
-
-    ground = root.occurrences.addNewComponent(ident)
-    ground.component.name = "Yataklar"
-    _bearings(ground.component, lay)
-    ground.isGrounded = True
-
-    occ = root.occurrences.addNewComponent(ident)
+def make_shaft(root, lay, name, matrix=None):
+    """Shaft component: revolved profile + (keyseat) end-milled pocket and DIN 6885 key.
+    Returns (occurrence, shaft body)."""
+    occ = root.occurrences.addNewComponent(matrix or adsk.core.Matrix3D.create())
     comp = occ.component
-    comp.name = "Mil"
+    comp.name = name
     prof, axis = _profile_sketch(comp, lay)
     rv = comp.features.revolveFeatures
     rin = rv.createInput(prof, axis, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
     rin.setAngleExtent(False, adsk.core.ValueInput.createByReal(2 * math.pi))
     shaft = rv.add(rin).bodies.item(0)
-    shaft.name = f"Mil Ø{g['d']:g}"
-
+    shaft.name = f"Shaft Ø{lay['d']:g}"
     feat = lay["feature"]
-    if feat["kind"] == "keyseat":                 # parmak freze kama yuvasi + kama
+    if feat["kind"] == "keyseat":                 # end-milled keyseat + key
         r = lay["d"] / 2
-        pocket = _obround(comp, r, feat["x"], feat["length"], feat["b"], "Kama yuvası")
+        pocket = _obround(comp, r, feat["x"], feat["length"], feat["b"], "Keyseat")
         _extrude(comp, pocket, -feat["t1"], adsk.fusion.FeatureOperations.CutFeatureOperation, shaft)
-        key = _obround(comp, r - feat["t1"], feat["x"], feat["length"], feat["b"], "Kama")
-        _extrude(comp, key, feat["h"], adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0).name = \
-            f"Kama {feat['b']}×{feat['h']}×{feat['length']:g} (DIN 6885)"
+        key = _obround(comp, r - feat["t1"], feat["x"], feat["length"], feat["b"], "Key")
+        _extrude(comp, key, feat["h"], adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0).name =             f"Key {feat['b']}×{feat['h']}×{feat['length']:g} (DIN 6885)"
+    return occ, shaft
 
-    # donel mafsal: milin sol uc dairesi (x = 0) merkezinden, eksen = daire normali (x)
+
+def revolute_to(root, ground, occ, shaft, lay, name):
+    """Revolute joint about the shaft axis: centre of the shaft's end circle at local x = 0."""
     edge = next(e for e in shaft.edges
                 if isinstance(e.geometry, adsk.core.Circle3D) and abs(e.geometry.center.x) < 1e-6
                 and abs(e.geometry.radius - mm(lay["segments"][0][2])) < 1e-6)
@@ -126,5 +123,18 @@ def build(g, root, design=None):
                                                   adsk.fusion.JointKeyPointTypes.CenterKeyPoint)
     ji = root.asBuiltJoints.createInput(ground, occ, geo)
     ji.setAsRevoluteJointMotion(adsk.fusion.JointDirections.ZAxisJointDirection)
-    root.asBuiltJoints.add(ji).name = "Sabit-Mil"
+    joint = root.asBuiltJoints.add(ji)
+    joint.name = name
+    return joint
+
+
+def build(g, root, design=None):
+    """g: pipeline's fusion dict (d, feature, layout ...). Returns the shaft occurrence."""
+    lay = g.get("layout") or shafts.layout(g["d"], g["feature"], g.get("span_mm"))   # engine's bearing / key
+    ground = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+    ground.component.name = "Yataklar"
+    _bearings(ground.component, lay)
+    ground.isGrounded = True
+    occ, shaft = make_shaft(root, lay, "Mil")
+    revolute_to(root, ground, occ, shaft, lay, "Sabit-Mil")
     return occ

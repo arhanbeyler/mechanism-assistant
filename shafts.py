@@ -154,7 +154,7 @@ def journal_checks(brg, R, T, mat, n, ny, rpm):
     if rpm:
         life = l10_hours(C, R, rpm)
         checks.append({"group": "Rulman", "name": f"Rulman ömrü ({name})", "util": LIFE_H / life,
-                       "detail": f"L10 = {life:,.0f} saat (hedef {LIFE_H:,.0f}), P = {R:.0f} N, C = {C:g} kN, {rpm:g} rpm"})
+                       "detail": f"L10 = {life:,.0f} saat (hedef {LIFE_H:,.0f}), P = {R:.0f} N, C = {C:g} kN, {rpm:.0f} rpm"})
     return checks
 
 
@@ -375,7 +375,7 @@ def _evaluate(d, M, T, mat, feature, n, ny, span, rpm, F_N=None, hub_len=None, h
     if rpm:
         extra = f", göbekte {hub_mass:.2f} kg dahil" if hub_mass else ""
         checks.append({"group": "Titreşim", "name": "Kritik hız", "util": CRIT_RATIO * rpm / bm["n_crit"],
-                       "detail": f"{bm['n_crit']:,.0f} rpm (çalışma {rpm:g} rpm'in en az {CRIT_RATIO:g} katı{extra})"})
+                       "detail": f"{bm['n_crit']:,.0f} rpm (çalışma {rpm:.0f} rpm'in en az {CRIT_RATIO:g} katı{extra})"})
     return {"d": d, "Se": Se, "nf": nf, "ny": mat["Sy"] / sv, "Kf": FEATURES[feature][1], "Kfs": FEATURES[feature][2],
             "feature": feature, "material": mat["name"], "M": M, "T": T, "F": F, "rpm": rpm, "hub_mass": hub_mass,
             "bearing": {"name": brg[0], "bore": brg[1], "OD": brg[2], "B": brg[3], "C": brg[4],
