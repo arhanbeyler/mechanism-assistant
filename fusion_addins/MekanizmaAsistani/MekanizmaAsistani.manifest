@@ -4,7 +4,7 @@
 	"id": "5b0f2f1e-8f5a-4c1e-9a7e-4d2c6e3a9b71",
 	"author": "Arhan Beyler",
 	"description": {
-		"": "Mekanizma Asistani: dogal dille mekanizma tasarimi (yerel LLM + kinematik dogrulama)"
+		"": "Mechanism Assistant: mechanism design in plain language (local LLM + verified engineering engines)"
 	},
 	"version": "0.1.0",
 	"runOnStartup": true,

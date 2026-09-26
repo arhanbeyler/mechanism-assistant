@@ -1,12 +1,12 @@
 """
-C10: Basma yayini Fusion 360'ta kurar (sadece Fusion icinde).
+C10: Builds the compression spring in Fusion 360 (runs inside Fusion only).
 
-API'de yeni "coil" olusturulamadigi icin: tel merkez cizgisi 3B spline (springs.helix_points,
-konik yayda degisken yaricap, uclarda kapali sarimlar) -> yolun basinda yola dik duzlemde
-tel kesiti (daire) -> sweep -> z = 0 ve z = L0 duzlemleriyle kesme (kare ve taslanmis uclar).
+The API cannot create a new "coil" feature, so: wire centre line as a 3D spline (springs.helix_points,
+varying radius for a conical spring, closed coils at the ends) -> wire section (circle) on a plane normal
+to the path at its start -> sweep -> cut with the planes z = 0 and z = L0 (squared and ground ends).
 
-Animasyon: Fusion'da govdeler esnemez; yay FRAMES farkli sikisma miktarinda (0 -> calisma cokmesi)
-ayri kareler olarak cizilir (her karede ust basma plakasi). Eklenti kareleri sirayla gorunur yapar.
+Animation: bodies cannot flex in Fusion; the spring is drawn as FRAMES separate frames at different
+compressions (0 -> working deflection), optionally with a top plate in each. The add-in shows them in turn.
 """
 
 import adsk.core
@@ -15,7 +15,7 @@ import adsk.fusion
 import springs
 from fusion_lib.fourbar import MARK_GROUP, mm
 
-END_GAP = 1.03    # kapali uc sarimlarinda hatve = 1.03 d (tam temas sweep'te kendine degen govde yapiyor)
+END_GAP = 1.03    # pitch of the closed end coils = 1.03 d (full contact makes the sweep touch itself)
 FRAMES = 8
 PLATE_T = 3.0
 
@@ -33,22 +33,22 @@ def _plate(comp, R, z0, t, name):
 
 
 def _spring_body(comp, geo, compression):
-    """compression mm sikismis yay govdesi (taslanmis uclar). Dondurur: (govde, ust yuzey z'si)."""
+    """Spring body compressed by `compression` mm (ground ends). Returns (body, z of the top face)."""
     d, L0 = geo["d"], geo["L0"]
     P = adsk.core.Point3D.create
     g = dict(geo)
     g["d"] = d * END_GAP
-    g["pitch"] = (L0 - 2 * g["d"]) / geo["Na"]       # gorsel: uc boslugu; L0 ve k degismez
+    g["pitch"] = (L0 - 2 * g["d"]) / geo["Na"]       # visual: end gap; L0 and k do not change
     pts = springs.helix_points(g, per_turn=16, compression=compression)
     z_top = pts[-1][2]
 
     path_sk = comp.sketches.add(comp.xYConstructionPlane)
-    path_sk.name = "Tel ekseni (helis)"
+    path_sk.name = "Wire axis (helix)"
     col = adsk.core.ObjectCollection.create()
     for x, y, z in pts:
         col.add(P(mm(x), mm(y), mm(z)))
     spline = path_sk.sketchCurves.sketchFittedSplines.add(col)
-    path = comp.features.createPath(spline, False)       # alt bilesende: bilesen baglaminda yol
+    path = comp.features.createPath(spline, False)       # in a sub-component: path in the component context
 
     pl_in = comp.constructionPlanes.createInput()
     pl_in.setByDistanceOnPath(path, adsk.core.ValueInput.createByReal(0.0))
@@ -58,40 +58,40 @@ def _spring_body(comp, geo, compression):
     sw_in = comp.features.sweepFeatures.createInput(prof_sk.profiles.item(0), path,
                                                     adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
     body = comp.features.sweepFeatures.add(sw_in).bodies.item(0)
-    body.name = "Yay"
+    body.name = "Spring"
 
     R = max(geo["D1"], geo["D2"]) / 2 + d * 2
-    for z0, direction in ((0.0, -1.0), (z_top, 1.0)):   # taslama
+    for z0, direction in ((0.0, -1.0), (z_top, 1.0)):   # grinding
         pin = comp.constructionPlanes.createInput()
         pin.setByOffset(comp.xYConstructionPlane, adsk.core.ValueInput.createByReal(mm(z0)))
         sk = comp.sketches.add(comp.constructionPlanes.add(pin))
         sk.sketchCurves.sketchLines.addTwoPointRectangle(P(mm(-R), mm(-R), 0), P(mm(R), mm(R), 0))
         cut = comp.features.extrudeFeatures.createInput(sk.profiles.item(0), adsk.fusion.FeatureOperations.CutFeatureOperation)
         cut.setDistanceExtent(False, adsk.core.ValueInput.createByReal(mm(direction * 2 * d)))
-        cut.participantBodies = [body]     # SADECE bu karenin yayi: varsayilan, kesistigi tum govdeleri
-        comp.features.extrudeFeatures.add(cut)   # kesiyordu (ust uste duran diger kareler ve taban)
+        cut.participantBodies = [body]     # ONLY this frame's spring: by default it cut every body it met
+        comp.features.extrudeFeatures.add(cut)   # (the other frames on top of each other and the base)
     return body, z_top
 
 
 def build(geo, root, design=None):
-    """geo["show_plates"]: taban ve basma plakasi da cizilsin mi (varsayilan: sadece yay)."""
+    """geo["show_plates"]: also draw the base and top plates (default: the spring only)."""
     R_plate = max(geo["D1"], geo["D2"]) / 2 + geo["d"] + 4
     plates = bool(geo.get("show_plates"))
 
     if plates:
         base = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-        base.component.name = "Taban"
-        _plate(base.component, R_plate, -PLATE_T, PLATE_T, "Taban")
+        base.component.name = "Base"
+        _plate(base.component, R_plate, -PLATE_T, PLATE_T, "Base")
         base.isGrounded = True
 
     frames = []
     for k in range(FRAMES):
         delta = geo["y_work"] * k / (FRAMES - 1)
         occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-        occ.component.name = f"Yay {k} ({delta:.1f} mm)"
+        occ.component.name = f"Spring {k} ({delta:.1f} mm)"
         _, z_top = _spring_body(occ.component, geo, delta)
         if plates:
-            _plate(occ.component, R_plate, z_top, PLATE_T, "Basma plakası")
+            _plate(occ.component, R_plate, z_top, PLATE_T, "Top plate")
         occ.isGrounded = True
         occ.isLightBulbOn = (k == 0)
         frames.append(occ)

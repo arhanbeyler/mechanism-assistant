@@ -1,16 +1,16 @@
 """
-Dogal dil -> yapilandirilmis JSON (iki asamali).
+Natural language -> structured JSON (two stages).
 
-LLM burada hicbir olcu UYDURMAZ. Sadece kullanicinin cumlesinde gecen
-bilgileri sabit bir forma (sema) yerlestirir. Cumlede olmayan bilgi null kalir.
-Hangi bilginin eksik/zorunlu oldugunu LLM degil, kod (pipeline.py) belirler.
+The LLM invents NO dimension here. It only puts the facts stated in the user's sentence into a fixed
+form (schema). Anything not in the sentence stays null. The code (pipeline.py), not the LLM, decides
+what is missing or required. Sentences may be Turkish or English.
 
-Iki asama (moduller cogaldikca tek uzun istem 9B modelde ayrintilari kaciriyordu):
-  1) Yonlendirici: kisa istemle sadece tur (dort cubuk / disli / yay / bilinmiyor).
-  2) Modul cikarici: o module ozel kisa istem ve sema.
-Yeni modul = yeni bir (istem, sema) ciftidir; digerlerinin istemlerine dokunulmaz.
+Two stages (with more modules, one long prompt made the 9B model miss details):
+  1) Router: a short prompt that only picks the kind (four-bar / reducer / gears / spring / cam / shaft).
+  2) Module extractor: a short prompt and schema specific to that module.
+A new module = a new (prompt, schema) pair; the other prompts are not touched.
 
-OpenAI uyumlu API kullaniyoruz; LM Studio'ya gecmek icin sadece BASE_URL degisir.
+OpenAI-compatible API; switching to LM Studio only changes BASE_URL.
 """
 
 import json
@@ -18,7 +18,7 @@ import sys
 import time
 import urllib.request
 
-BASE_URL = "http://localhost:11434/v1"   # LM Studio icin: http://localhost:1234/v1
+BASE_URL = "http://localhost:11434/v1"   # LM Studio: http://localhost:1234/v1
 MODEL = "qwen3.5:9b"
 
 COMMON = ("You extract design requirements from the user's text (usually Turkish) into JSON. "
@@ -33,7 +33,7 @@ def _schema(props):
     return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
 
 
-# ---------------------------------------------------------------- 1) yonlendirici
+# ---------------------------------------------------------------- 1) router
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
                                    "enum": ["fourbar", "reducer", "spur_gear", "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
@@ -47,7 +47,7 @@ ROUTER_PROMPT = (
     "'fourbar': a linkage / mechanism with links, crank, lever or swinging arm (krank, kol, biyel, dört çubuk, "
     "salınım, 'kolu X derece çevirince'). 'unknown': anything else.")
 
-# ---------------------------------------------------------------- 2) modul cikaricilar
+# ---------------------------------------------------------------- 2) module extractors
 FOURBAR = (_schema({
     "mechanism_type": {"type": "string", "enum": ["crank_rocker", "rocker_rocker"]},
     "crank_length_mm": {"type": ["number", "null"]},
@@ -144,12 +144,12 @@ SHAFT = (_schema({
 
 MODULE_EXTRACTORS = {"fourbar": FOURBAR, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
-# Tum alanlar (pipeline tek bir sozluk bekler; modulde olmayanlar None)
+# All fields (the pipeline expects one dict; fields of other modules are None)
 ALL_FIELDS = {"mechanism_type": "unknown", "quick_return": False}
 for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
-KIND_TO_TYPE = {"reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: cikarici secer
+KIND_TO_TYPE = {"reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
 def _chat(system, user_text, schema, name):
@@ -172,7 +172,7 @@ def route(user_text: str) -> str:
 
 
 def extract_spec(user_text: str) -> dict:
-    """Iki asamali cikarim. Dondurur: tum alanlari iceren sozluk (modulde olmayanlar None)."""
+    """Two-stage extraction. Returns a dict with all fields (None where the module has no such field)."""
     kind = route(user_text)
     spec = dict(ALL_FIELDS)
     if kind not in MODULE_EXTRACTORS:
@@ -189,9 +189,9 @@ if __name__ == "__main__":
         "10 cm'lik bir krankla çıkış kolu 60 derece salınım yapsın, "
         "PETG'den basacağım, uçta yaklaşık 5 kg yük olacak."
     )
-    print("Girdi :", text)
+    print("Input :", text)
     t0 = time.time()
     spec = extract_spec(text)
-    print(f"Sure  : {time.time() - t0:.1f} s")
-    print("Cikti :")
+    print(f"Time  : {time.time() - t0:.1f} s")
+    print("Output:")
     print(json.dumps(spec, indent=2, ensure_ascii=False))

@@ -1,10 +1,10 @@
 """
-C11b: Iki yatakli mili Fusion 360'ta kurar (sadece Fusion icinde).
+C11b: Builds the two-bearing shaft in Fusion 360 (runs inside Fusion only).
 
-Geometri shafts.layout/profile'dan (saf Python, test edilir): x ekseni boyunca donel profil -> revolve.
-Gerilme yigilmasi olarak sadece hesaptaki ozellik cizilir: kama yuvasi (parmak freze cebi + DIN 6885
-kama), segman kanali, keskin ya da yuvarlatilmis omuz (profilde radyus). Yataklar sabit bilesen;
-"Sabit-Mil" donel mafsali eklentinin 1 tur / surekli dondurme dugmeleriyle calisir.
+Geometry from shafts.layout / profile (plain Python, tested): a revolve profile along x -> revolve.
+Only the analysed stress raisers are drawn: keyseat (end-milled pocket + DIN 6885 key), retaining-ring
+groove, sharp or rounded shoulder (fillet in the profile), and the stepped bearing seats. The bearings are a
+grounded component; the "Ground-Shaft" revolute joint works with the add-in's 1-turn / continuous buttons.
 """
 
 import math
@@ -17,36 +17,36 @@ from fusion_lib.fourbar import mm
 
 
 def _profile_sketch(comp, lay):
-    """Donel profil (XY duzlemi, y = yaricap) + eksen cizgisi. Dondurur: (profil, eksen)."""
+    """Revolve profile (XY plane, y = radius) + axis line. Returns (profile, axis)."""
     P = adsk.core.Point3D.create
     sk = comp.sketches.add(comp.xYConstructionPlane)
-    sk.name = "Mil profili"
+    sk.name = "Shaft profile"
     lines, arcs = sk.sketchCurves.sketchLines, sk.sketchCurves.sketchArcs
     pts = shafts.profile(lay)
-    prev = None                                   # onceki egrinin bitis noktasi (SketchPoint): kapali zincir
+    prev = None                                   # end point (SketchPoint) of the previous curve: a closed chain
     first = None
     for i in range(1, len(pts)):
         item = pts[i]
         if item[0] == "arc":
             _, (cx, cy), (sx, sy), (ex, ey) = item
             rf = math.hypot(sx - cx, sy - cy)
-            mid = P(mm(cx - rf / math.sqrt(2)), mm(cy - rf / math.sqrt(2)), 0)   # ic koseye dogru siskin
+            mid = P(mm(cx - rf / math.sqrt(2)), mm(cy - rf / math.sqrt(2)), 0)   # bulging towards the inner corner
             a = arcs.addByThreePoints(prev, mid, P(mm(ex), mm(ey), 0))
             prev = a.endSketchPoint if a.startSketchPoint.geometry.isEqualTo(prev.geometry) else a.startSketchPoint
             continue
-        if isinstance(pts[i - 1][0], str):        # yaydan sonraki nokta = yay sonu (zaten prev)
+        if isinstance(pts[i - 1][0], str):        # the point after an arc is the arc end (already prev)
             continue
         x0, y0 = pts[i - 1]
         x1, y1 = item
         ln = lines.addByTwoPoints(prev or P(mm(x0), mm(y0), 0), P(mm(x1), mm(y1), 0))
         first = first or ln
         prev = ln.endSketchPoint
-    axis = lines.addByTwoPoints(prev, first.startSketchPoint)   # eksen boyunca kapat
+    axis = lines.addByTwoPoints(prev, first.startSketchPoint)   # close along the axis
     return sk.profiles.item(0), axis
 
 
 def _obround(comp, z, xc, length, b, name):
-    """z yuksekliginde XY'ye paralel duzlemde x yonunde uzun kanal (kama / kama yuvasi) cizimi."""
+    """Obround slot along x (key / keyseat) on a plane parallel to XY at height z."""
     P = adsk.core.Point3D.create
     pin = comp.constructionPlanes.createInput()
     pin.setByOffset(comp.xYConstructionPlane, adsk.core.ValueInput.createByReal(mm(z)))
@@ -67,7 +67,7 @@ def _extrude(comp, prof, dist_mm, op, body=None):
     inp = ext.createInput(prof, op)
     inp.setDistanceExtent(False, adsk.core.ValueInput.createByReal(mm(dist_mm)))
     if body is not None:
-        inp.participantBodies = [body]            # sadece mil kesilsin
+        inp.participantBodies = [body]            # cut only the shaft
     return ext.add(inp)
 
 
@@ -132,9 +132,9 @@ def build(g, root, design=None):
     """g: pipeline's fusion dict (d, feature, layout ...). Returns the shaft occurrence."""
     lay = g.get("layout") or shafts.layout(g["d"], g["feature"], g.get("span_mm"))   # engine's bearing / key
     ground = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-    ground.component.name = "Yataklar"
+    ground.component.name = "Bearings"
     _bearings(ground.component, lay)
     ground.isGrounded = True
-    occ, shaft = make_shaft(root, lay, "Mil")
-    revolute_to(root, ground, occ, shaft, lay, "Sabit-Mil")
+    occ, shaft = make_shaft(root, lay, "Shaft")
+    revolute_to(root, ground, occ, shaft, lay, "Ground-Shaft")
     return occ

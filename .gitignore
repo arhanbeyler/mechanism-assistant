@@ -2,11 +2,11 @@
 __pycache__/
 *.pyc
 
-# Uretilen ciktilar (her calistirmada yeniden olusur)
+# Generated output (recreated on every run)
 output/
 
-# Fusion koprusu gizli anahtari
+# Secret token of the Fusion bridge
 .bridge_token
 
-# Bu bilgisayardaki Python yolu (FEA icin; numpy/scipy/gmsh kurulu olan)
+# Path of this computer's Python (for the FEA; the one with numpy / scipy / gmsh)
 .local_python

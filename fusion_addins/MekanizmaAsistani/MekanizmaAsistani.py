@@ -1,13 +1,13 @@
 """
-Mekanizma Asistani — Fusion 360 eklentisi.
+Mechanism Assistant: Fusion 360 add-in.
 
-1) Panel: Fusion'in altinda sohbet kutusu. Kullanici cumleyi yazar; LLM + kinematik
-   motor ARKA PLANDA calisir (Fusion donmaz), sonuc ana is parcaciginda cizilir.
-2) Kopru: 127.0.0.1 uzerinde, token korumali kucuk HTTP sunucusu. Gelistirme
-   sirasinda Claude'un Fusion'da kod calistirip ekran goruntusu almasini saglar.
+1) Panel: a chat box + sliders + result card. The user types a sentence; the LLM and the engines run in
+   the BACKGROUND (Fusion does not freeze), the result is drawn on the main thread.
+2) Bridge: a small token-protected HTTP server on 127.0.0.1. During development it lets Claude run code
+   in Fusion and take screenshots.
 
-Kural: Fusion API'si sadece ANA is parcacigindan cagrilabilir. Arka plan is
-parcaciklari isi run_on_main() ile ana is parcacigina (custom event) devreder.
+Rule: the Fusion API may only be called from the MAIN thread. Background threads hand work over to the
+main thread with run_on_main() (a custom event).
 """
 
 import contextlib
@@ -29,26 +29,27 @@ import adsk.core
 import adsk.fusion
 
 ADDIN_DIR = os.path.dirname(os.path.realpath(__file__))
-ROOT = os.path.dirname(os.path.dirname(ADDIN_DIR))  # proje klasoru
+ROOT = os.path.dirname(os.path.dirname(ADDIN_DIR))  # project folder
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-PALETTE_ID = "MekanizmaAsistaniPalette"
-CMD_ID = "MekanizmaAsistaniCmd"
-EVENT_ID = "MekanizmaAsistaniMainThread"
+PALETTE_ID = "MechanismAssistantPalette"
+CMD_ID = "MechanismAssistantCmd"
+EVENT_ID = "MechanismAssistantMainThread"
+MARK_GROUP = "MekanizmaAsistani"    # attribute group of the drawn document (same as fusion_lib.fourbar)
 BRIDGE_PORT = 8765
 TOKEN_FILE = os.path.join(ROOT, ".bridge_token")
 LOG_FILE = os.path.join(ROOT, "output", "addin.log")
 
 app = None
 ui = None
-handlers = []           # Fusion olay isleyicileri canli kalsin diye referans tutulur
-pending = {}            # is id -> ana is parcaciginda calisacak fonksiyon
+handlers = []           # Fusion event handlers are kept referenced so they stay alive
+pending = {}            # job id -> function to run on the main thread
 pending_lock = threading.Lock()
 server = None
 
 
-# ---------------------------------------------------------------- yardimcilar
+# ---------------------------------------------------------------- helpers
 
 def log(msg):
     try:
@@ -60,7 +61,7 @@ def log(msg):
 
 
 def run_on_main(fn):
-    """Herhangi bir is parcacigindan: fn'i Fusion'in ana is parcaciginda calistir."""
+    """From any thread: run fn on Fusion's main thread."""
     job = uuid.uuid4().hex
     with pending_lock:
         pending[job] = fn
@@ -68,7 +69,7 @@ def run_on_main(fn):
 
 
 def call_on_main(fn, timeout=120):
-    """run_on_main + sonucu bekle. Dondurur: {'value': ...} ya da {'error': iz}."""
+    """run_on_main + wait for the result. Returns {'value': ...} or {'error': traceback}."""
     done, box = threading.Event(), {}
 
     def wrapper():
@@ -81,12 +82,12 @@ def call_on_main(fn, timeout=120):
 
     run_on_main(wrapper)
     if not done.wait(timeout):
-        return {"error": f"Zaman asimi ({timeout} s): Fusion mesgul olabilir."}
+        return {"error": f"Timed out ({timeout} s): Fusion may be busy."}
     return box
 
 
 def reload_modules():
-    """Proje modullerini yeniden yukle: kod degisince Fusion'u yeniden baslatmaya gerek yok."""
+    """Reload the project modules: no Fusion restart needed after a code change."""
     import pipeline
     import fusion_lib.fourbar
     root = os.path.normcase(ROOT)
@@ -94,31 +95,31 @@ def reload_modules():
             if getattr(m, "__file__", None)
             and os.path.normcase(os.path.realpath(m.__file__)).startswith(root)
             and os.path.normcase(ADDIN_DIR) not in os.path.normcase(os.path.realpath(m.__file__))]
-    # bagimliliklar once: pipeline en son (digerlerini import ediyor)
+    # dependencies first: pipeline last (it imports the others)
     for mod in sorted(ours, key=lambda m: m.__name__ == "pipeline"):
         importlib.reload(mod)
     return sys.modules["pipeline"], sys.modules["fusion_lib.fourbar"]
 
 
 def send_to_palette(action, payload):
-    """Sadece ana is parcacigindan cagrilir."""
+    """Main thread only."""
     pal = ui.palettes.itemById(PALETTE_ID)
     if pal:
         pal.sendInfoToHTML(action, json.dumps(payload, ensure_ascii=False))
 
 
-# ---------------------------------------------------------------- tasarim akisi
+# ---------------------------------------------------------------- design flow
 
 def start_preview(params, req):
-    """Kaydirici onizlemesi: LLM yok, Fusion'a cizim yok; sadece hesap + panel."""
+    """Slider preview: no LLM, no drawing in Fusion; only the calculation + the panel."""
     pipeline = sys.modules.get("pipeline") or reload_modules()[0]
 
     def worker():
         try:
             result = pipeline.design_from_params(**params)
         except Exception as e:
-            log("onizleme hata:\n" + traceback.format_exc())
-            result = {"status": "error", "message": f"Hesap hatası: {e}"}
+            log("preview error:\n" + traceback.format_exc())
+            result = {"status": "error", "message": f"Calculation error: {e}"}
         result["req"] = req
         run_on_main(lambda: send_to_palette("preview", result))
 
@@ -132,7 +133,7 @@ def start_band(Q, req):
         try:
             band = pipeline.swing_band(Q)
         except Exception:
-            log("band hata:\n" + traceback.format_exc())
+            log("band error:\n" + traceback.format_exc())
             return
         run_on_main(lambda: send_to_palette("band", {"req": req, "Q": Q, "band": band}))
 
@@ -140,8 +141,8 @@ def start_band(Q, req):
 
 
 def start_fea(params):
-    """Yerel FEA (gmsh + scikit-fem) ile kol ve krank icin el hesabini dogrula.
-    FEA, Fusion'in Python'unda degil bu bilgisayarin normal Python'unda calisir (.local_python)."""
+    """Verify the hand calculation of the rocker and crank with the local FEA (gmsh + scikit-fem).
+    The FEA runs in this computer's normal Python, not in Fusion's (.local_python)."""
     import subprocess
     pipeline = sys.modules.get("pipeline") or reload_modules()[0]
 
@@ -151,12 +152,12 @@ def start_fea(params):
     def worker():
         try:
             if params.get("kind", "fourbar") != "fourbar":
-                raise ValueError("FEA doğrulaması şimdilik sadece dört çubuk uzuvları için var.")
+                raise ValueError("FEA verification is available for four-bar links only (for now).")
             r = pipeline.design_from_params(**params)
             st = r.get("strength")
             if r.get("status") != "ok" or not st:
-                out = {"ok": False, "message": "FEA için önce kontrollerden geçen ve yükü verilmiş bir tasarım gerekli "
-                                              "(Uçtaki yük kaydırıcısını 0'dan büyük yap)."}
+                out = {"ok": False, "message": "The FEA needs a design that passes the checks and has a load "
+                                              "(set the tip load slider above 0)."}
             else:
                 import strength
                 mat = strength.MATERIALS[params.get("material") or "PLA"]
@@ -165,27 +166,27 @@ def start_fea(params):
                        "crank_torque": st["input_torque_max_Nmm"]}
                 with open(os.path.join(ROOT, ".local_python"), encoding="utf-8") as fh:
                     py = fh.read().strip()
-                status("Yerel FEA çalışıyor (ağ oluşturma + çözüm)...")
+                status("Local FEA running (meshing + solving)...")
                 proc = subprocess.run([py, os.path.join(ROOT, "fea_local.py"), "--json"],
                                       input=json.dumps(req), capture_output=True, text=True,
                                       timeout=300, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
                 if proc.returncode != 0:
-                    log("FEA hata:\n" + proc.stderr[-3000:])
-                    out = {"ok": False, "message": "FEA çalışmadı (ayrıntı: output/addin.log)."}
+                    log("FEA error:\n" + proc.stderr[-3000:])
+                    out = {"ok": False, "message": "The FEA did not run (details: output/addin.log)."}
                 else:
                     out = {"ok": True, "links": json.loads(proc.stdout), "material": mat["name"]}
         except ValueError as e:
             out = {"ok": False, "message": str(e)}
         except Exception as e:
-            log("FEA hata:\n" + traceback.format_exc())
-            out = {"ok": False, "message": f"FEA hatası: {e}"}
+            log("FEA error:\n" + traceback.format_exc())
+            out = {"ok": False, "message": f"FEA error: {e}"}
         run_on_main(lambda: send_to_palette("fea", out))
 
     threading.Thread(target=worker, daemon=True).start()
 
 
 def start_design(text=None, params=None):
-    """Cumleden (LLM ile) ya da kaydirici degerlerinden tasarla ve Fusion'da ciz."""
+    """Design from a sentence (with the LLM) or from slider values, and draw it in Fusion."""
     pipeline, fourbar = reload_modules()
 
     def status(s):
@@ -199,12 +200,12 @@ def start_design(text=None, params=None):
                 result = pipeline.design_from_text(text, on_status=status)
         except urllib.error.URLError:
             result = {"status": "error",
-                      "message": "Yerel LLM'e (Ollama) ulaşılamadı. Ollama çalışıyor mu?"}
+                      "message": "Could not reach the local LLM (Ollama). Is Ollama running?"}
         except Exception as e:
-            log("design hata:\n" + traceback.format_exc())
-            result = {"status": "error", "message": f"Beklenmeyen hata: {e}"}
+            log("design error:\n" + traceback.format_exc())
+            result = {"status": "error", "message": f"Unexpected error: {e}"}
         if result.get("status") == "ok":
-            status("Fusion'da çiziliyor...")
+            status("Drawing in Fusion...")
         run_on_main(lambda: finish_design(result, fourbar))
 
     threading.Thread(target=worker, daemon=True).start()
@@ -216,60 +217,61 @@ def finish_design(result, fourbar):
             fourbar.build(result["fusion"])
             result["drawn"] = True
         except Exception as e:
-            log("cizim hata:\n" + traceback.format_exc())
+            log("drawing error:\n" + traceback.format_exc())
             result["drawn"] = False
-            result["message"] += f" Ama çizimde hata oluştu: {e}"
+            result["message"] += f" But drawing failed: {e}"
     send_to_palette("result", result)
 
 
-# ---------------------------------------------------------------- dondurme (animasyon)
+# ---------------------------------------------------------------- turning (animation)
 
 anim = {"running": False}
-STEP_DEG = 4          # her adimda krank acisi
-STEP_PAUSE = 0.02     # adimlar arasi bekleme (s)
+STEP_DEG = 4          # input angle per step
+STEP_PAUSE = 0.02     # pause between steps (s)
+INPUT_JOINTS = ("Ground-Pinion", "Ground-Cam", "Ground-Shaft", "Ground-Input")   # + "Ground-Crank ..."
 
 
 def crank_motion():
-    """Aktif belgedeki mekanizmanin krank mafsali (yoksa None)."""
+    """The input joint of the mechanism in the active document (None if there is none)."""
     design = adsk.fusion.Design.cast(app.activeProduct)
     if not design:
         return None
     for j in design.rootComponent.asBuiltJoints:
-        if j.name.startswith("Sabit-Krank") or j.name in ("Sabit-Pinyon", "Sabit-Kam", "Sabit-Mil", "Ground-Input"):   # giris mafsali
+        if j.name.startswith("Ground-Crank") or j.name in INPUT_JOINTS:
             return adsk.fusion.RevoluteJointMotion.cast(j.jointMotion)
     return None
 
 
 def cam_follower():
-    """Kam tasariminda: (itici kayar mafsali, s tablosu [mm, derece basina], kayma isareti) ya da None."""
+    """For a cam design: (follower slider joint, s table [mm, per degree], slide sign) or None."""
     design = adsk.fusion.Design.cast(app.activeProduct)
     if not design:
         return None
-    table = design.attributes.itemByName("MekanizmaAsistani", "cam_table")
-    sign = design.attributes.itemByName("MekanizmaAsistani", "cam_slide_sign")
-    joint = [j for j in design.rootComponent.asBuiltJoints if j.name == "Sabit-Itici"]
+    table = design.attributes.itemByName(MARK_GROUP, "cam_table")
+    sign = design.attributes.itemByName(MARK_GROUP, "cam_slide_sign")
+    joint = [j for j in design.rootComponent.asBuiltJoints if j.name == "Ground-Follower"]
     if not (table and sign and joint):
         return None
     return (adsk.fusion.SliderJointMotion.cast(joint[0].jointMotion), json.loads(table.value), float(sign.value))
 
 
 def spring_frames():
-    """Yay tasariminda sikisma karesi bilesenleri (0 = serbest ... son = calisma cokmesi) ya da None."""
+    """For a spring design: the compression frame components (0 = free ... last = working) or None."""
     design = adsk.fusion.Design.cast(app.activeProduct)
-    if not design or not design.attributes.itemByName("MekanizmaAsistani", "spring_frames"):
+    if not design or not design.attributes.itemByName(MARK_GROUP, "spring_frames"):
         return None
-    occs = [o for o in design.rootComponent.occurrences if o.component.name.startswith("Yay ")]
+    occs = [o for o in design.rootComponent.occurrences if o.component.name.startswith("Spring ")]
     return sorted(occs, key=lambda o: int(o.component.name.split()[1])) or None
 
 
 def animate_spring(mode):
-    """Yay: kareleri sirayla gorunur yaparak sikisip acilma. 'turn' = bir sikistir-birak dongusu."""
+    """Spring: compress and release by showing the frames in turn. 'turn' = one compress-release cycle."""
     anim["running"] = True
     send_to_palette("anim", {"running": True, "mode": mode})
 
     def worker():
         n = len(spring_frames() or [])
-        seq = list(range(n)) + list(range(n - 2, 0, -1))      # 0..n-1..1 (sonra tekrar 0)
+        seq = list(range(n)) + list(range(n - 2, 0, -1))      # 0..n-1..1 (then 0 again)
         i = 0
         while anim["running"]:
             k = seq[i % len(seq)]
@@ -298,26 +300,26 @@ def animate_spring(mode):
 
 
 def rotate(mode):
-    """mode: 'turn' (bir tam tur) ya da 'toggle' (surekli donmeyi ac/kapat)."""
+    """mode: 'turn' (one full turn) or 'toggle' (continuous turning on / off)."""
     if anim["running"]:
         if mode == "toggle":
-            anim["running"] = False       # calisan is parcacigi durur ve paneli gunceller
+            anim["running"] = False       # the running thread stops and updates the panel
         return
     if spring_frames():
         animate_spring(mode)
         return
     if crank_motion() is None:
-        send_to_palette("status", {"text": "Açık belgede dönecek bir mekanizma yok. Önce 'Fusion'da çiz'."})
+        send_to_palette("status", {"text": "Nothing to turn in the open document. Press 'Draw in Fusion' first."})
         return
     anim["running"] = True
     send_to_palette("anim", {"running": True, "mode": mode})
 
-    # Sinirli acili mekanizma (B9): mafsalin sinirlari varsa tam tur yerine sinirlar arasinda salinim
+    # Limited-angle mechanism (B9): with joint limits, oscillate between them instead of a full turn
     motion0 = crank_motion()
     lim = motion0.rotationLimits
     if lim.isMinimumValueEnabled and lim.isMaximumValueEnabled:
         lo, hi, start = lim.minimumValue, lim.maximumValue, motion0.rotationValue
-        # "1 tur" = baslangic -> ust sinir -> alt sinir -> baslangic; surekli = ust <-> alt
+        # "1 turn" = start -> upper limit -> lower limit -> start; continuous = upper <-> lower
         targets = [hi, lo, start] if mode == "turn" else None
     else:
         lo = hi = None
@@ -327,7 +329,7 @@ def rotate(mode):
         done, goal_i, going_up = 0, 0, True
         step_rad = math.radians(STEP_DEG)
         while anim["running"]:
-            if lo is None:                        # tam tur donebilen mekanizma
+            if lo is None:                        # a mechanism that can turn fully
                 if mode == "turn" and done >= 360:
                     break
                 delta = step_rad
@@ -355,13 +357,13 @@ def rotate(mode):
                 try:
                     motion = crank_motion()
                     motion.rotationValue = motion.rotationValue + delta
-                    cf = cam_follower()                # kam: itici s(theta) tablosundan
+                    cf = cam_follower()                # cam: follower from the s(theta) table
                     if cf:
                         slider, table, sgn = cf
                         deg = int(round(math.degrees(motion.rotationValue))) % 360
                         slider.slideValue = sgn * table[deg * len(table) // 360] / 10.0
                 except Exception:
-                    anim["running"] = False       # belge kapandi vb.
+                    anim["running"] = False       # document closed etc.
                 finally:
                     stepped.set()
 
@@ -374,7 +376,7 @@ def rotate(mode):
     threading.Thread(target=worker, daemon=True).start()
 
 
-# ---------------------------------------------------------------- Fusion olaylari
+# ---------------------------------------------------------------- Fusion events
 
 class MainThreadHandler(adsk.core.CustomEventHandler):
     def notify(self, args):
@@ -384,7 +386,7 @@ class MainThreadHandler(adsk.core.CustomEventHandler):
             try:
                 fn()
             except Exception:
-                log("ana is parcacigi hata:\n" + traceback.format_exc())
+                log("main thread error:\n" + traceback.format_exc())
 
 
 class PaletteHTMLHandler(adsk.core.HTMLEventHandler):
@@ -407,7 +409,7 @@ class PaletteHTMLHandler(adsk.core.HTMLEventHandler):
                 start_band(float(data.get("Q", 1.0)), data.get("req", 0))
                 html_args.returnData = "started"
             elif html_args.action == "draw":
-                anim["running"] = False           # cizmeden once donmeyi durdur
+                anim["running"] = False           # stop turning before drawing
                 start_design(params=data["params"])
                 html_args.returnData = "started"
             elif html_args.action == "fea":
@@ -420,16 +422,16 @@ class PaletteHTMLHandler(adsk.core.HTMLEventHandler):
                 pipeline, _ = reload_modules()
                 html_args.returnData = json.dumps(pipeline.MODULES, ensure_ascii=False)   # C0
         except Exception:
-            log("panel hata:\n" + traceback.format_exc())
+            log("panel error:\n" + traceback.format_exc())
 
 
 class StartupCompletedHandler(adsk.core.ApplicationEventHandler):
-    """Fusion acilisini bitirince paneli ac (erken acilan panel arayuz yuklenirken kayboluyor)."""
+    """Open the panel once Fusion has finished starting (a panel opened earlier vanished while the UI loaded)."""
     def notify(self, args):
         try:
             show_palette()
         except Exception:
-            log("acilis paneli hata:\n" + traceback.format_exc())
+            log("startup panel error:\n" + traceback.format_exc())
 
 
 class CommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
@@ -455,18 +457,18 @@ def _save_palette_pos(pal):
             with open(PALETTE_POS, "w", encoding="utf-8") as fh:
                 json.dump({"left": pal.left, "top": pal.top, "width": pal.width, "height": pal.height}, fh)
     except Exception:
-        log("panel konumu kaydedilemedi:" + chr(10) + traceback.format_exc())
+        log("could not save the panel position:\n" + traceback.format_exc())
 
 
 def show_palette():
     pal = ui.palettes.itemById(PALETTE_ID)
     if not pal:
         url = os.path.join(ADDIN_DIR, "palette.html").replace("\\", "/")
-        pal = ui.palettes.add(PALETTE_ID, "Mekanizma Asistanı", url, False, True, True, 1000, 300)
+        pal = ui.palettes.add(PALETTE_ID, "Mechanism Assistant", url, False, True, True, 1000, 300)
         on_html = PaletteHTMLHandler()
         pal.incomingFromHTML.add(on_html)
         handlers.append(on_html)
-        # Alta yapisik (docked) halde Fusion paneli daraltip "kaybedebiliyordu": serbest pencere
+        # Docked at the bottom, Fusion could collapse the panel and "lose" it: a floating window instead
         pal.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateFloating
         pal.setSize(1100, 320)
         # A new floating palette opens at (0, 0): on a dual-monitor setup that is the other screen.
@@ -484,13 +486,13 @@ def show_palette():
     pal.isVisible = True
 
 
-# ---------------------------------------------------------------- kopru (gelistirme)
+# ---------------------------------------------------------------- bridge (development)
 
 TOKEN = None
 
 
 def bridge_exec(code):
-    """Ana is parcaciginda Python kodu calistir, print ciktisini dondur."""
+    """Run Python code on the main thread and return what it printed."""
     def fn():
         buf = io.StringIO()
         ns = {"app": app, "ui": ui, "adsk": adsk, "ROOT": ROOT, "reload_modules": reload_modules}
@@ -513,7 +515,7 @@ def bridge_screenshot(width=1400, height=900):
 class BridgeHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not secrets.compare_digest(self.headers.get("X-Token", ""), TOKEN or ""):
-            self._reply(403, {"error": "gecersiz token"})
+            self._reply(403, {"error": "invalid token"})
             return
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
         if self.path == "/exec":
@@ -521,7 +523,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         elif self.path == "/screenshot":
             self._reply(200, bridge_screenshot())
         else:
-            self._reply(404, {"error": "bilinmeyen yol"})
+            self._reply(404, {"error": "unknown path"})
 
     def _reply(self, code, obj):
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -536,15 +538,15 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
 
 class BridgeServer(ThreadingHTTPServer):
-    # Windows'ta SO_REUSEADDR ayni portu iki sunucuya actirir (eklenti iki kez
-    # baslatilirsa istekler eski sunucuya gider). Kapali: port doluysa hata verir.
+    # On Windows SO_REUSEADDR lets two servers open the same port (if the add-in starts twice, the requests
+    # go to the old server). Off: an occupied port raises an error.
     allow_reuse_address = False
     daemon_threads = True
 
 
 def start_bridge():
     global server, TOKEN
-    # Anahtar kalici: eklenti yeniden baslasa da ayni kalir
+    # The token is persistent: it stays the same when the add-in restarts
     try:
         with open(TOKEN_FILE, encoding="utf-8") as fh:
             TOKEN = fh.read().strip() or None
@@ -557,14 +559,14 @@ def start_bridge():
     try:
         server = BridgeServer(("127.0.0.1", BRIDGE_PORT), BridgeHandler)
     except OSError as e:
-        log(f"kopru baslatilamadi (port {BRIDGE_PORT}): {e}")
+        log(f"bridge could not start (port {BRIDGE_PORT}): {e}")
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    log(f"kopru hazir: 127.0.0.1:{BRIDGE_PORT}")
+    log(f"bridge ready: 127.0.0.1:{BRIDGE_PORT}")
 
 
 def warm_up_llm():
-    """Modeli onceden VRAM'e yukle: ilk istek 100 s yerine birkac saniye sursun."""
+    """Load the model into VRAM early: the first request then takes seconds instead of ~100 s."""
     def worker():
         try:
             import llm_extract
@@ -573,16 +575,16 @@ def warm_up_llm():
                 data=json.dumps({"model": llm_extract.MODEL, "keep_alive": "30m"}).encode(),
                 headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=300).read()
-            log("LLM isitildi")
+            log("LLM warmed up")
         except Exception as e:
-            log(f"LLM isitilamadi: {e}")
+            log(f"LLM warm-up failed: {e}")
     threading.Thread(target=worker, daemon=True).start()
 
 
-# ---------------------------------------------------------------- yasam dongusu
+# ---------------------------------------------------------------- life cycle
 
-RUNNING_FLAG = "_mekanizma_asistani_running"   # tum eklentilerin paylastigi sys modulunde
-owner = False                                   # bu kopya mi baslatti?
+RUNNING_FLAG = "_mechanism_assistant_running"   # on the sys module shared by all add-ins
+owner = False                                   # did this copy start it?
 
 
 def run(context):
@@ -590,13 +592,13 @@ def run(context):
     try:
         app = adsk.core.Application.get()
         ui = app.userInterface
-        # Ayni eklenti iki yoldan kayitli olabilir (kisayol + gercek klasor): tek kopya calissin
+        # The same add-in may be registered twice (junction + real folder): only one copy may run
         if getattr(sys, RUNNING_FLAG, False):
-            log("---- ikinci kopya atlandi (eklenti zaten calisiyor): " + ADDIN_DIR)
+            log("---- second copy skipped (the add-in is already running): " + ADDIN_DIR)
             return
         setattr(sys, RUNNING_FLAG, True)
         owner = True
-        log("---- eklenti basladi: " + os.path.realpath(__file__))
+        log("---- add-in started: " + os.path.realpath(__file__))
 
         custom_event = app.registerCustomEvent(EVENT_ID)
         on_main = MainThreadHandler()
@@ -604,7 +606,7 @@ def run(context):
         handlers.append(on_main)
 
         cmd_def = ui.commandDefinitions.itemById(CMD_ID) or ui.commandDefinitions.addButtonDefinition(
-            CMD_ID, "Mekanizma Asistanı", "Doğal dille mekanizma tasarla (yerel yapay zekâ)")
+            CMD_ID, "Mechanism Assistant", "Design mechanisms in plain language (local AI)")
         on_created = CommandCreatedHandler()
         cmd_def.commandCreated.add(on_created)
         handlers.append(on_created)
@@ -615,21 +617,21 @@ def run(context):
         start_bridge()
         warm_up_llm()
         if app.isStartupComplete:
-            show_palette()            # elle Run'a basildi: hemen ac
+            show_palette()            # Run pressed by hand: open now
         else:
-            on_startup = StartupCompletedHandler()   # Fusion aciliyor: bitmesini bekle
+            on_startup = StartupCompletedHandler()   # Fusion is starting: wait until it is done
             app.startupCompleted.add(on_startup)
             handlers.append(on_startup)
     except Exception:
-        log("run hata:\n" + traceback.format_exc())
+        log("run error:\n" + traceback.format_exc())
         if ui:
-            ui.messageBox("Mekanizma Asistanı başlatılamadı:\n" + traceback.format_exc())
+            ui.messageBox("Mechanism Assistant could not start:\n" + traceback.format_exc())
 
 
 def stop(context):
     global server, owner
     if not owner:
-        return          # calisan kopya bu degil: onun kaynaklarina dokunma
+        return          # not the running copy: do not touch its resources
     owner = False
     anim["running"] = False
     setattr(sys, RUNNING_FLAG, False)
@@ -651,6 +653,6 @@ def stop(context):
             cmd_def.deleteMe()
         app.unregisterCustomEvent(EVENT_ID)
         handlers.clear()
-        log("---- eklenti durdu")
+        log("---- add-in stopped")
     except Exception:
-        log("stop hata:\n" + traceback.format_exc())
+        log("stop error:\n" + traceback.format_exc())

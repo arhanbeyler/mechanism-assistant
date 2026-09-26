@@ -1,12 +1,13 @@
 """
-Fusion FEA ile el hesabi dogrulamasi (sadece Fusion icinde calisir).
+Hand calculation vs Fusion FEA (runs inside Fusion only). Legacy (B7e): the Simulation API could not be
+driven reliably and the solve went to the cloud, so the project moved to the local FEA in fea_local.py.
 
-Deney: tek uzuv konsol kiris gibi. O4 deligi sabit, B deligine uzva dik F.
-El hesabi (strength.py ile ayni bagintilar):
-    sehim   delta = F L^3 / (3 E I),  I = t w^3 / 12   (Euler-Bernoulli, kayma ihmal)
-    kayma katkisi (Timoshenko): delta_s = F L / (kappa G A),  kappa = 5/6, G = E / (2 (1 + nu))
-    gerilme sigma = F L / S_net,  S_net = t (w^3 - d^3) / (6 w)   (delikli kesit, O4'te)
-Birimler: Fusion ici uzunluk cm; sim ici kuvvet 0.01 N (kg*cm/s^2); malzeme ozellikleri kPa.
+Experiment: one link as a cantilever. The O4 hole is fixed, F acts at the B hole perpendicular to the link.
+Hand calculation (same relations as strength.py):
+    deflection  delta = F L^3 / (3 E I),  I = t w^3 / 12   (Euler-Bernoulli, shear neglected)
+    shear share (Timoshenko): delta_s = F L / (kappa G A),  kappa = 5/6, G = E / (2 (1 + nu))
+    stress      sigma = F L / S_net,  S_net = t (w^3 - d^3) / (6 w)   (section with the hole, at O4)
+Units: length inside Fusion in cm; force in the simulation 0.01 N (kg*cm/s^2); material properties in kPa.
 """
 
 import math
@@ -29,18 +30,18 @@ def hand_calc(L, w, t, d, F, E_mpa, nu):
 
 
 def _hole_face(body, x_mm, d):
-    """Yerel x konumundaki pim deliginin silindirik yuzeyi."""
+    """Cylindrical face of the pin hole at local x."""
     for face in body.faces:
         g = face.geometry
         if isinstance(g, adsk.core.Cylinder) and abs(g.radius - mm(d / 2)) < 1e-4 \
                 and abs(g.origin.x - mm(x_mm)) < 1e-4:
             return face
-    raise RuntimeError(f"x={x_mm} mm'de delik yuzeyi bulunamadi")
+    raise RuntimeError(f"no hole face at x = {x_mm} mm")
 
 
 def create_cantilever_study(L, d, F, body=None):
-    """Aktif (KAYDEDILMIS) belgede statik gerilme calismasi: O4 deligi sabit, B deligine +Y yonde F.
-    Cozum BASLATILMAZ: kullanici Fusion'da Solve -> Local secer (bulut yok)."""
+    """Static stress study in the active (SAVED) document: O4 hole fixed, F in +Y at the B hole.
+    The solve is NOT started: the user picks Solve -> Local in Fusion (no cloud)."""
     app = adsk.core.Application.get()
     ui = app.userInterface
     if body is None:
@@ -50,8 +51,8 @@ def create_cantilever_study(L, d, F, body=None):
     adsk.doEvents()
     sims = adsk.sim.Simulations.get(app.activeDocument)
     if sims is None:
-        raise RuntimeError("Simulations alinamadi (belge kaydedilmis mi, acik diyalog var mi?)")
-    study = sims.createStudy("Kol dogrulama", adsk.sim.StudyTypes.LinearStaticStressStudyType)
+        raise RuntimeError("Could not get Simulations (is the document saved, is a dialog open?)")
+    study = sims.createStudy("Rocker verification", adsk.sim.StudyTypes.LinearStaticStressStudyType)
     case = study.loadCases.item(0)
     case.constraints.add(case.constraints.createFixedConstraintInput([_hole_face(body, 0.0, d)]))
     force = adsk.sim.VectorDefinition.createByVector(adsk.core.Vector3D.create(0, F * 100.0, 0))  # N -> 0.01 N
@@ -60,8 +61,8 @@ def create_cantilever_study(L, d, F, body=None):
 
 
 def setup_cantilever(L, w, t, d, F, material_name="Aluminum 6061"):
-    """Yeni belgede uzvu cizer, malzemeyi atar, el hesabini yapar. (Calisma: create_cantilever_study,
-    belge kaydedildikten sonra.) Dondurur: (body, el_hesabi)."""
+    """Draws the link in a new document, assigns the material and does the hand calculation. (The study:
+    create_cantilever_study, after the document is saved.) Returns (body, hand_calc)."""
     app = adsk.core.Application.get()
     app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
     design = adsk.fusion.Design.cast(app.activeProduct)
@@ -69,7 +70,7 @@ def setup_cantilever(L, w, t, d, F, material_name="Aluminum 6061"):
     root = design.rootComponent
 
     body = build_link_body(root, L, {"width": w, "thickness": t, "hole": d})
-    body.name = "Kol"
+    body.name = "Rocker"
 
     mat = app.materialLibraries.itemByName("Fusion Material Library").materials.itemByName(material_name)
     body.material = mat

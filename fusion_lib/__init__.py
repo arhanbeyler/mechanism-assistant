@@ -1,1 +1,1 @@
-"""Fusion 360'a ozel cizim modulleri (sadece Fusion icinde import edilebilir)."""
+"""Fusion 360 builders (can only be imported inside Fusion)."""

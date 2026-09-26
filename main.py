@@ -1,9 +1,9 @@
 """
-Tek komut (terminal surumu): dogal dil -> LLM -> sentez -> kontrol -> mechanism.json
+One command (terminal version): natural language -> LLM -> synthesis -> checks -> mechanism.json
 
-Kullanim:
-    python main.py "30 mm krankli, 60 derece salinan bir mekanizma"
-Sonra Fusion'da DortCubuk script'ini calistir (ya da Mekanizma Asistani panelini kullan).
+Usage:
+    python main.py "30 mm crank, 60 degree swing"
+Then run the FourBar script in Fusion (or use the Mechanism Assistant panel).
 """
 
 import json
@@ -31,12 +31,12 @@ def main(text):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(r["fusion"], fh, indent=2)
-        print(f"  Kaydedildi: {path}")
+        print(f"  Saved: {path}")
 
     print(f"\n{'✓' if r['status'] == 'ok' else '✗'} {r['message']}")
     return {"ok": 0, "missing": 1, "unsupported": 1, "failed": 2}[r["status"]]
 
 
 if __name__ == "__main__":
-    sentence = " ".join(sys.argv[1:]) or input("Mekanizmayi tarif edin: ")
+    sentence = " ".join(sys.argv[1:]) or input("Describe the mechanism: ")
     sys.exit(main(sentence))

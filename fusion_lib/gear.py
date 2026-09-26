@@ -1,9 +1,9 @@
 """
-C9: Duz disli ciftini Fusion 360'ta kurar (sadece Fusion icinde).
+C9: Builds the spur gear pair in Fusion 360 (runs inside Fusion only).
 
-Her disli: dis dibi diski + tek disin evolvent profili (iki yan spline) -> dairesel coklama (z adet)
--> mil deligi. Iki disli taban plakasina doner mafsallarla baglanir; aralarinda disli oraninda,
-ters yonlu motion link (pinyon bir tur -> cark z1/z2 tur).
+Each gear: root disc + the involute profile of one tooth (two flank splines) -> circular pattern
+(z copies) -> shaft bore. Both gears are joined to a base plate with revolute joints; a reversed motion
+link at the gear ratio couples them (one pinion turn -> z1/z2 gear turns).
 """
 
 import math
@@ -14,14 +14,14 @@ import adsk.fusion
 import gears
 from fusion_lib.fourbar import mm
 
-PLATE_T = 3.0     # mm, taban plakasi
-GAP = 0.5         # mm, plaka ile disli arasi
+PLATE_T = 3.0     # mm, base plate
+GAP = 0.5         # mm, between the plate and the gears
 
 
 def _tooth_profile(sketch, m, z):
-    """Tek dis (ekseni +x), dis dibi diskine gomulu kapali profil. Dondurur: profil."""
+    """One tooth (axis +x) as a closed profile sunk into the root disc. Returns the profile."""
     right, left, rf, ra = gears.involute_tooth(m, z, n=10)
-    r_in = rf - 0.3 * m                                     # diske gomulsun (birlesme icin)
+    r_in = rf - 0.3 * m                                     # sunk into the disc (so they join)
     P = adsk.core.Point3D.create
     lines = sketch.sketchCurves.sketchLines
     splines = sketch.sketchCurves.sketchFittedSplines
@@ -47,18 +47,18 @@ def _tooth_profile(sketch, m, z):
 
 
 def build_gear_body(comp, m, z, width, bore):
-    """Bilesende tek disli govdesi. Dondurur: BRepBody."""
+    """One gear body in the component. Returns the BRepBody."""
     ext = comp.features.extrudeFeatures
     dist = adsk.core.ValueInput.createByReal(mm(width))
     rf = m * z / 2 - 1.25 * m
 
     disk = comp.sketches.add(comp.xYConstructionPlane)
-    disk.name = "Dis dibi"
+    disk.name = "Root disc"
     disk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0, 0, 0), mm(rf))
     body = ext.addSimple(disk.profiles.item(0), dist, adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
 
     tooth_sk = comp.sketches.add(comp.xYConstructionPlane)
-    tooth_sk.name = "Dis profili (evolvent)"
+    tooth_sk.name = "Tooth profile (involute)"
     tin = ext.createInput(_tooth_profile(tooth_sk, m, z), adsk.fusion.FeatureOperations.JoinFeatureOperation)
     tin.setDistanceExtent(False, dist)
     tin.participantBodies = [body]         # only this gear (in an assembly other bodies may touch)
@@ -73,7 +73,7 @@ def build_gear_body(comp, m, z, width, bore):
     comp.features.circularPatternFeatures.add(pin)
 
     hole = comp.sketches.add(comp.xYConstructionPlane)
-    hole.name = "Mil deligi"
+    hole.name = "Shaft bore"
     hole.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0, 0, 0), mm(bore / 2))
     cut = ext.createInput(hole.profiles.item(0), adsk.fusion.FeatureOperations.CutFeatureOperation)
     cut.setDistanceExtent(False, dist)
@@ -89,27 +89,27 @@ def _bore_edge(occ, bore, z_top):
         if isinstance(g, (adsk.core.Circle3D, adsk.core.Arc3D)) and abs(g.radius - mm(bore / 2)) < 1e-3 \
                 and abs(g.center.x) < 1e-3 and abs(g.center.y) < 1e-3 and abs(g.center.z - mm(z_top)) < 1e-3:
             return e.createForAssemblyContext(occ)
-    raise RuntimeError(f"{occ.component.name}: mil deligi kenari bulunamadi")
+    raise RuntimeError(f"{occ.component.name}: bore edge not found")
 
 
 def build(g, root, design=None):
-    """g: gears.design() ciktisi (+ type). root: temizlenmis kok bilesen."""
+    """g: gears.design() output (+ type). root: the cleared root component."""
     m, z1, z2, b = g["module"], g["z1"], g["z2"], g["face_width"]
     a = g["center_distance"]
     ra1, ra2 = m * z1 / 2 + m, m * z2 / 2 + m
     P = adsk.core.Point3D.create
 
-    # Taban plakasi (sabit): iki mil deligi
+    # Base plate (grounded): two shaft holes
     plate_occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
     plate = plate_occ.component
-    plate.name = "Sabit"
+    plate.name = "Ground"
     sk = plate.sketches.add(plate.xYConstructionPlane)
     margin = 5.0
     sk.sketchCurves.sketchLines.addTwoPointRectangle(
         P(mm(-ra1 - margin), mm(-max(ra1, ra2) - margin), 0), P(mm(a + ra2 + margin), mm(max(ra1, ra2) + margin), 0))
     body = plate.features.extrudeFeatures.addSimple(sk.profiles.item(0), adsk.core.ValueInput.createByReal(mm(PLATE_T)),
                                                     adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
-    body.name = "Sabit"
+    body.name = "Ground"
     holes = plate.sketches.add(plate.xYConstructionPlane)
     holes.sketchCurves.sketchCircles.addByCenterRadius(P(0, 0, 0), mm(g["bore1"] / 2))
     holes.sketchCurves.sketchCircles.addByCenterRadius(P(mm(a), 0, 0), mm(g["bore2"] / 2))
@@ -120,11 +120,11 @@ def build(g, root, design=None):
                                              adsk.fusion.FeatureOperations.CutFeatureOperation)
     plate_occ.isGrounded = True
 
-    # Disliler: pinyon orijinde, cark (a, 0)'da; carkin bir dis boslugu pinyona baksin
+    # Gears: pinion at the origin, gear at (a, 0); a tooth space of the gear faces the pinion
     zb = PLATE_T + GAP
     occs = {}
-    for name, z, bore, x, phase in (("Pinyon", z1, g["bore1"], 0.0, 0.0),
-                                    ("Cark", z2, g["bore2"], a, math.pi / z2 if z2 % 2 == 0 else 0.0)):
+    for name, z, bore, x, phase in (("Pinion", z1, g["bore1"], 0.0, 0.0),
+                                    ("Gear", z2, g["bore2"], a, math.pi / z2 if z2 % 2 == 0 else 0.0)):
         mt = adsk.core.Matrix3D.create()
         mt.setToRotation(phase, adsk.core.Vector3D.create(0, 0, 1), P(0, 0, 0))
         mt.translation = adsk.core.Vector3D.create(mm(x), 0, mm(zb))
@@ -134,17 +134,17 @@ def build(g, root, design=None):
         occs[name] = (occ, bore)
 
     joints = {}
-    for name in ("Pinyon", "Cark"):
+    for name in ("Pinion", "Gear"):
         occ, bore = occs[name]
         geo = adsk.fusion.JointGeometry.createByCurve(_bore_edge(occ, bore, b),
                                                       adsk.fusion.JointKeyPointTypes.CenterKeyPoint)
         ji = root.asBuiltJoints.createInput(plate_occ, occ, geo)
         ji.setAsRevoluteJointMotion(adsk.fusion.JointDirections.ZAxisJointDirection)
         j = root.asBuiltJoints.add(ji)
-        j.name = f"Sabit-{name}"
+        j.name = f"Ground-{name}"
         joints[name] = j
 
-    link = root.motionLinks.createInput(joints["Pinyon"], joints["Cark"])
+    link = root.motionLinks.createInput(joints["Pinion"], joints["Gear"])
     link.valueOne = adsk.core.ValueInput.createByString("360 deg")
     link.valueTwo = adsk.core.ValueInput.createByString(f"{360.0 * z1 / z2} deg")
     link.isReversed = True

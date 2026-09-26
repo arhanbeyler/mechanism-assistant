@@ -1,10 +1,10 @@
 """
-Dort cubuk mekanizmasini Fusion 360'ta kurar (sadece Fusion icinde calisir).
+Builds the four-bar linkage in Fusion 360 (runs inside Fusion only), and the shared document handling
+used by every module (one tagged document is reused instead of opening new tabs).
 
-build(mech) -> mech: kinematics.to_fusion_dict() ciktisi.
-4 uzvu ayri bilesen olarak cizer, dogru konuma yerlestirir ve 4 adet
-Revolute (as-built) joint ile baglar. Sabit uzuv (ground) sabitlenir.
-Uzuvlar birbirine carpmasin diye z yonunde katmanlara dizilir.
+build(mech) -> mech: kinematics.to_fusion_dict() output (+ section, layer order ...).
+Draws the 4 links as separate components, places them and joins them with 4 revolute (as-built)
+joints. The ground link is grounded. The links are stacked in z layers so that they do not collide.
 """
 
 import math
@@ -12,40 +12,40 @@ import math
 import adsk.core
 import adsk.fusion
 
-# Varsayilan kesit (mech['section_mm'] yoksa). Yuk verildiyse strength.py hesaplar:
-# pim capi (A, B), mil capi (O2, O4) + uzuv basina genislik/kalinlik.
+# Default section (if mech['section_mm'] is missing). With a load, strength.py computes it:
+# pin diameter (A, B), shaft diameter (O2, O4) + width / thickness per link.
 DEFAULT_SECTION = {"hole": 4.0, "shaft": 4.0, "links": {n: {"width": 10.0, "thickness": 4.0}
-                                                        for n in ("Sabit", "Krank", "Biyel", "Kol")}}
-SHAFT_POINTS = {"O2", "O4"}   # tahrik ve cikis milleri; A, B serbest pim
-GAP = 0.5          # mm, katmanlar arasi bosluk
+                                                        for n in ("Ground", "Crank", "Coupler", "Rocker")}}
+SHAFT_POINTS = {"O2", "O4"}   # drive and output shafts; A, B are free pins
+GAP = 0.5          # mm, gap between layers
 
-# uzuv adi: (baslangic noktasi, bitis noktasi, katman)
+# link name: (start point, end point, layer)
 LINKS = {
-    "Sabit": ("O2", "O4", 0),
-    "Krank": ("O2", "A", 1),
-    "Biyel": ("A", "B", 2),
-    "Kol":   ("O4", "B", 3),
+    "Ground": ("O2", "O4", 0),
+    "Crank": ("O2", "A", 1),
+    "Coupler": ("A", "B", 2),
+    "Rocker": ("O4", "B", 3),
 }
 
-# (uzuv1, uzuv2, ortak nokta)
+# (link 1, link 2, shared point)
 JOINTS = [
-    ("Sabit", "Krank", "O2"),
-    ("Krank", "Biyel", "A"),
-    ("Biyel", "Kol", "B"),
-    ("Kol", "Sabit", "O4"),
+    ("Ground", "Crank", "O2"),
+    ("Crank", "Coupler", "A"),
+    ("Coupler", "Rocker", "B"),
+    ("Rocker", "Ground", "O4"),
 ]
 
 
 def mm(v):
-    """mm -> Fusion'un ic birimi (cm)."""
+    """mm -> Fusion's internal unit (cm)."""
     return v / 10.0
 
 
 def build_link_body(comp, length, sec):
-    """Bilesende uzuv govdesi: once dolu dis hat (w genisliginde govde + uclarda gobek, cap
-    sec["boss0"]/["boss1"], yoksa w) extrude, sonra delikler (sec["hole0"]/["hole1"], yoksa
-    sec["hole"]) ayri cizimden kesilir. (Govde delikten dar olunca tek cizimde bolge ayiklamak
-    guvenilir degildi.) Dondurur: BRepBody."""
+    """Link body in the component: first the solid outline (web of width w + end bosses of diameter
+    sec["boss0"]/["boss1"], else w) is extruded, then the holes (sec["hole0"]/["hole1"], else sec["hole"])
+    are cut from a separate sketch. (Picking regions in one sketch was unreliable when the web was
+    narrower than the hole.) Returns the BRepBody."""
     w, t = sec["width"], sec["thickness"]
     d0 = sec.get("hole0", sec["hole"])
     d1 = sec.get("hole1", sec["hole"])
@@ -56,7 +56,7 @@ def build_link_body(comp, length, sec):
     extrudes = comp.features.extrudeFeatures
 
     outline = comp.sketches.add(comp.xYConstructionPlane)
-    outline.name = "Dis hat"
+    outline.name = "Outline"
     outline.sketchCurves.sketchLines.addTwoPointRectangle(P(0, mm(-w / 2), 0), P(mm(length), mm(w / 2), 0))
     outline.sketchCurves.sketchCircles.addByCenterRadius(P(0, 0, 0), mm(R0))
     outline.sketchCurves.sketchCircles.addByCenterRadius(P(mm(length), 0, 0), mm(R1))
@@ -66,19 +66,22 @@ def build_link_body(comp, length, sec):
     body = extrudes.addSimple(solid, dist, adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
 
     holes = comp.sketches.add(comp.xYConstructionPlane)
-    holes.name = "Delikler"
+    holes.name = "Holes"
     holes.sketchCurves.sketchCircles.addByCenterRadius(P(0, 0, 0), mm(d0 / 2))
     holes.sketchCurves.sketchCircles.addByCenterRadius(P(mm(length), 0, 0), mm(d1 / 2))
     cut = adsk.core.ObjectCollection.create()
     for prof in holes.profiles:
         cut.add(prof)
-    extrudes.addSimple(cut, dist, adsk.fusion.FeatureOperations.CutFeatureOperation)
+    cin = extrudes.createInput(cut, adsk.fusion.FeatureOperations.CutFeatureOperation)
+    cin.setDistanceExtent(False, dist)
+    cin.participantBodies = [body]           # only this link (a cut hits every body it touches otherwise)
+    extrudes.add(cin)
     return body
 
 
 def make_link(root, name, p_start, p_end, z_mm, sec):
-    """Bir uzvu yeni bilesen olarak olusturur ve z_mm yuksekligine yerlestirir.
-    sec: {"width", "thickness", "hole"} (bu uzvun kesiti)."""
+    """Creates one link as a new component and places it at height z_mm.
+    sec: {"width", "thickness", "hole"} (this link's section)."""
     dx, dy = p_end[0] - p_start[0], p_end[1] - p_start[1]
     length = math.hypot(dx, dy)
     angle = math.atan2(dy, dx)
@@ -96,26 +99,28 @@ def make_link(root, name, p_start, p_end, z_mm, sec):
 
 
 def hole_edge(occ, local_x_mm, sec):
-    """Uzvun yerel x konumundaki deligin ust dairesel kenari (montaj baglaminda)."""
+    """Top circular edge of the link's hole at local x (in the assembly context)."""
     body = occ.component.bRepBodies.item(0)
     d = sec.get("hole0" if local_x_mm < 1e-9 else "hole1", sec["hole"])
     for edge in body.edges:
         geo = edge.geometry
-        # Kisa uzuvlarda Fusion delik kenarini tam daire yerine yaylara bolebiliyor
+        # On short links Fusion may split the hole edge into arcs instead of one full circle
         if isinstance(geo, (adsk.core.Circle3D, adsk.core.Arc3D)) \
                 and abs(geo.radius - mm(d / 2)) < 1e-3 \
                 and abs(geo.center.x - mm(local_x_mm)) < 1e-3 \
                 and abs(geo.center.y) < 1e-3 \
                 and abs(geo.center.z - mm(sec["thickness"])) < 1e-3:
             return edge.createForAssemblyContext(occ)
-    raise RuntimeError(f"{occ.component.name}: x={local_x_mm} mm'de delik kenari bulunamadi")
+    raise RuntimeError(f"{occ.component.name}: no hole edge at x = {local_x_mm} mm")
 
 
-MARK_GROUP, MARK_NAME = "MekanizmaAsistani", "fourbar"   # eklentinin cizdigi belgenin etiketi
+# Tag of the document drawn by the add-in. The group name stays as it is until the add-in folder / id is
+# renamed together with it (documents already drawn carry this tag).
+MARK_GROUP, MARK_NAME = "MekanizmaAsistani", "fourbar"
 
 
 def _find_marked_design(app):
-    """Daha once bu eklentinin cizdigi (etiketli) acik belge; yoksa (None, None)."""
+    """The open document this add-in drew before (tagged); (None, None) if there is none."""
     for i in range(app.documents.count):
         doc = app.documents.item(i)
         try:
@@ -128,9 +133,9 @@ def _find_marked_design(app):
 
 
 def _clear(design):
-    """Onceki mekanizmayi sil (sadece etiketli belgede cagrilir)."""
+    """Delete the previous mechanism (only called on the tagged document)."""
     root = design.rootComponent
-    for ml in list(root.motionLinks):        # disli: once mafsallari baglayan motion link
+    for ml in list(root.motionLinks):        # gears: first the motion link that ties the joints
         ml.deleteMe()
     for j in list(root.asBuiltJoints):
         j.deleteMe()
@@ -138,15 +143,15 @@ def _clear(design):
         o.deleteMe()
 
 
-# Gorunumler (panelle ayni renkler): bilesen adi -> Fusion Appearance Library gorunumu. Adi "Yay" ile
-# baslayanlar yay kareleri; "Kama" govdeye ayrica uygulanir.
-APPEARANCES = {"Sabit": "Plastic - Matte (Gray)", "Taban": "Plastic - Matte (Gray)", "Yataklar": "Plastic - Matte (Gray)",
-               "Krank": "Plastic - Matte (Red)", "Pinyon": "Plastic - Matte (Red)", "Kam": "Plastic - Matte (Red)",
-               "Biyel": "Plastic - Matte (Blue)",
-               "Kol": "Plastic - Matte (Green)", "Cark": "Plastic - Matte (Green)", "Itici": "Plastic - Matte (Green)",
-               "Mil": "Steel - Satin", "Yay": "Steel - Satin", "Kama": "Brass - Matte",
-               "Housing": "Plastic - Matte (Gray)", "Pinion": "Plastic - Matte (Red)", "Gear": "Plastic - Matte (Green)",
-               "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin"}
+# Appearances (same colours as the panel): component name -> Fusion Appearance Library appearance.
+# Components named "Spring k ..." are the spring frames; bodies named "Key ..." get brass separately.
+APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gray)", "Bearings": "Plastic - Matte (Gray)",
+               "Housing": "Plastic - Matte (Gray)",
+               "Crank": "Plastic - Matte (Red)", "Pinion": "Plastic - Matte (Red)", "Cam": "Plastic - Matte (Red)",
+               "Coupler": "Plastic - Matte (Blue)",
+               "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
+               "Shaft": "Steel - Satin", "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin",
+               "Spring": "Steel - Satin", "Key": "Brass - Matte"}
 
 
 def _appearance(design, name):
@@ -158,24 +163,24 @@ def _appearance(design, name):
 
 
 def paint(design):
-    """Cizilen bilesenleri renklendirir (sadece gorsel: bir sorun cizimi bozmasin)."""
+    """Colours the drawn components (visual only: a problem here must not break the drawing)."""
     try:
         for occ in design.rootComponent.occurrences:
-            key = "Yay" if occ.component.name.startswith("Yay ") else occ.component.name
+            key = "Spring" if occ.component.name.startswith("Spring ") else occ.component.name
             if key in APPEARANCES:
                 occ.appearance = _appearance(design, APPEARANCES[key])
             for body in occ.component.bRepBodies:
-                if body.name.startswith(("Kama", "Key ")):
-                    body.appearance = _appearance(design, APPEARANCES["Kama"])
-                elif body.name == "Basma plakası":
-                    body.appearance = _appearance(design, APPEARANCES["Taban"])
+                if body.name.startswith("Key "):
+                    body.appearance = _appearance(design, APPEARANCES["Key"])
+                elif body.name == "Top plate":
+                    body.appearance = _appearance(design, APPEARANCES["Base"])
     except Exception:
         pass
 
 
 def build(mech, reuse=True):
-    """Mekanizmayi kurar. reuse=True: eklentinin daha once cizdigi belge aciksa onu gunceller
-    (yeni sekme acmaz); yoksa yeni belge acar. Dondurur: tasarim (Design)."""
+    """Builds the mechanism. reuse=True: if the document drawn by the add-in is open it is updated
+    (no new tab); otherwise a new document is opened. Returns the Design."""
     app = adsk.core.Application.get()
     doc, design = _find_marked_design(app) if reuse else (None, None)
     if doc:
@@ -190,11 +195,11 @@ def build(mech, reuse=True):
     for key, owner in (("cam_table", "cam"), ("cam_slide_sign", "cam"), ("spring_frames", "spring")):
         old = design.attributes.itemByName(MARK_GROUP, key)
         if old and mech.get("type") != owner:
-            old.deleteMe()                    # onceki tasarimin animasyon verisi kalmasin
-    other = {"spur_gear": "gear",             # C9: disli cifti
-             "spring": "spring",              # C10: basma yayi (+ sikisma animasyonu kareleri)
-             "cam": "cam",                    # C11a: kam + itici
-             "shaft": "shaft",                # C11b: iki yatakli mil
+            old.deleteMe()                    # no animation data of the previous design may remain
+    other = {"spur_gear": "gear",             # C9: gear pair
+             "spring": "spring",              # C10: compression spring (+ compression animation frames)
+             "cam": "cam",                    # C11a: cam + follower
+             "shaft": "shaft",                # C11b: two-bearing shaft
              "reducer": "reducer"}.get(mech.get("type"))   # E1: single-stage reducer (system)
     if other:
         import importlib
@@ -213,16 +218,16 @@ def build(mech, reuse=True):
     secs = {n: dict(section["links"][n], hole=d_pin, hole0=hole_at(s), hole1=hole_at(e))
             for n, (s, e, _) in LINKS.items()}
 
-    # Katman sirasi motordan (interference.choose_layer_order); yoksa LINKS'teki varsayilan
+    # Layer order from the engine (interference.choose_layer_order); else the default in LINKS
     order = mech.get("layer_order") or [n for n, _ in sorted(LINKS.items(), key=lambda kv: kv[1][2])]
     occs, lengths, z = {}, {}, 0.0
     for name in order:
         s, e, _ = LINKS[name]
         occs[name], lengths[name] = make_link(root, name, pts[s], pts[e], z, secs[name])
         z += secs[name]["thickness"] + GAP
-    occs["Sabit"].isGrounded = True
+    occs["Ground"].isGrounded = True
 
-    # Her uzvun hangi ucu hangi noktada: baslangic -> x=0, bitis -> x=L
+    # Which end of each link is at which point: start -> x = 0, end -> x = L
     def local_x(link, point):
         s, _, _ = LINKS[link]
         return 0.0 if point == s else lengths[link]
@@ -237,7 +242,7 @@ def build(mech, reuse=True):
         joint.name = f"{l1}-{l2} ({p})"
 
     if mech.get("input_range_deg"):
-        _limit_input_joint(root, occs["Krank"], mech["input_range_deg"])
+        _limit_input_joint(root, occs["Crank"], mech["input_range_deg"])
     paint(design)
     app.activeViewport.fit()
     return design
@@ -249,10 +254,10 @@ def _occ_angle(occ):
 
 
 def _limit_input_joint(root, crank_occ, range_deg):
-    """Sinirli acili mekanizma (B9): giris mafsalina donme siniri koy. range_deg, cizilen konuma gore
-    giris acisi araligi (theta artisi = saat yonu tersi). Mafsalin pozitif yonu kucuk bir deneme
-    donusuyle olculur, sinirlar ona gore yerlestirilir."""
-    joint = [j for j in root.asBuiltJoints if j.name.startswith("Sabit-Krank")][0]
+    """Limited-angle mechanism (B9): joint limits on the input joint. range_deg is the input angle range
+    relative to the drawn pose (theta grows counter-clockwise). The joint's positive sense is measured
+    with a small trial turn and the limits are placed accordingly."""
+    joint = [j for j in root.asBuiltJoints if j.name.startswith("Ground-Crank")][0]
     motion = adsk.fusion.RevoluteJointMotion.cast(joint.jointMotion)
     a0 = _occ_angle(crank_occ)
     motion.rotationValue = math.radians(2)
@@ -265,4 +270,4 @@ def _limit_input_joint(root, crank_occ, range_deg):
     limits.minimumValue = lo
     limits.isMaximumValueEnabled = True
     limits.maximumValue = hi
-    joint.name = "Sabit-Krank (O2, sinirli)"
+    joint.name = "Ground-Crank (O2, limited)"

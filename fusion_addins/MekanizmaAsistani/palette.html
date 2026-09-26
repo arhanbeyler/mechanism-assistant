@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Mekanizma Asistanı</title>
+<title>Mechanism Assistant</title>
 <style>
   :root {
     --bg: #1f232b; --panel: #272c36; --line: #3a404c; --text: #e6e8ec; --muted: #9aa1ad;
@@ -19,7 +19,7 @@
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
   h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
 
-  /* sohbet */
+  /* chat */
   .chat { flex: 1 1 30%; display: flex; flex-direction: column; }
   .log { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .msg { max-width: 90%; padding: 7px 10px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; }
@@ -41,7 +41,7 @@
     padding: 0 16px; font: inherit; font-weight: 600; cursor: pointer; }
   button.primary:disabled { opacity: .45; cursor: default; }
 
-  /* kaydiricilar */
+  /* sliders */
   .knobs { flex: 1 1 24%; padding: 8px 12px; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; }
   .knobs h3 { margin-bottom: 2px; }
   .knobs .row { display: flex; gap: 10px; } .knobs .row > * { flex: 1; min-width: 0; }
@@ -65,7 +65,7 @@
   button.ghost:hover { border-color: var(--accent); }
   button.ghost.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-  /* sonuc karti */
+  /* result card */
   .result { flex: 1 1 46%; padding: 10px 12px; overflow-y: auto; }
   .empty { color: var(--muted); height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; }
   .grid { display: flex; gap: 14px; }
@@ -91,62 +91,62 @@
 <div class="wrap">
   <section class="card chat">
     <div class="log" id="log">
-      <div class="msg ai">Merhaba! İstediğin mekanizmayı tarif et ya da yandaki kaydırıcılarla oyna.
-Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
+      <div class="msg ai">Hi! Describe the mechanism you want, or play with the sliders.
+Everything is computed on this computer, with a local AI.</div>
     </div>
     <div class="status" id="status"></div>
     <div class="examples">
-      <button class="chip">30 mm krank, 60° salınım, uçta 5 kg, PETG</button>
-      <button class="chip">4 cm krank, 50°, hızlı dönüşlü</button>
-      <button class="chip">25 mm krank, 110° salınım</button>
+      <button class="chip">30 mm crank, 60° swing, 5 kg at the tip, PETG</button>
+      <button class="chip">1.5 kW 1450 rpm motor, 1:4 gearbox</button>
+      <button class="chip">turn a 4 cm arm 45° and the other arm turns 120°</button>
     </div>
     <div class="input">
-      <textarea id="text" placeholder="Mekanizmayı tarif et... (Enter: gönder)"></textarea>
-      <button class="primary" id="send">Gönder</button>
+      <textarea id="text" placeholder="Describe the mechanism... (Enter: send)"></textarea>
+      <button class="primary" id="send">Send</button>
     </div>
   </section>
 
   <section class="card knobs">
     <div class="row">
-      <div class="knob"><label>Tür</label>
-        <select id="k-kind"><option value="fourbar">Dört çubuk</option></select></div>
-      <div class="knob"><label>Malzeme</label>
+      <div class="knob"><label>Type</label>
+        <select id="k-kind"><option value="fourbar">Four-bar</option></select></div>
+      <div class="knob"><label>Material</label>
         <select id="k-mat">
-          <option value="PLA">PLA (3B baskı)</option><option value="PETG">PETG (3B baskı)</option>
-          <option value="aluminum">Alüminyum 6061-T6</option><option value="steel">Çelik S235</option>
+          <option value="PLA">PLA (3D print)</option><option value="PETG">PETG (3D print)</option>
+          <option value="aluminum">Aluminium 6061-T6</option><option value="steel">Steel S235</option>
         </select></div>
     </div>
     <div id="fb-knobs">
       <div class="row">
-        <div class="knob"><label>Giriş kolu <b id="v-a"></b></label>
+        <div class="knob"><label>Input arm <b id="v-a"></b></label>
           <input type="range" id="k-a" min="5" max="200" step="1" value="30"></div>
-        <div class="knob"><label title="Sağ uç: tam tur (krank-kol). Sola çekince giriş kolu sınırlı açıda döner.">Giriş hareketi <b id="v-in"></b></label>
+        <div class="knob"><label title="Right end: full turns (crank-rocker). Pull left and the input arm turns through a limited angle.">Input motion <b id="v-in"></b></label>
           <input type="range" id="k-in" min="10" max="360" step="5" value="360"></div>
       </div>
-      <div class="knob"><label id="l-psi">Salınım açısı <b id="v-psi"></b></label>
+      <div class="knob"><label id="l-psi">Swing angle <b id="v-psi"></b></label>
         <input type="range" id="k-psi" min="5" max="175" step="1" value="60">
-        <div class="legend"><span><i style="background:var(--ok)"></i>uygun</span>
-          <span><i style="background:var(--warn)"></i>sınırda / büyük</span>
-          <span><i style="background:var(--bad)"></i>olmaz</span></div></div>
+        <div class="legend"><span><i style="background:var(--ok)"></i>good</span>
+          <span><i style="background:var(--warn)"></i>marginal / large</span>
+          <span><i style="background:var(--bad)"></i>not possible</span></div></div>
       <div class="row">
-        <div class="knob"><label title="Zaman oranı: ileri / geri strok süresi">Q <b id="v-q"></b></label>
+        <div class="knob"><label title="Time ratio: forward / return stroke time">Q <b id="v-q"></b></label>
           <input type="range" id="k-q" min="1" max="2" step="0.05" value="1"></div>
-        <div class="knob"><label>Uçtaki yük <b id="v-f"></b></label>
+        <div class="knob"><label>Tip load <b id="v-f"></b></label>
           <input type="range" id="k-f" min="0" max="500" step="1" value="0"></div>
       </div>
     </div>
     <div id="gen-knobs" hidden></div>
     <div class="verdict" id="verdict"></div>
     <div class="actions">
-      <button class="primary" id="draw" disabled>Fusion'da çiz</button>
-      <button class="ghost" id="turn" title="Krankı bir tam tur döndür">⟳ 1 tur</button>
-      <button class="ghost" id="loop" title="Sürekli döndür / durdur">▶ Sürekli</button>
-      <button class="ghost" id="fea" title="Kol ve krankı yerel sonlu eleman analiziyle (FEA) doğrula">FEA</button>
+      <button class="primary" id="draw" disabled>Draw in Fusion</button>
+      <button class="ghost" id="turn" title="Turn the input one full turn">⟳ 1 turn</button>
+      <button class="ghost" id="loop" title="Turn continuously / stop">▶ Loop</button>
+      <button class="ghost" id="fea" title="Verify the rocker and crank with a local finite element analysis (FEA)">FEA</button>
     </div>
   </section>
 
   <section class="card result" id="result">
-    <div class="empty">Tasarım sonucu burada görünecek:<br>ölçüler, kesitler, kontroller, mekanizma ve iletim açısı.</div>
+    <div class="empty">The design result appears here:<br>dimensions, sections, checks and a sketch of the mechanism.</div>
   </section>
 </div>
 
@@ -155,7 +155,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   const ready = () => window.adsk && adsk.fusionSendData;
   let busy = false, req = 0, bandReq = 0, lastQ = null, lastPreview = null;
 
-  // ------------------------------------------------------------ sohbet
+  // ------------------------------------------------------------ chat
   function addMsg(kind, text, tone) {
     const el = document.createElement("div");
     el.className = "msg " + kind + (tone ? " " + tone : "");
@@ -168,10 +168,10 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   function send() {
     const text = $("text").value.trim();
     if (!text || busy) return;
-    if (!ready()) { addMsg("ai", "Fusion bağlantısı henüz hazır değil, bir saniye sonra tekrar dene.", "info"); return; }
+    if (!ready()) { addMsg("ai", "The Fusion connection is not ready yet; try again in a second.", "info"); return; }
     addMsg("user", text);
     $("text").value = "";
-    setBusy(true, "Gönderiliyor...");
+    setBusy(true, "Sending...");
     adsk.fusionSendData("design", JSON.stringify({ text }));
   }
   $("send").addEventListener("click", send);
@@ -179,13 +179,13 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   document.querySelectorAll(".chip").forEach((c) =>
     c.addEventListener("click", () => { $("text").value = c.textContent; $("text").focus(); }));
 
-  // ------------------------------------------------------------ kaydiricilar
-  const limited = () => +$("k-in").value < 360;      // sinirli acili giris (B9)
-  let MODULES = {};                                   // C0: eklentiden gelir (pipeline.MODULES)
+  // ------------------------------------------------------------ sliders
+  const limited = () => +$("k-in").value < 360;      // limited-angle input (B9)
+  let MODULES = {};                                   // C0: comes from the add-in (pipeline.MODULES)
   const kind = () => $("k-kind").value;
   const isFourbar = () => kind() === "fourbar";
 
-  function buildModules(mods) {                       // Tur seciciye modulleri ekle
+  function buildModules(mods) {                       // add the modules to the Type selector
     MODULES = mods || {};
     for (const [key, m] of Object.entries(MODULES)) {
       const o = document.createElement("option");
@@ -193,7 +193,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       $("k-kind").appendChild(o);
     }
   }
-  function buildGenKnobs() {                          // secilen modulun kaydiricilari (tanimdan)
+  function buildGenKnobs() {                          // the chosen module's sliders (from its definition)
     const m = MODULES[kind()];
     $("gen-knobs").innerHTML = m.params.map((p) => p.options
       ? `<div class="knob"><label>${p.label}</label><select id="k-${p.key}">${p.options.map(([v, t]) =>
@@ -206,7 +206,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     $("fb-knobs").hidden = !isFourbar();
     $("gen-knobs").hidden = isFourbar();
     if (!isFourbar()) buildGenKnobs();
-    $("fea").disabled = !isFourbar();                 // FEA simdilik dort cubuk uzuvlari icin
+    $("fea").disabled = !isFourbar();                 // FEA is for four-bar links only (for now)
     lastQ = null;
     schedulePreview();
   }
@@ -239,15 +239,15 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     }
     const p = params();
     $("v-a").textContent = p.crank_length_mm + " mm";
-    $("v-in").textContent = limited() ? p.input_swing_deg + "°" : "tam tur";
-    $("l-psi").firstChild.textContent = limited() ? "Çıkış dönmesi " : "Salınım açısı ";
+    $("v-in").textContent = limited() ? p.input_swing_deg + "°" : "full turns";
+    $("l-psi").firstChild.textContent = limited() ? "Output rotation " : "Swing angle ";
     $("k-q").disabled = limited();
     $("v-psi").textContent = p.output_swing_deg + "°";
-    $("v-q").textContent = p.time_ratio > 1 ? p.time_ratio.toFixed(2) : "1 (yok)";
-    $("v-f").textContent = p.max_load_N ? p.max_load_N + " N (≈" + (p.max_load_N / 9.81).toFixed(1) + " kg)" : "yok";
+    $("v-q").textContent = p.time_ratio > 1 ? p.time_ratio.toFixed(2) : "1 (none)";
+    $("v-f").textContent = p.max_load_N ? p.max_load_N + " N (≈" + (p.max_load_N / 9.81).toFixed(1) + " kg)" : "none";
   }
   let timer = null;
-  function schedulePreview() {          // kaydirirken en fazla ~8 istek/s
+  function schedulePreview() {          // at most ~8 requests/s while dragging
     labels();
     if (timer) return;
     timer = setTimeout(() => { timer = null; requestPreview(); }, 120);
@@ -257,7 +257,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     req += 1;
     adsk.fusionSendData("preview", JSON.stringify({ req, params: params() }));
     if (!isFourbar()) return;
-    if (limited()) {                     // renkli bolge sadece tam tur (krank-kol) icin hesaplaniyor
+    if (limited()) {                     // the coloured band exists for full-turn (crank-rocker) designs only
       lastQ = null;
       $("k-psi").style.background = "var(--line)";
       return;
@@ -270,7 +270,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   $("draw").addEventListener("click", () => {
     if (!ready() || !lastPreview || lastPreview.status !== "ok") return;
     $("draw").disabled = true;
-    $("status").textContent = "Fusion'da çiziliyor...";
+    $("status").textContent = "Drawing in Fusion...";
     adsk.fusionSendData("draw", JSON.stringify({ params: params() }));
   });
 
@@ -279,7 +279,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   $("fea").addEventListener("click", () => {
     if (!ready()) return;
     $("fea").disabled = true;
-    $("status").textContent = "FEA başlatılıyor...";
+    $("status").textContent = "Starting the FEA...";
     adsk.fusionSendData("fea", JSON.stringify({ params: params() }));
   });
   function showFea(d) {
@@ -288,27 +288,27 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (!d.ok) { addMsg("ai", d.message, "info"); return; }
     const pct = (x) => (x >= 0 ? "+" : "") + x.toFixed(0) + "%";
     const lines = Object.entries(d.links).map(([n, r]) =>
-      `${n} (${r.width}×${r.thickness} mm, mil Ø${r.shaft}, pim Ø${r.hole}):\n` +
-      `  gerilme (orta kesit): FEA ${r.fea_sigma_mid.toFixed(1)} · model ${r.hand_sigma_mid.toFixed(1)} MPa (${pct(r.err_sigma_pct)})\n` +
-      `  uç sehimi: FEA ${r.fea_delta.toFixed(3)} · model ${r.hand_delta.toFixed(3)} mm (${pct(r.err_delta_pct)})`);
+      `${n} (${r.width}×${r.thickness} mm, shaft Ø${r.shaft}, pin Ø${r.hole}):\n` +
+      `  stress (mid section): FEA ${r.fea_sigma_mid.toFixed(1)} · model ${r.hand_sigma_mid.toFixed(1)} MPa (${pct(r.err_sigma_pct)})\n` +
+      `  tip deflection: FEA ${r.fea_delta.toFixed(3)} · model ${r.hand_delta.toFixed(3)} mm (${pct(r.err_delta_pct)})`);
     const errs = Object.values(d.links).map((r) => r.err_delta_pct);
-    const under = Math.max(...errs) > 10;     // FEA modelden belirgin buyuk: model guvensiz tarafta
+    const under = Math.max(...errs) > 10;     // FEA clearly above the model: the model is on the unsafe side
     const note = under
-      ? "\n⚠ FEA sehimi modelden belirgin büyük: bu geometride model güvensiz tarafta kalıyor."
-      : "\n✓ Model FEA ile uyumlu (sehimde güvenli tarafta: negatif fark = model fazla tahmin ediyor).";
-    addMsg("ai", `Yerel FEA (${d.material}, bu bilgisayarda çözüldü):\n` + lines.join("\n") + note, under ? "info" : "ok");
+      ? "\n⚠ The FEA deflection is clearly larger than the model: for this geometry the model is on the unsafe side."
+      : "\n✓ The model agrees with the FEA (safe side for deflection: a negative difference = the model over-predicts).";
+    addMsg("ai", `Local FEA (${d.material}, solved on this computer):\n` + lines.join("\n") + note, under ? "info" : "ok");
   }
   function setAnim(d) {
     const looping = d.running && d.mode === "toggle";
     $("loop").classList.toggle("on", looping);
-    $("loop").textContent = looping ? "■ Durdur" : "▶ Sürekli";
+    $("loop").textContent = looping ? "■ Stop" : "▶ Loop";
     $("turn").disabled = d.running;
   }
 
-  function setKnobs(d) {                 // cumleden gelen tasarimla kaydiricilari doldur
+  function setKnobs(d) {                 // fill the sliders from a design that came from a sentence
     const s = d.spec || {};
     if (s.material) $("k-mat").value = s.material;
-    if (MODULES[d.mechanism_type]) {     // modul (C0): tanimli parametreler
+    if (MODULES[d.mechanism_type]) {     // module (C0): its defined parameters
       $("k-kind").value = d.mechanism_type;
       applyKind();
       for (const p of MODULES[d.mechanism_type].params)
@@ -329,7 +329,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     requestPreview();
   }
 
-  function paintBand(band) {             // salinim kaydiricisinin arka plani
+  function paintBand(band) {             // background of the swing slider
     const col = ["var(--bad)", "var(--warn)", "var(--ok)"];
     const min = 5, max = 175, pct = (v) => ((v - min) / (max - min) * 100).toFixed(1) + "%";
     const stops = band.map(([psi, lvl], i) => {
@@ -361,8 +361,8 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     $("draw").disabled = !(d.status === "ok");
     const tone = { ok: "ok", failed: "bad", error: "bad" }[d.status] || "info";
     let text = d.message;
-    if (d.status === "ok" && d.drawn) text += "\nMekanizma Fusion'da çizildi.";
-    if (d.status === "failed") text += "\nBu tasarım çizilmedi. Kaydırıcılarla uygun değeri arayabilirsin.";
+    if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
+    if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
     if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer) { renderCard(d); if (d.spec) setKnobs(d); }
   }
@@ -372,32 +372,32 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     $("draw").disabled = d.status !== "ok";
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
-    $("verdict").title = d.message;          // tamami: fareyle ustune gelince
+    $("verdict").title = d.message;          // full text on hover
     if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer) renderCard(d);
   }
 
-  // ------------------------------------------------------------ sonuc karti
+  // ------------------------------------------------------------ result card
   const f = (x, n = 1) => Number(x).toFixed(n);
   const checksHtml = (list) => (list || []).map((c) =>
     `<div class="check"><span class="i ${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"}</span>
      <span>${c.name}<br><span class="d">${c.detail}</span></span></div>`).join("");
 
-  function renderGearCard(d) {               // C9: disli cifti
+  function renderGearCard(d) {               // C9: gear pair
     const g = d.gear;
-    if (!g) { $("result").innerHTML = `<h3>Kontroller</h3>${checksHtml(d.checks)}`; return; }
-    const rows = [["Modül", f(g.module, 2)], ["Diş sayıları", `${g.z1} / ${g.z2}`], ["Oran", f(g.ratio, 3)],
-                  ["Diş genişliği", f(g.face_width) + " mm"], ["Eksen mesafesi", f(g.center_distance) + " mm"],
-                  ["Miller (çelik)", `Ø${f(g.bore1, 0)} / Ø${f(g.bore2, 0)} mm`]]
+    if (!g) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const rows = [["Module", f(g.module, 2)], ["Teeth", `${g.z1} / ${g.z2}`], ["Ratio", f(g.ratio, 3)],
+                  ["Face width", f(g.face_width) + " mm"], ["Centre distance", f(g.center_distance) + " mm"],
+                  ["Shafts (steel)", `Ø${f(g.bore1, 0)} / Ø${f(g.bore2, 0)} mm`]]
       .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
     $("result").innerHTML = `
       <div class="grid">
-        <div class="col"><h3>Dişli çifti</h3><table>${rows}</table></div>
-        <div class="col"><h3>Kontroller</h3>${checksHtml(d.checks)}</div>
-        <div class="col"><h3>Görünüm</h3>${gearSvg(g)}</div>
+        <div class="col"><h3>Gear pair</h3><table>${rows}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>View</h3>${gearSvg(g)}</div>
       </div>`;
   }
 
-  function gearSvg(g) {                      // hatve daireleri + dis uclari (olcekli)
+  function gearSvg(g) {                      // pitch circles + tooth tips (to scale)
     const W = 220, H = 150, r1 = g.d1 / 2, r2 = g.d2 / 2, m = g.module;
     const s = Math.min((W - 16) / (g.center_distance + r1 + r2 + 2 * m), (H - 16) / (2 * (r2 + m)));
     const cx1 = 8 + (r1 + m) * s, cx2 = cx1 + g.center_distance * s, cy = H / 2;
@@ -414,23 +414,23 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       <circle cx="${cx2}" cy="${cy}" r="${g.bore2 / 2 * s}" fill="var(--panel)" stroke="var(--text)"/></svg>`;
   }
 
-  function renderSpringCard(d) {             // C10: basma yayi
+  function renderSpringCard(d) {             // C10: compression spring
     const s = d.spring;
-    if (!s) { $("result").innerHTML = `<h3>Kontroller</h3>${checksHtml(d.checks)}`; return; }
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
     const conical = s.taper < 1;
-    const rows = [["Tel çapı", `Ø${f(s.d, 2)} mm`], ["Ortalama çap", conical ? `${f(s.D1)} → ${f(s.D2)} mm` : `${f(s.D1)} mm`],
-                  ["Sarım", `${s.Na} aktif + 2 uç`], ["Serbest boy", `${f(s.L0)} mm`], ["Katı (solid) boy", `${f(s.Ls)} mm`],
-                  ["Yay sabiti", `${f(s.k, 2)} N/mm`], ["Malzeme", s.material]]
+    const rows = [["Wire", `Ø${f(s.d, 2)} mm`], ["Mean diameter", conical ? `${f(s.D1)} → ${f(s.D2)} mm` : `${f(s.D1)} mm`],
+                  ["Coils", `${s.Na} active + 2 end`], ["Free length", `${f(s.L0)} mm`], ["Solid length", `${f(s.Ls)} mm`],
+                  ["Rate", `${f(s.k, 2)} N/mm`], ["Material", s.material]]
       .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
     $("result").innerHTML = `
       <div class="grid">
-        <div class="col"><h3>Yay</h3><table>${rows}</table></div>
-        <div class="col"><h3>Kontroller</h3>${checksHtml(d.checks)}</div>
-        <div class="col"><h3>Görünüm</h3>${springSvg(s)}</div>
+        <div class="col"><h3>Spring</h3><table>${rows}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>View</h3>${springSvg(s)}</div>
       </div>`;
   }
 
-  function springSvg(s) {                    // yandan gorunus: sarimlar (olcekli)
+  function springSvg(s) {                    // side view: the coils (to scale)
     const W = 220, H = 150, pad = 8, n = s.Na + 2;
     const sc = Math.min((H - 2 * pad) / s.L0, (W - 2 * pad) / (s.D1 + s.d));
     const cx = W / 2, top = pad, steps = Math.round(n * 24);
@@ -445,23 +445,23 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       stroke-width="${Math.max(1, s.d * sc)}" stroke-linejoin="round"/></svg>`;
   }
 
-  function renderCamCard(d) {                // C11a: kam + makarali itici
+  function renderCamCard(d) {                // C11a: cam + roller follower
     const c = d.cam;
-    if (!c) { $("result").innerHTML = `<h3>Kontroller</h3>${checksHtml(d.checks)}`; return; }
-    const law = { cycloidal: "sikloidal", harmonic: "basit harmonik", poly345: "3-4-5 polinom" }[c.motion];
-    const rows = [["Temel daire R_b", `${f(c.Rb)} mm`], ["Makara R", `${f(c.Rf)} mm`], ["Kalkma", `${f(c.h)} mm`],
-                  ["Açılar", `${c.rise}° / ${c.dwell_top}° / ${c.return}° / ${f(c.dwell_bottom, 0)}°`],
-                  ["Hareket yasası", law], ["Mil deliği", `Ø${f(c.bore, 0)} mm`]]
+    if (!c) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const law = { cycloidal: "cycloidal", harmonic: "simple harmonic", poly345: "3-4-5 polynomial" }[c.motion];
+    const rows = [["Base circle R_b", `${f(c.Rb)} mm`], ["Roller R", `${f(c.Rf)} mm`], ["Lift", `${f(c.h)} mm`],
+                  ["Angles", `${c.rise}° / ${c.dwell_top}° / ${c.return}° / ${f(c.dwell_bottom, 0)}°`],
+                  ["Motion law", law], ["Shaft bore", `Ø${f(c.bore, 0)} mm`]]
       .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
     $("result").innerHTML = `
       <div class="grid">
-        <div class="col"><h3>Kam</h3><table>${rows}</table></div>
-        <div class="col"><h3>Kontroller</h3>${checksHtml(d.checks)}</div>
-        <div class="col"><h3>Yer değiştirme s(θ)</h3>${camSvg(d.cam_curve, c.h)}</div>
+        <div class="col"><h3>Cam</h3><table>${rows}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Displacement s(θ)</h3>${camSvg(d.cam_curve, c.h)}</div>
       </div>`;
   }
 
-  function camSvg(curve, h) {                // yer degistirme diyagrami
+  function camSvg(curve, h) {                // displacement diagram
     const W = 220, H = 150, l = 26, r = 6, t = 8, b = 20;
     const X = (th) => l + th / 360 * (W - l - r), Y = (s) => t + (1 - s / (h || 1)) * (H - t - b);
     const line = curve.map(([th, s]) => `${X(th).toFixed(1)},${Y(s).toFixed(1)}`).join(" ");
@@ -474,30 +474,30 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
   }
 
-  function renderShaftCard(d) {              // C11b: iki yatakli mil (DE-Goodman)
+  function renderShaftCard(d) {              // C11b: two-bearing shaft (DE-Goodman)
     const g = d.shaft;
-    if (!g) { $("result").innerHTML = `<h3>Kontroller</h3>${checksHtml(d.checks)}`; return; }
+    if (!g) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
     const ft = g.layout.feature;
     const featTxt = {
-      keyseat: `kama ${ft.b}×${ft.h}×${ft.length}`, round_shoulder: `omuz Ø${ft.D}, r${ft.fillet}`,
-      sharp_shoulder: `omuz Ø${ft.D}, r${ft.fillet}`, ring_groove: `kanal ${ft.width}×${ft.depth}`, plain: "düz" }[ft.kind];
-    const rows = [["Çap", `${f(g.d_min, 2)} → Ø${f(g.d, 0)}`], ["Çelik", g.material.replace("AISI ", "")],
+      keyseat: `key ${ft.b}×${ft.h}×${ft.length}`, round_shoulder: `shoulder Ø${ft.D}, r${ft.fillet}`,
+      sharp_shoulder: `shoulder Ø${ft.D}, r${ft.fillet}`, ring_groove: `groove ${ft.width}×${ft.depth}`, plain: "plain" }[ft.kind];
+    const rows = [["Diameter", `${f(g.d_min, 2)} → Ø${f(g.d, 0)}`], ["Steel", g.material.replace("AISI ", "")],
                   ["M / T", `${f(g.M / 1000, 0)} / ${f(g.T / 1000, 0)} N·m`], ["S_e", `${f(g.Se, 0)} MPa`],
                   ["K_f / K_fs", `${g.Kf} / ${g.Kfs}`], ["n_f / n_y", `${f(g.nf, 2)} / ${f(g.ny, 2)}`],
-                  ["Özellik", featTxt], ["Rulman", `${g.bearing.name} (Ø${g.bearing.bore}×Ø${g.bearing.OD})`],
-                  ["Ömür L10", g.bearing.life_h ? `${Math.round(g.bearing.life_h).toLocaleString("tr-TR")} sa` : "devir yok"],
-                  ["Çökme / eğim", `${f(g.beam.y_hub * 1000, 0)} µm / ${f(Math.max(g.beam.slope1, g.beam.slope2) * 1000, 2)} mrad`],
-                  ["Rulman arası", `${f(g.layout.span, 0)} mm`]]
+                  ["Feature", featTxt], ["Bearing", `${g.bearing.name} (Ø${g.bearing.bore}×Ø${g.bearing.OD})`],
+                  ["L10 life", g.bearing.life_h ? `${Math.round(g.bearing.life_h).toLocaleString("en-US")} h` : "no speed"],
+                  ["Deflection / slope", `${f(g.beam.y_hub * 1000, 0)} µm / ${f(Math.max(g.beam.slope1, g.beam.slope2) * 1000, 2)} mrad`],
+                  ["Bearing span", `${f(g.layout.span, 0)} mm`]]
       .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
     $("result").innerHTML = `
       <div class="grid">
-        <div class="col"><h3>Mil</h3><table>${rows}</table></div>
-        <div class="col"><h3>Kontroller</h3>${checksHtml(d.checks)}</div>
-        <div class="col"><h3>Görünüm</h3>${shaftSvg(g.layout)}</div>
+        <div class="col"><h3>Shaft</h3><table>${rows}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>View</h3>${shaftSvg(g.layout)}</div>
       </div>`;
   }
 
-  function shaftSvg(lay) {                   // yandan kesit: kademeler, yataklar, gobek, ozellik (olcekli)
+  function shaftSvg(lay) {                   // side section: steps, bearings, hub, feature (to scale)
     const W = 220, H = 150, pad = 8;
     const rmax = Math.max(...lay.bearings.map((b) => b[2] / 2), ...lay.segments.map((s) => s[2]));
     const sc = Math.min((W - 2 * pad) / lay.length, (H - 2 * pad) / (2 * rmax));
@@ -516,7 +516,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     return `<svg viewBox="0 0 ${W} ${H}">
       <line class="axis" x1="${pad / 2}" y1="${cy}" x2="${W - pad / 2}" y2="${cy}" stroke-dasharray="6 2 1 2"/>
       ${brg}<polygon points="${top} ${bot}" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.5"/>${key}${hub}
-      <text class="lbl" x="${X((lay.hub[0] + lay.hub[1]) / 2)}" y="${H - 4}" text-anchor="middle">göbek (M maks)</text></svg>`;
+      <text class="lbl" x="${X((lay.hub[0] + lay.hub[1]) / 2)}" y="${H - 4}" text-anchor="middle">hub (max M)</text></svg>`;
   }
 
   function renderReducerCard(d) {            // E1: single-stage reducer (system)
@@ -574,7 +574,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
     if (d.mechanism_type === "spring") return renderSpringCard(d);
     if (d.mechanism_type === "cam") return renderCamCard(d);
     const L = d.lengths, sec = (d.section_mm && d.section_mm.links) || {};
-    const rows = [["Krank", "a", "--crank"], ["Biyel", "b", "--coupler"], ["Kol", "c", "--rocker"], ["Sabit", "d", "--ground"]]
+    const rows = [["Crank", "a", "--crank"], ["Coupler", "b", "--coupler"], ["Rocker", "c", "--rocker"], ["Ground", "d", "--ground"]]
       .map(([n, k, c]) => `<tr><td><span class="sw" style="background:var(${c})"></span>${n}</td>
         <td class="r">${f(L[k])} mm</td>
         <td class="m">${sec[n] ? f(sec[n].width, 0) + "×" + f(sec[n].thickness, 0) : ""}</td></tr>`).join("");
@@ -582,15 +582,15 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       `<div class="check"><span class="i ${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"}</span>
        <span>${c.name}<br><span class="d">${c.detail}</span></span></div>`).join("");
     const st = d.strength;
-    const extra = st ? `Pim Ø${f(d.section_mm.hole, 0)} · mil Ø${f(d.section_mm.shaft || d.section_mm.hole, 0)} (çelik) · tork ${f(st.input_torque_max_Nmm / 1000, 2)} N·m · n = ${st.safety_factor}`
-                     : "Yük yok: kesit varsayılan";
+    const extra = st ? `Pin Ø${f(d.section_mm.hole, 0)} · shaft Ø${f(d.section_mm.shaft || d.section_mm.hole, 0)} (steel) · torque ${f(st.input_torque_max_Nmm / 1000, 2)} N·m · n = ${st.safety_factor}`
+                     : "No load: default section";
     $("result").innerHTML = `
       <div class="grid">
-        <div class="col"><h3>Ölçüler <span style="font-weight:400;color:var(--muted)">(kesit mm)</span></h3>
+        <div class="col"><h3>Dimensions <span style="font-weight:400;color:var(--muted)">(section mm)</span></h3>
           <table>${rows}</table><div class="extra">${extra}</div>
-          <h3 style="margin-top:8px">Kontroller</h3>${checks}</div>
-        <div class="col"><h3>Mekanizma</h3>${mechSvg(d.fusion.points_mm)}</div>
-        <div class="col"><h3>İletim açısı μ</h3>${muSvg(d.mu_curve, d.mu_axis)}</div>
+          <h3 style="margin-top:8px">Checks</h3>${checks}</div>
+        <div class="col"><h3>Mechanism</h3>${mechSvg(d.fusion.points_mm)}</div>
+        <div class="col"><h3>Transmission angle μ</h3>${muSvg(d.mu_curve, d.mu_axis)}</div>
       </div>`;
   }
 
@@ -613,7 +613,7 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
   }
 
   function muSvg(curve, axis) {
-    const [x0, x1] = axis || [0, 360];                 // krank-kol: 0-360; sinirli: 0-giris acisi
+    const [x0, x1] = axis || [0, 360];                 // crank-rocker: 0-360; limited: 0-input angle
     const W = 220, H = 150, l = 26, r = 6, t = 8, b = 20;
     const X = (th) => l + (th - x0) / ((x1 - x0) || 1) * (W - l - r), Y = (mu) => t + (180 - mu) / 180 * (H - t - b);
     const line = curve.map(([th, mu]) => `${X(th).toFixed(1)},${Y(mu).toFixed(1)}`).join(" ");
@@ -627,13 +627,13 @@ Hesaplar bilgisayarında, yerel yapay zekâ ile yapılır.</div>
       <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
   }
 
-  // ------------------------------------------------------------ baslangic
+  // ------------------------------------------------------------ start-up
   labels();
   (function waitForAdsk() {
     if (ready()) {
-      // C0: eklenti modul tanimlarini dondurur (pipeline.MODULES) -> Tur secicisi dolar
+      // C0: the add-in returns the module definitions (pipeline.MODULES) -> fills the Type selector
       Promise.resolve(adsk.fusionSendData("ready", "")).then((r) => {
-        try { buildModules(JSON.parse(r)); } catch (e) { console.log("moduller alinamadi", e); }
+        try { buildModules(JSON.parse(r)); } catch (e) { console.log("could not read the modules", e); }
       });
       requestPreview();
     }
