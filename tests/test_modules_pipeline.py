@@ -1,4 +1,4 @@
-"""Dişli ve yay modullerinin tasarim akisi testleri (sahte LLM cevabiyla)."""
+"""Design-flow tests of the gear and spring modules (with a fake LLM reply)."""
 
 import os
 import sys
@@ -23,7 +23,7 @@ def test_gear_pipeline_ok(monkeypatch):
 def test_gear_does_not_invent_torque(monkeypatch):
     _fake(monkeypatch, mechanism_type="spur_gear", gear_ratio=3, torque_Nm=None, speed_rpm=None)
     r = pipeline.design_from_text("x")
-    assert r["status"] == "missing" and "tork" in r["message"]
+    assert r["status"] == "missing" and "torque" in r["message"]
 
 
 def test_spring_pipeline_ok(monkeypatch):
@@ -38,24 +38,24 @@ def test_conical_spring_without_ratio_uses_default_and_says_so(monkeypatch):
           spring_taper=None, outer_diameter_max_mm=None)
     r = pipeline.design_from_text("x")
     assert r["status"] == "ok" and r["spring"]["taper"] == 0.5
-    assert "Konik oranı belirtilmediği" in r["message"]
+    assert "Taper not given" in r["message"]
 
 
 def test_plastic_spring_note(monkeypatch):
     _fake(monkeypatch, mechanism_type="spring", spring_force_N=50, spring_deflection_mm=15, spring_shape="helical",
           spring_taper=None, outer_diameter_max_mm=None, material="PLA")
     r = pipeline.design_from_text("x")
-    assert "çelik telden" in r["message"]
+    assert "steel wire" in r["message"]
 
 
 def test_modules_params_are_complete():
     for key, mod in pipeline.MODULES.items():
         for p in mod["params"]:
-            if "options" in p:                      # secim listesi (orn. kam hareket yasasi)
+            if "options" in p:                      # option list (e.g. the cam motion law)
                 assert p["default"] in [o[0] for o in p["options"]]
                 continue
             assert {"key", "label", "min", "max", "step", "default"} <= set(p)
             assert p["min"] <= p["default"] <= p["max"]
-        # kaydirici degerleriyle tasarim cagrilabilmeli
+        # a design must be possible with the slider defaults
         r = pipeline.design_from_params(kind=key, **{p["key"]: p["default"] for p in mod["params"]})
         assert r["status"] == "ok", (key, r["message"])

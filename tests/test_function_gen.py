@@ -1,4 +1,4 @@
-"""B9: sinirli acili dort cubuk (Freudenstein fonksiyon ureteci) testleri."""
+"""B9: limited-angle four-bar (Freudenstein function generator) tests."""
 
 import math
 import os
@@ -18,12 +18,12 @@ def design():
 
 
 def test_precision_points_are_exact(design):
-    """Freudenstein: 3 hassas noktada (Chebyshev) cikis acisi istenen degere tam esit olmali."""
+    """Freudenstein: at the 3 (Chebyshev) precision points the output angle must equal the wanted value."""
     m = design
     a, b, c, d = m["a"], m["b"], m["c"], m["d"]
     for th in fg.chebyshev(m["th0"], m["dth"]):
         want = m["phi0"] + m["dphi"] * (th - m["th0"]) / m["dth"]
-        # ayni montaj kolu: baslangictan bu aciya kadar simule et
+        # same assembly branch: simulate from the start to this angle
         fr = fg.simulate_range(a, b, c, d, m["th0"], th - m["th0"], m["phi0"], n=41)
         got = fg._unwrap([f["phi"] for f in fr])[-1]
         diff = (got - want + math.pi) % (2 * math.pi) - math.pi
@@ -41,12 +41,12 @@ def test_design_meets_targets_in_simulation(design):
 
 
 def test_input_does_not_need_full_rotation():
-    """Bu tur tasarimlar cogu zaman Grashof degil ya da cift kol: giris tam tur atmaz."""
+    """Such designs are usually non-Grashof or double-rockers: the input does not make full turns."""
     kinds = set()
     for tin, tout in ((60, 90), (45, 120), (120, 60)):
         m = fg.synthesize(40, tin, tout)
         kinds.add(kin.grashof(m["a"], m["b"], m["c"], m["d"])[1])
-    assert any("DEGIL" in k or "cift kol" in k for k in kinds)
+    assert any("NON-Grashof" in k or "double-rocker" in k for k in kinds)
 
 
 def test_candidates_are_all_valid_and_sorted():
@@ -69,7 +69,7 @@ def test_pipeline_rocker_rocker(monkeypatch):
     r = pipeline.design_from_text("x")
     assert r["status"] == "ok"
     assert r["mechanism_type"] == "rocker_rocker"
-    assert any(c["name"].startswith("Yapısal hata") and c["ok"] for c in r["checks"])
+    assert any(c["name"].startswith("Structural error") and c["ok"] for c in r["checks"])
     lo, hi = r["fusion"]["input_range_deg"]
     assert hi - lo == pytest.approx(60, abs=0.5)
 
@@ -78,7 +78,7 @@ def test_pipeline_rocker_rocker_asks_for_input_angle(monkeypatch):
     monkeypatch.setattr(pipeline, "extract_spec", lambda t: _spec(input_swing_deg=None))
     r = pipeline.design_from_text("x")
     assert r["status"] == "missing"
-    assert "giriş kolunun dönme açısı" in r["message"]
+    assert "input arm turning angle" in r["message"]
 
 
 @pytest.mark.parametrize("text, angle", [
@@ -88,7 +88,7 @@ def test_pipeline_rocker_rocker_asks_for_input_angle(monkeypatch):
     ("kolu 22,5° döndürünce", 22.5),
 ])
 def test_backstop_reads_input_turn_from_sentence(text, angle):
-    """LLM giris acisini kacirsa bile kullanicinin cumlesindeki sayi kullanilir."""
+    """Even if the LLM misses the input angle, the number in the user's sentence is used."""
     llm_missed = {"mechanism_type": "crank_rocker", "input_swing_deg": None, "quick_return": False}
     spec, note = pipeline.input_turn_backstop(text, llm_missed)
     assert spec["mechanism_type"] == "rocker_rocker"

@@ -1,9 +1,9 @@
 """
-Tasarim akisi (ekrana yazdirmadan, sadece veri dondurur):
-    cumle -> LLM (JSON) -> kinematik sentez -> simulasyon -> kontroller
+Design flow (prints nothing, only returns data):
+    sentence -> LLM (JSON) -> synthesis / sizing -> independent simulation -> checks
 
-Hem terminal (main.py) hem Fusion paneli bunu kullanir.
-Sadece standart kutuphane: Fusion'in kendi Python'unda da calisir.
+Used by both the terminal (main.py) and the Fusion panel.
+Standard library only: it also runs in Fusion's own Python.
 """
 
 import re
@@ -20,8 +20,8 @@ import strength
 from llm_extract import extract_spec
 
 
-# C0: moduller kendi kaydiricilarini tanimlar; panel bunlardan otomatik kurar.
-# (Dort cubuk panelde ozel kaydiricilarla gelir: renkli salinim bolgesi, giris hareketi vb.)
+# C0: each module defines its own sliders; the panel builds them from here.
+# (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
     "reducer": {
         "title": "Reducer (system)",
@@ -36,60 +36,60 @@ MODULES = {
         ],
     },
     "spur_gear": {
-        "title": "Düz dişli",
+        "title": "Spur gears",
         "params": [
-            {"key": "gear_ratio", "label": "Çevrim oranı", "unit": "", "min": 1, "max": 8, "step": 0.1, "default": 3},
-            {"key": "torque_Nm", "label": "Giriş torku", "unit": "N·m", "min": 0.1, "max": 50, "step": 0.1, "default": 2},
-            {"key": "speed_rpm", "label": "Giriş devri", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
-             "zero_label": "belirtilmedi"},
+            {"key": "gear_ratio", "label": "Ratio", "unit": "", "min": 1, "max": 8, "step": 0.1, "default": 3},
+            {"key": "torque_Nm", "label": "Input torque", "unit": "N·m", "min": 0.1, "max": 50, "step": 0.1, "default": 2},
+            {"key": "speed_rpm", "label": "Input speed", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
+             "zero_label": "not given"},
         ],
     },
     "spring": {
-        "title": "Basma yayı",
+        "title": "Compression spring",
         "params": [
-            {"key": "spring_force_N", "label": "En büyük kuvvet", "unit": "N", "min": 1, "max": 500, "step": 1, "default": 100},
-            {"key": "spring_deflection_mm", "label": "Bu kuvvette çökme", "unit": "mm", "min": 1, "max": 100, "step": 1, "default": 20},
-            {"key": "spring_taper", "label": "Konik oranı (D₂/D₁)", "unit": "", "min": 0.3, "max": 1.0, "step": 0.05,
-             "default": 1.0, "one_label": "silindirik"},
-            {"key": "outer_diameter_max_mm", "label": "Dış çap sınırı", "unit": "mm", "min": 0, "max": 100, "step": 1,
-             "default": 0, "zero_label": "serbest"},
-            {"key": "show_plates", "label": "Fusion görünümü", "default": "no",
-             "options": [["no", "Sadece yay"], ["yes", "Plakalarla (sıkışma)"]]},
+            {"key": "spring_force_N", "label": "Max force", "unit": "N", "min": 1, "max": 500, "step": 1, "default": 100},
+            {"key": "spring_deflection_mm", "label": "Deflection at that force", "unit": "mm", "min": 1, "max": 100, "step": 1, "default": 20},
+            {"key": "spring_taper", "label": "Taper (D₂/D₁)", "unit": "", "min": 0.3, "max": 1.0, "step": 0.05,
+             "default": 1.0, "one_label": "cylindrical"},
+            {"key": "outer_diameter_max_mm", "label": "Max outer diameter", "unit": "mm", "min": 0, "max": 100, "step": 1,
+             "default": 0, "zero_label": "free"},
+            {"key": "show_plates", "label": "Fusion view", "default": "no",
+             "options": [["no", "Spring only"], ["yes", "With plates (compression)"]]},
         ],
     },
     "cam": {
-        "title": "Kam (makaralı itici)",
+        "title": "Cam (roller follower)",
         "params": [
-            {"key": "cam_rise_mm", "label": "Kalkma (strok)", "unit": "mm", "min": 2, "max": 60, "step": 1, "default": 20},
-            {"key": "rise_deg", "label": "Yükselme açısı", "unit": "°", "min": 20, "max": 200, "step": 5, "default": 120},
-            {"key": "dwell_top_deg", "label": "Üstte bekleme", "unit": "°", "min": 0, "max": 180, "step": 5, "default": 60},
-            {"key": "return_deg", "label": "Dönüş açısı", "unit": "°", "min": 20, "max": 200, "step": 5, "default": 120},
-            {"key": "motion_law", "label": "Hareket yasası", "default": "cycloidal",
-             "options": [["cycloidal", "Sikloidal"], ["harmonic", "Basit harmonik"], ["poly345", "3-4-5 polinom"]]},
+            {"key": "cam_rise_mm", "label": "Lift (stroke)", "unit": "mm", "min": 2, "max": 60, "step": 1, "default": 20},
+            {"key": "rise_deg", "label": "Rise angle", "unit": "°", "min": 20, "max": 200, "step": 5, "default": 120},
+            {"key": "dwell_top_deg", "label": "Dwell at top", "unit": "°", "min": 0, "max": 180, "step": 5, "default": 60},
+            {"key": "return_deg", "label": "Return angle", "unit": "°", "min": 20, "max": 200, "step": 5, "default": 120},
+            {"key": "motion_law", "label": "Motion law", "default": "cycloidal",
+             "options": [["cycloidal", "Cycloidal"], ["harmonic", "Simple harmonic"], ["poly345", "3-4-5 polynomial"]]},
         ],
     },
     "shaft": {
-        "title": "Mil (yorulma)",
+        "title": "Shaft (fatigue)",
         "params": [
-            {"key": "torque_Nm", "label": "Tork", "unit": "N·m", "min": 1, "max": 500, "step": 1, "default": 100},
-            {"key": "bending_moment_Nm", "label": "Eğilme momenti", "unit": "N·m", "min": 0, "max": 500, "step": 1, "default": 60},
-            {"key": "feature", "label": "Gerilme yığılması", "default": "keyseat",
-             "options": [["keyseat", "Kama yuvası"], ["sharp_shoulder", "Keskin omuz"], ["round_shoulder", "Yuvarlatılmış omuz"],
-                         ["ring_groove", "Segman kanalı"], ["plain", "Düz mil"]]},
-            {"key": "shaft_material", "label": "Çelik", "default": "1045",
+            {"key": "torque_Nm", "label": "Torque", "unit": "N·m", "min": 1, "max": 500, "step": 1, "default": 100},
+            {"key": "bending_moment_Nm", "label": "Bending moment", "unit": "N·m", "min": 0, "max": 500, "step": 1, "default": 60},
+            {"key": "feature", "label": "Stress raiser", "default": "keyseat",
+             "options": [["keyseat", "Keyseat"], ["sharp_shoulder", "Sharp shoulder"], ["round_shoulder", "Rounded shoulder"],
+                         ["ring_groove", "Retaining-ring groove"], ["plain", "Plain shaft"]]},
+            {"key": "shaft_material", "label": "Steel", "default": "1045",
              "options": [["1045", "AISI 1045 CD"], ["1020", "AISI 1020 CD"]]},
-            {"key": "safety_n", "label": "Yorulma emniyeti", "unit": "", "min": 1.2, "max": 4, "step": 0.1, "default": 2},
-            {"key": "speed_rpm", "label": "Devir", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 300,
-             "zero_label": "verilmedi"},
-            {"key": "span_mm", "label": "Rulman aralığı", "unit": "mm", "min": 0, "max": 400, "step": 10, "default": 0,
-             "zero_label": "otomatik"},
+            {"key": "safety_n", "label": "Fatigue safety", "unit": "", "min": 1.2, "max": 4, "step": 0.1, "default": 2},
+            {"key": "speed_rpm", "label": "Speed", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 300,
+             "zero_label": "not given"},
+            {"key": "span_mm", "label": "Bearing span", "unit": "mm", "min": 0, "max": 400, "step": 10, "default": 0,
+             "zero_label": "auto"},
         ],
     },
 }
 
 
 def max_feasible_swing(a, psi_start):
-    """Istenen salinim saglanamiyorsa, tasarim hedefini (45-135, kompakt) gecen en buyuk salinim."""
+    """If the wanted swing is not feasible: the largest swing meeting the design target (45-135, compact)."""
     for psi in range(int(psi_start) - 1, 0, -1):
         m = kin.synthesize_crank_rocker(a, psi)
         if m["worst_dev"] <= 45.0:
@@ -98,7 +98,7 @@ def max_feasible_swing(a, psi_start):
 
 
 def max_feasible_q(a, psi, q_max=1.5, step=0.05):
-    """Iletim acisi tasarim hedefini (45-135) saglayan en buyuk zaman orani. Yoksa None."""
+    """Largest time ratio meeting the transmission-angle design target (45-135). None if there is none."""
     q = q_max
     while q > 1.0 + 1e-9:
         if kin.synthesize_quick_return(a, psi, q)["worst_dev"] <= 45.0:
@@ -109,11 +109,11 @@ def max_feasible_q(a, psi, q_max=1.5, step=0.05):
 
 def swing_band(Q=1.0, step=5, n=720):
     """
-    Salinim kaydiricisinin renkli bolgeleri: [(psi, seviye), ...]
-      2: iletim acisi 45-135 icinde (kompakt cozum var)
-      1: 40-140 sinirinda gecer (ama mekanizma buyuk olabilir)
-      0: gecmez
-    Olcekten bagimsiz: acilar krank boyuna bagli degil (a=10 ile hesaplanir).
+    Coloured bands of the swing slider: [(psi, level), ...]
+      2: transmission angle within 45-135 (a compact solution exists)
+      1: passes the 40-140 limit (but the mechanism may be large)
+      0: fails
+    Scale-free: the angles do not depend on the crank length (computed with a = 10).
     """
     band = []
     for psi in range(step, 180, step):
@@ -140,9 +140,10 @@ _SPEED_KINDS = ("reducer", "spur_gear", "shaft")
 
 
 def input_turn_backstop(text, spec):
-    """Guvenlik agi: "X° cevirince/dondurunce/itince" kalibi varsa giris kolu sinirli acida doner.
-    LLM bunu kacirirsa (ornegin '45°' yaziminda) sayi DOGRUDAN kullanicinin cumlesinden okunur
-    (uydurma degil). Ayni sekilde devir (rpm) de cumleden okunur. Dondurur: (spec, not ya da None)."""
+    """Safety net: a Turkish "X° cevirince / dondurunce / itince" ("when turned / pushed by X degrees")
+    pattern means the input arm turns through a limited angle. If the LLM misses it (e.g. written as
+    '45°'), the number is read DIRECTLY from the user's sentence (not invented). The speed (rpm) is read
+    the same way. Returns (spec, note or None)."""
     sp = _SPEED.search(text)
     if sp and spec.get("speed_rpm") is None and spec.get("mechanism_type") in _SPEED_KINDS:
         spec = dict(spec, speed_rpm=float(sp.group(1).replace(",", ".")))
@@ -154,17 +155,17 @@ def input_turn_backstop(text, spec):
         return spec, None
     fixed = dict(spec, mechanism_type="rocker_rocker", input_swing_deg=angle,
                  quick_return=False, time_ratio=None)
-    return fixed, f"Giriş kolunun {angle:g}° döndüğü cümleden okundu (sınırlı açılı mekanizma)."
+    return fixed, f"Read from the sentence: the input arm turns {angle:g}° (limited-angle mechanism)."
 
 
 def design_from_text(text, on_status=None):
     """
-    Cumleden tasarim. Dondurur: dict(status, message, spec, ...)
-      status: "ok" | "failed" (kontrollerden gecmedi) | "missing" | "unsupported"
-    on_status(str): ilerleme bildirimi icin istege bagli geri cagirma.
+    Design from a sentence. Returns dict(status, message, spec, ...)
+      status: "ok" | "failed" (did not pass the checks) | "missing" | "unsupported"
+    on_status(str): optional progress callback.
     """
     say = on_status or (lambda s: None)
-    say("LLM cümleyi yorumluyor...")
+    say("The LLM is reading the sentence...")
     spec, note = input_turn_backstop(text, extract_spec(text))
     result = design_from_spec(spec, on_status)
     if note and "message" in result:
@@ -180,9 +181,9 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None,
                        bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None,
                        span_mm=None, power_kW=None):
-    """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim.
-    kind: "fourbar", "spur_gear", "spring" ya da "cam" (C0: modul secimi).
-    input_swing_deg >= 360: giris tam tur (krank-kol); daha az: sinirli acida giris kolu (B9)."""
+    """For the sliders: design straight from numbers, no LLM.
+    kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
+    input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
     if kind == "reducer":
         return design_from_spec({"mechanism_type": "reducer", "torque_Nm": torque_Nm, "power_kW": power_kW,
                                  "speed_rpm": speed_rpm, "gear_ratio": gear_ratio, "material": material,
@@ -214,7 +215,7 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
 
 
 def design_from_spec(spec, on_status=None):
-    """Yapilandirilmis istekten (LLM ciktisi ya da kaydiricilar) tasarim."""
+    """Design from a structured request (LLM output or sliders)."""
     say = on_status or (lambda s: None)
     result = {"spec": spec}
 
@@ -231,32 +232,32 @@ def design_from_spec(spec, on_status=None):
         return _shaft(result, spec, say)
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
-                    message="Şu an sadece dört çubuk mekanizmaları destekleniyor "
-                            "(krank-kol ya da sınırlı açıda çalışan giriş kolu).")
+                    message="Supported: four-bar linkages (crank-rocker or limited-angle input), reducer, "
+                            "spur gears, compression springs, cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
-    required = ((("crank_length_mm", "giriş kolu uzunluğu"), ("input_swing_deg", "giriş kolunun dönme açısı"),
-                 ("output_swing_deg", "çıkış kolunun dönme açısı")) if rr else
-                (("crank_length_mm", "krank uzunluğu"), ("output_swing_deg", "salınım açısı")))
+    required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
+                 ("output_swing_deg", "output arm turning angle")) if rr else
+                (("crank_length_mm", "crank length"), ("output_swing_deg", "swing angle")))
     missing = [name for key, name in required if spec.get(key) is None]
     if missing:
         return dict(result, status="missing",
-                    message=f"Tasarım için eksik bilgi: {', '.join(missing)}.")
+                    message=f"Missing for the design: {', '.join(missing)}.")
 
     a, psi = spec["crank_length_mm"], spec["output_swing_deg"]
     if not 0 < psi < 180:
         return dict(result, status="missing",
-                    message=f"Salınım açısı 0-180° arasında olmalı (verilen: {psi:g}°).")
+                    message=f"The swing angle must be between 0 and 180° (given: {psi:g}°).")
     notes = []
     if rr:
         t_in = spec["input_swing_deg"]
         if not 0 < t_in < 360:
             return dict(result, status="missing",
-                        message=f"Giriş açısı 0-360° arasında olmalı (verilen: {t_in:g}°).")
-        say("Fonksiyon üreteci sentezi (Freudenstein)...")
+                        message=f"The input angle must be between 0 and 360° (given: {t_in:g}°).")
+        say("Function generator synthesis (Freudenstein)...")
         fg = _pick_function_generator(a, t_in, psi, spec)
         if fg is None:
             return dict(result, status="failed",
-                        message=f"Giriş {t_in:g}° → çıkış {psi:g}° için uygun dört çubuk bulunamadı.")
+                        message=f"No suitable four-bar found for input {t_in:g}° → output {psi:g}°.")
         mech, frames = function_gen.frames_for(fg)
         mr = function_gen.measure_range(frames)
         grashof_ok, grashof_kind = kin.grashof(mech["a"], mech["b"], mech["c"], mech["d"])
@@ -269,16 +270,16 @@ def design_from_spec(spec, on_status=None):
         meas = {"swing": abs(mr["out_swing"]), "in_swing": mr["in_swing"], "Q": 1.0,
                 "mu_min": mr["mu_min"], "mu_max": mr["mu_max"]}
         checks = [
-            {"name": "Mekanizma türü", "ok": True, "detail": grashof_kind},
-            {"name": "Giriş dönmesi (simülasyon)", "ok": in_ok,
-             "detail": f"{mr['in_swing']:.1f}° (hedef {t_in:g}°)"},
-            {"name": "Çıkış dönmesi (simülasyon)", "ok": out_ok,
-             "detail": f"{abs(mr['out_swing']):.1f}° (hedef {psi:g}°)"},
-            {"name": "Yapısal hata (doğrusallık)", "ok": err_ok,
-             "detail": f"en fazla {fg['err_deg']:.2f}° (sınır 1°)"},
-            {"name": "İletim açısı", "ok": mu_ok,
+            {"name": "Mechanism type", "ok": True, "detail": grashof_kind},
+            {"name": "Input rotation (simulation)", "ok": in_ok,
+             "detail": f"{mr['in_swing']:.1f}° (target {t_in:g}°)"},
+            {"name": "Output rotation (simulation)", "ok": out_ok,
+             "detail": f"{abs(mr['out_swing']):.1f}° (target {psi:g}°)"},
+            {"name": "Structural error (linearity)", "ok": err_ok,
+             "detail": f"at most {fg['err_deg']:.2f}° (limit 1°)"},
+            {"name": "Transmission angle", "ok": mu_ok,
              "detail": f"{mr['mu_min']:.1f}° – {mr['mu_max']:.1f}° "
-                       f"(sınır {kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°)"},
+                       f"(limits {kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°)"},
         ]
     return _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi,
                    Q if rr else None, rr) if rr else _crank_rocker(result, spec, notes, say, a, psi)
@@ -333,116 +334,116 @@ def _reducer(result, spec, say):
 
 
 def _spur_gear(result, spec, say):
-    """C9: duz disli cifti. Gerekli: cevrim orani ve giris torku (tork uydurulmaz)."""
-    missing = [name for key, name in (("gear_ratio", "çevrim oranı"), ("torque_Nm", "giriş torku (N·m)"))
+    """C9: spur gear pair. Required: ratio and input torque (the torque is never invented)."""
+    missing = [name for key, name in (("gear_ratio", "ratio"), ("torque_Nm", "input torque (N·m)"))
                if spec.get(key) is None]
     if missing:
         return dict(result, status="missing", mechanism_type="spur_gear",
-                    message=f"Dişli tasarımı için eksik bilgi: {', '.join(missing)}.")
+                    message=f"Missing for the gears: {', '.join(missing)}.")
     ratio, T1 = float(spec["gear_ratio"]), float(spec["torque_Nm"]) * 1000.0
     if ratio < 1:
-        ratio = 1 / ratio                     # 1:3 ve 3:1 ayni cift; pinyon her zaman giris
+        ratio = 1 / ratio                     # 1:3 and 3:1 are the same pair; the pinion is always the input
     if not 1 <= ratio <= 8:
         return dict(result, status="missing", mechanism_type="spur_gear",
-                    message=f"Tek kademe düz dişli için oran 1–8 arasında olmalı (verilen: {ratio:g}).")
+                    message=f"A single spur stage needs a ratio of 1–8 (given: {ratio:g}).")
     notes = []
     mat_key = spec.get("material")
     if mat_key not in strength.MATERIALS:
         mat_key = "PLA"
-        notes.append("Malzeme belirtilmediği için PLA (3B baskı) varsayıldı.")
+        notes.append("Material not given: PLA (3D print) assumed.")
     mat = strength.MATERIALS[mat_key]
-    say("Dişli sentezi (Lewis eğilme, kavrama oranı)...")
+    say("Gear synthesis (Lewis bending, contact ratio)...")
     g, g_checks = gears.design(ratio, T1, mat, spec.get("speed_rpm"))
-    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0 or c["group"] == "Temas",
-               "detail": c["detail"] + (f" · kullanım %{c['util'] * 100:.0f}" if c["group"] != "Temas" else "")}
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0 or c["group"] == "Contact",
+               "detail": c["detail"] + (f" · use {c['util'] * 100:.0f}%" if c["group"] != "Contact" else "")}
               for c in g_checks]
     result.update(mechanism_type="spur_gear", checks=checks, notes=notes)
     if g is None:
         return dict(result, status="failed",
-                    message=" ".join(notes + [f"{T1 / 1000:g} N·m giriş torku için {mat['name']} ile uygun dişli "
-                                              f"bulunamadı. Öneri: daha dayanıklı malzeme ya da daha küçük tork."]))
-    checks.insert(0, {"name": "Çevrim oranı", "ok": g["ratio_err_pct"] <= 2.0,
-                      "detail": f"{g['z2']}/{g['z1']} = {g['ratio']:.3f} (hedef {ratio:g}, fark %{g['ratio_err_pct']:.1f})"})
-    checks.insert(1, {"name": "Alttan kesme", "ok": g["z1"] >= gears.z_min(),
+                    message=" ".join(notes + [f"No {mat['name']} gear pair carries {T1 / 1000:g} N·m input torque. "
+                                              f"Suggestion: a stronger material or a smaller torque."]))
+    checks.insert(0, {"name": "Ratio", "ok": g["ratio_err_pct"] <= 2.0,
+                      "detail": f"{g['z2']}/{g['z1']} = {g['ratio']:.3f} (target {ratio:g}, off by {g['ratio_err_pct']:.1f}%)"})
+    checks.insert(1, {"name": "Undercut", "ok": g["z1"] >= gears.z_min(),
                       "detail": f"z₁ = {g['z1']} ≥ {gears.z_min():.1f}"})
     result.update(
         gear=g, target={"ratio": ratio, "torque_Nm": T1 / 1000},
         fusion={"type": "spur_gear", "passed_checks": True, **g},
         status="ok",
         message=" ".join(notes + [
-            f"Tasarım tüm kontrollerden geçti. Modül {g['module']:g}, z = {g['z1']}/{g['z2']}, "
-            f"diş genişliği {g['face_width']:g} mm, eksen mesafesi {g['center_distance']:g} mm, "
-            f"miller Ø{g['bore1']:g}/Ø{g['bore2']:g} mm (çelik). Çıkış torku {T1 * g['ratio'] / 1000:.2f} N·m."]))
+            f"All checks passed. Module {g['module']:g}, z = {g['z1']}/{g['z2']}, "
+            f"face width {g['face_width']:g} mm, centre distance {g['center_distance']:g} mm, "
+            f"shafts Ø{g['bore1']:g}/Ø{g['bore2']:g} mm (steel). Output torque {T1 * g['ratio'] / 1000:.2f} N·m."]))
     return result
 
 
 def _spring(result, spec, say):
-    """C10: basma yayi (silindirik ya da konik). Gerekli: kuvvet ve cokme (uydurulmaz)."""
+    """C10: compression spring (cylindrical or conical). Required: force and deflection (never invented)."""
     result["mechanism_type"] = "spring"
-    missing = [name for key, name in (("spring_force_N", "en büyük kuvvet"),
-                                      ("spring_deflection_mm", "bu kuvvetteki çökme (mm)"))
+    missing = [name for key, name in (("spring_force_N", "max force"),
+                                      ("spring_deflection_mm", "deflection at that force (mm)"))
                if spec.get(key) is None]
     if missing:
-        return dict(result, status="missing", message=f"Yay tasarımı için eksik bilgi: {', '.join(missing)}.")
+        return dict(result, status="missing", message=f"Missing for the spring: {', '.join(missing)}.")
     F, y = float(spec["spring_force_N"]), float(spec["spring_deflection_mm"])
     notes = []
     taper = spec.get("spring_taper")
     if taper is None and spec.get("spring_shape") == "conical":
         taper = 0.5
-        notes.append("Konik oranı belirtilmediği için küçük uç çapı büyük ucun yarısı alındı (D₂/D₁ = 0.5).")
+        notes.append("Taper not given: the small end is half of the large end (D₂/D₁ = 0.5).")
     taper = min(1.0, max(0.3, float(taper))) if taper else 1.0
     if spec.get("material") == "steel" or spec.get("material") is None:
         mat = springs.SPRING_MATERIALS["music_wire"]
     else:
         mat = springs.SPRING_MATERIALS["music_wire"]
-        notes.append("Yaylar çelik telden yapılır (plastik/alüminyum yay uygun değil); müzik teli varsayıldı.")
-    say("Yay sentezi (Shigley: Bergsträsser, tam sıkışma, burkulma)...")
+        notes.append("Springs are made of steel wire (plastic / aluminium springs are not suitable): music wire assumed.")
+    say("Spring synthesis (Shigley: Bergsträsser, solid height, buckling)...")
     geo, s_checks = springs.design(F, y, mat, taper, spec.get("outer_diameter_max_mm") or None)
     checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
-               "detail": c["detail"] + (f" · kullanım %{c['util'] * 100:.0f}" if c["group"] in ("Gerilme", "Burkulma") else "")}
+               "detail": c["detail"] + (f" · use {c['util'] * 100:.0f}%" if c["group"] in ("Stress", "Buckling") else "")}
               for c in s_checks]
     result.update(checks=checks, notes=notes, target={"force_N": F, "deflection_mm": y, "taper": taper})
     if geo is None:
         return dict(result, status="failed", message=" ".join(notes + [
-            f"{F:g} N / {y:g} mm için uygun yay bulunamadı. Öneri: çökmeyi artırın, dış çap sınırını gevşetin "
-            f"ya da kuvveti azaltın."]))
-    kind = "konik" if taper < 1 else "silindirik"
+            f"No spring found for {F:g} N / {y:g} mm. Suggestion: allow more deflection, relax the outer "
+            f"diameter limit or lower the force."]))
+    kind = "conical" if taper < 1 else "cylindrical"
     result.update(
         spring=dict(geo, material=mat["name"]),
         fusion={"type": "spring", "passed_checks": True, **geo, "show_plates": spec.get("show_plates") == "yes"},
         status="ok",
         message=" ".join(notes + [
-            f"Tasarım tüm kontrollerden geçti ({kind}, {mat['name']}). Tel Ø{geo['d']:g} mm, ortalama çap "
+            f"All checks passed ({kind}, {mat['name']}). Wire Ø{geo['d']:g} mm, mean diameter "
             + (f"{geo['D1']:.1f} → {geo['D2']:.1f}" if taper < 1 else f"{geo['D1']:.1f}")
-            + f" mm, {geo['Na']:g} aktif + 2 uç sarım, serbest boy {geo['L0']:.1f} mm, k = {geo['k']:.2f} N/mm."]))
+            + f" mm, {geo['Na']:g} active + 2 end coils, free length {geo['L0']:.1f} mm, k = {geo['k']:.2f} N/mm."]))
     return result
 
 
 def _shaft(result, spec, say):
-    """C11b: donen mil, DE-Goodman. Gerekli: tork; egilme momenti ya da (radyal kuvvet + yatak araligi)."""
+    """C11b: rotating shaft, DE-Goodman. Required: torque; bending moment or (radial force + bearing span)."""
     result["mechanism_type"] = "shaft"
     notes = []
     T = spec.get("torque_Nm")
     M = spec.get("bending_moment_Nm")
     if M is None and spec.get("radial_force_N") is not None and spec.get("span_mm") is not None:
         M = spec["radial_force_N"] * spec["span_mm"] / 1000.0 / 4.0
-        notes.append(f"Eğilme momenti, iki yataklı milin ortasına etkiyen kuvvetten hesaplandı: "
-                     f"M = F·L/4 = {M:.1f} N·m (basit mesnetli kiriş varsayımı).")
-    missing = [n for v, n in ((T, "tork (N·m)"), (M, "eğilme momenti ya da kuvvet + yatak aralığı")) if v is None]
+        notes.append(f"Bending moment from the force at mid-span of the two-bearing shaft: "
+                     f"M = F·L/4 = {M:.1f} N·m (simply supported beam).")
+    missing = [n for v, n in ((T, "torque (N·m)"), (M, "bending moment or force + bearing span")) if v is None]
     if missing:
-        return dict(result, status="missing", message=f"Mil tasarımı için eksik bilgi: {', '.join(missing)}.")
+        return dict(result, status="missing", message=f"Missing for the shaft: {', '.join(missing)}.")
     feature = spec.get("feature") or "keyseat"
     if not spec.get("feature"):
-        notes.append("Gerilme yığılması belirtilmediği için kama yuvası varsayıldı (K_f = 2.14, K_fs = 3.0).")
+        notes.append("Stress raiser not given: keyseat assumed (K_f = 2.14, K_fs = 3.0).")
     mat = spec.get("shaft_material") or "1045"
     if not spec.get("shaft_material"):
-        notes.append("Çelik belirtilmediği için AISI 1045 soğuk çekilmiş varsayıldı.")
+        notes.append("Steel not given: cold-drawn AISI 1045 assumed.")
     n = float(spec.get("safety_n") or 2.0)
     rpm = spec.get("speed_rpm")
     if not rpm:
-        notes.append("Devir verilmediği için rulman ömrü ve kritik hız kontrol edilmedi.")
+        notes.append("Speed not given: bearing life and critical speed were not checked.")
     span = spec.get("span_mm")
-    say("Mil tasarımı (DE-Goodman yorulma, rulman, kama, sehim)...")
+    say("Shaft design (DE-Goodman fatigue, bearings, key, deflection)...")
     g, s_checks = shafts.design(float(M) * 1000.0, float(T) * 1000.0, mat, feature, n, span=span,
                                 rpm=float(rpm) if rpm else None)
     checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0, "detail": c["detail"]} for c in s_checks]
@@ -451,47 +452,47 @@ def _shaft(result, spec, say):
     if g is None:
         bad = [c["name"] for c in checks if not c["ok"]]
         return dict(result, status="failed", message=" ".join(notes + [
-            f"Standart çaplar içinde uygun mil yok (geçmeyen: {', '.join(bad)}). "
-            "Öneri: yükü azaltın, rulman aralığını kısaltın ya da daha dayanıklı çelik seçin."]))
+            f"No standard diameter works (failing: {', '.join(bad)}). "
+            "Suggestion: lower the load, shorten the bearing span or pick a stronger steel."]))
     g["span_mm"] = span
     fname = shafts.FEATURES[feature][0]
     if g["raised"]:
-        notes.append(f"Göbek kesiti için Ø{g['d_min']:.2f} mm yeterliydi; daha ince milde geçmeyen kontrol "
-                     f"({', '.join(g['raised_by']).lower()}) yüzünden çap Ø{g['d']:g} mm'ye büyütüldü.")
+        notes.append(f"Ø{g['d_min']:.2f} mm was enough at the hub; a thinner shaft failed "
+                     f"({', '.join(g['raised_by']).lower()}), so the diameter was raised to Ø{g['d']:g} mm.")
     if rpm:
-        notes.append("Kritik hıza sadece milin kütlesi katıldı; göbekteki dişli/kasnak kütlesi dahil değil.")
+        notes.append("The critical speed includes only the shaft's own mass, not the gear / pulley on the hub.")
     b = g["bearing"]
     result.update(
         shaft=g, fusion={"type": "shaft", "passed_checks": True, **g},
         status="ok",
         message=" ".join(notes + [
-            f"Tasarım tüm kontrollerden geçti. Mil Ø{g['d']:g} mm ({g['material']}, {fname}), rulmanlar "
-            f"{b['name']} (Ø{b['bore']}×Ø{b['OD']}×{b['B']}). Yorulma emniyeti n_f = {g['nf']:.2f}, "
-            f"akma emniyeti n_y = {g['ny']:.2f}."]))
+            f"All checks passed. Shaft Ø{g['d']:g} mm ({g['material']}, {fname}), bearings "
+            f"{b['name']} (Ø{b['bore']}×Ø{b['OD']}×{b['B']}). Fatigue safety n_f = {g['nf']:.2f}, "
+            f"yield safety n_y = {g['ny']:.2f}."]))
     return result
 
 
-LAW_NAMES = {"cycloidal": "sikloidal", "harmonic": "basit harmonik", "poly345": "3-4-5 polinom"}
+LAW_NAMES = {"cycloidal": "cycloidal", "harmonic": "simple harmonic", "poly345": "3-4-5 polynomial"}
 
 
 def _cam(result, spec, say):
-    """C11a: disk kam + makarali itici. Gerekli: kalkma ve yukselme acisi (uydurulmaz)."""
+    """C11a: disk cam + roller follower. Required: lift and rise angle (never invented)."""
     result["mechanism_type"] = "cam"
-    missing = [name for key, name in (("cam_rise_mm", "kalkma (strok, mm)"), ("rise_deg", "yükselme açısı"))
+    missing = [name for key, name in (("cam_rise_mm", "lift (stroke, mm)"), ("rise_deg", "rise angle"))
                if spec.get(key) is None]
     if missing:
-        return dict(result, status="missing", message=f"Kam tasarımı için eksik bilgi: {', '.join(missing)}.")
+        return dict(result, status="missing", message=f"Missing for the cam: {', '.join(missing)}.")
     notes = []
     h, b1 = float(spec["cam_rise_mm"]), float(spec["rise_deg"])
     b3 = spec.get("return_deg")
     if b3 is None:
         b3 = b1
-        notes.append(f"Dönüş açısı belirtilmediği için yükselmeyle aynı alındı ({b1:g}°).")
+        notes.append(f"Return angle not given: same as the rise ({b1:g}°).")
     b2 = float(spec.get("dwell_top_deg") or 0.0)
     law_ = spec.get("motion_law") or "cycloidal"
     if not spec.get("motion_law"):
-        notes.append("Hareket yasası belirtilmediği için sikloidal seçildi (sonsuz sarsıntı yok).")
-    say("Kam sentezi (basınç açısı, eğrilik)...")
+        notes.append("Motion law not given: cycloidal chosen (no infinite jerk).")
+    say("Cam synthesis (pressure angle, curvature)...")
     d, c_checks = cams.design(h, b1, b2, float(b3), law_, spec.get("roller_radius_mm"))
     checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
                "detail": c["detail"]} for c in c_checks]
@@ -499,25 +500,25 @@ def _cam(result, spec, say):
                   target={"rise": h, "rise_deg": b1, "dwell_top_deg": b2, "return_deg": float(b3), "law": law_})
     if d is None:
         return dict(result, status="failed", message=" ".join(notes + [
-            "Uygun kam bulunamadı. Öneri: yükselme/dönüş açılarını büyütün ya da açıların toplamını 360°'nin altında tutun."]))
+            "No suitable cam found. Suggestion: larger rise / return angles, and keep their sum below 360°."]))
     table = cams.svaj(h, b1, b2, float(b3), law_, n=360)
     result.update(
         cam=d, cam_curve=[(round(t, 1), round(s, 3)) for t, s, _, _ in table[::2]],
         fusion={"type": "cam", "passed_checks": True, **d, "s_table": [round(s, 4) for _, s, _, _ in table]},
         status="ok",
         message=" ".join(notes + [
-            f"Tasarım tüm kontrollerden geçti ({LAW_NAMES[law_]}). Temel daire R_b = {d['Rb']:g} mm, makara "
-            f"R = {d['Rf']:g} mm, kalkma {h:g} mm: {b1:g}° yükselme, {b2:g}° bekleme, {float(b3):g}° dönüş, "
-            f"{d['dwell_bottom']:g}° altta bekleme."]))
+            f"All checks passed ({LAW_NAMES[law_]}). Base circle R_b = {d['Rb']:g} mm, roller "
+            f"R = {d['Rf']:g} mm, lift {h:g} mm: {b1:g}° rise, {b2:g}° dwell, {float(b3):g}° return, "
+            f"{d['dwell_bottom']:g}° dwell at the bottom."]))
     return result
 
 
 def _pick_function_generator(a, t_in, psi, spec):
-    """Kinematik adaylar arasindan, (yuk verildiyse) mukavemetten ve katman cakismasindan gecen ilki.
-    Hicbiri gecmezse kinematik olarak en iyisi (kontroller nedenini gosterir)."""
+    """The first kinematic candidate that also passes strength (if a load is given) and layer interference.
+    If none does, the kinematically best one (the checks then show why)."""
     cands = function_gen.candidates(a, t_in, psi)
     if not cands:
-        return function_gen.synthesize(a, t_in, psi)   # kinematik hedefi de tutmayan en iyi aday
+        return function_gen.synthesize(a, t_in, psi)   # best candidate, even though it misses the kinematic target
     F, mat_key = spec.get("max_load_N"), spec.get("material")
     mat = strength.MATERIALS.get(mat_key) or strength.MATERIALS["PLA"]
     for fg in cands:
@@ -534,27 +535,27 @@ def _pick_function_generator(a, t_in, psi, spec):
 
 
 def _crank_rocker(result, spec, notes, say, a, psi):
-    # Zaman orani Q: kullanici verdiyse o; "hizli donus" deyip vermediyse MOTOR secer
-    # (LLM asla sayi uydurmaz); hic bahsetmediyse Q = 1.
+    # Time ratio Q: the user's value if given; if "quick return" is asked without a value the ENGINE
+    # picks it (the LLM never invents numbers); if not mentioned, Q = 1.
     Q = spec.get("time_ratio")
     if Q is not None:
         if not 1.0 <= Q <= 3.0:
             return dict(result, status="missing",
-                        message=f"Zaman oranı Q, 1 ile 3 arasında olmalı (verilen: {Q:g}).")
+                        message=f"The time ratio Q must be between 1 and 3 (given: {Q:g}).")
     elif spec.get("quick_return"):
-        say("Uygun zaman oranı (Q) aranıyor...")
+        say("Searching for a feasible time ratio (Q)...")
         Q = max_feasible_q(a, psi)
         if Q:
-            notes.append(f"Q belirtilmediği için, iletim açısını 45°–135° içinde tutan "
-                         f"en büyük değer seçildi: Q = {Q:g}.")
+            notes.append(f"Q not given: the largest value keeping the transmission angle within 45°–135° "
+                         f"was chosen: Q = {Q:g}.")
         else:
             Q = 1.0
-            notes.append(f"{psi:g}° salınımda hızlı dönüş iletim açısını bozuyor; "
-                         f"hızlı dönüşsüz (Q = 1) tasarlandı.")
+            notes.append(f"At {psi:g}° swing a quick return spoils the transmission angle; "
+                         f"designed without quick return (Q = 1).")
     else:
         Q = 1.0
 
-    say("Kinematik sentez ve kontroller...")
+    say("Kinematic synthesis and checks...")
     mech = kin.synthesize_quick_return(a, psi, Q)
     frames = kin.simulate(mech)
     meas = kin.measure(frames)
@@ -566,41 +567,41 @@ def _crank_rocker(result, spec, notes, say, a, psi):
 
     checks = [
         {"name": "Grashof", "ok": grashof_ok, "detail": grashof_kind},
-        {"name": "Salınım (simülasyon)", "ok": swing_ok,
-         "detail": f"{meas['swing']:.2f}° (hedef {psi:g}°)"},
-        {"name": "İletim açısı", "ok": mu_ok,
+        {"name": "Swing (simulation)", "ok": swing_ok,
+         "detail": f"{meas['swing']:.2f}° (target {psi:g}°)"},
+        {"name": "Transmission angle", "ok": mu_ok,
          "detail": f"{meas['mu_min']:.1f}° – {meas['mu_max']:.1f}° "
-                   f"(sınır {kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°)"},
+                   f"(limits {kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°)"},
     ]
     if Q > 1.0:
-        checks.append({"name": "Zaman oranı Q (simülasyon)", "ok": q_ok,
-                       "detail": f"{meas['Q']:.2f} (hedef {Q:g})"})
+        checks.append({"name": "Time ratio Q (simulation)", "ok": q_ok,
+                       "detail": f"{meas['Q']:.2f} (target {Q:g})"})
     return _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi, Q, False)
 
 
 def _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi, Q, rr):
-    """Iki mekanizma turu icin ortak: mukavemet, katman cakismasi, Fusion verisi, mesaj."""
-    # ---- mukavemet: yuk verildiyse kesit boyutlandirilir, verilmediyse uydurulmaz
+    """Shared by both four-bar kinds: strength, layer interference, Fusion data, message."""
+    # ---- strength: with a load the sections are sized; without one nothing is invented
     section, strength_ok = strength.DEFAULT_SECTION, True
     F, mat_key = spec.get("max_load_N"), spec.get("material")
     if passed and F:
         if mat_key not in strength.MATERIALS:
             mat_key = "PLA"
-            notes.append("Malzeme belirtilmediği için PLA (3B baskı) varsayıldı.")
+            notes.append("Material not given: PLA (3D print) assumed.")
         mat = strength.MATERIALS[mat_key]
-        say("Mukavemet hesabı ve kesit boyutlandırma...")
+        say("Strength and section sizing...")
         forces = strength.analyze_forces(mech, frames, F)
         sec, s_checks = strength.size_links(forces, {k: mech[k] for k in "abcd"}, mat)
         strength_ok = sec is not None
         if sec:
             section = sec
         worst = {}
-        for c in s_checks:                      # grup basina en kritik kontrol
+        for c in s_checks:                      # most critical check per group
             if c["group"] not in worst or c["util"] > worst[c["group"]]["util"]:
                 worst[c["group"]] = c
         for g, c in worst.items():
             checks.append({"name": f"{g}: {c['name']}", "ok": c["util"] <= 1.0,
-                           "detail": f"{c['detail']} · kullanım %{c['util'] * 100:.0f}"})
+                           "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"})
         result["strength"] = {
             "material": mat["name"], "safety_factor": mat["n"], "load_N": F,
             "coupler_force_max_N": forces["F_ab_max"],
@@ -608,25 +609,25 @@ def _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi
             "checks": s_checks,
         }
     elif passed:
-        notes.append("Yük verilmediği için mukavemet hesabı yapılmadı; "
-                     "varsayılan kesit (10×4 mm, Ø4 pim) kullanıldı.")
+        notes.append("No load given, so no strength calculation: "
+                     "default section (10×4 mm, Ø4 pin) used.")
     section = strength.section_with_bosses(section)
     result["section_mm"] = section
 
-    # ---- katman cakismasi: ara katmanlardan gecen mil, hareketli uzuvlara carpmamali
+    # ---- layer interference: a shaft through the middle layers must not hit the moving links
     order, clearances, layers_ok = interference.choose_layer_order(mech, frames, section)
     for p, between, margin in clearances:
-        checks.append({"name": f"Katman çakışması ({p} mili)", "ok": margin >= 0,
-                       "detail": f"{', '.join(between)} katmanından geçiyor; en az boşluk "
-                                 f"{margin + interference.CLEARANCE:.1f} mm (gereken {interference.CLEARANCE:g})"})
+        checks.append({"name": f"Layer interference ({p} shaft)", "ok": margin >= 0,
+                       "detail": f"passes through the {', '.join(between)} layer; smallest clearance "
+                                 f"{margin + interference.CLEARANCE:.1f} mm (needed {interference.CLEARANCE:g})"})
     if passed and not layers_ok:
-        notes.append("Hiçbir katman sırasında mil, hareketli uzuvlardan kurtulamıyor.")
+        notes.append("In no layer order does the shaft clear the moving links.")
 
     fusion = kin.to_fusion_dict(mech, frames, passed and strength_ok and layers_ok)
     fusion["section_mm"] = section
     fusion["layer_order"] = list(order)
     if rr:
-        # Fusion cizimi kare len//8'de; giris kolu o konuma gore bu aralikta hareket eder (mafsal siniri)
+        # Fusion draws frame len//8; relative to it the input arm moves within this range (joint limits)
         k = len(frames) // 8
         fusion["input_range_deg"] = [frames[0]["theta"] - frames[k]["theta"],
                                      frames[-1]["theta"] - frames[k]["theta"]]
@@ -650,35 +651,35 @@ def _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi
 
     if passed and not strength_ok:
         passed = False
-        msg = (f"{F:g} N yük için {strength.MATERIALS[mat_key]['name']} ile uygun kesit bulunamadı "
-               f"(genişlik ≤ {strength.MAX_WIDTH} mm). Öneri: daha dayanıklı malzeme ya da daha küçük yük.")
+        msg = (f"No {strength.MATERIALS[mat_key]['name']} section carries {F:g} N "
+               f"(width ≤ {strength.MAX_WIDTH} mm). Suggestion: a stronger material or a smaller load.")
     elif passed and not layers_ok:
         passed = False
-        msg = ("Mekanizma kendi kendine çarpıyor: ara katmandan geçen mil, dönen uzuvların yolunda. "
-               "Öneri: sabit uzvu iki taraflı (üst ve alt) yapmak ya da ölçüleri değiştirmek.")
+        msg = ("The mechanism collides with itself: a shaft through a middle layer is in the way of the "
+               "turning links. Suggestion: a two-sided ground link (top and bottom) or different dimensions.")
     elif passed:
-        msg = "Tasarım tüm kontrollerden geçti."
+        msg = "All checks passed."
         if "strength" in result:
             parts = ", ".join(f"{n} {s['width']:g}×{s['thickness']:g}"
                               for n, s in section["links"].items())
-            msg += (f" Kesitler (mm): {parts}; pim Ø{section['hole']:g} mm, "
-                    f"mil Ø{section.get('shaft', section['hole']):g} mm (çelik). "
-                    f"En büyük tahrik torku {result['strength']['input_torque_max_Nmm'] / 1000:.2f} N·m.")
+            msg += (f" Sections (mm): {parts}; pin Ø{section['hole']:g} mm, "
+                    f"shaft Ø{section.get('shaft', section['hole']):g} mm (steel). "
+                    f"Max drive torque {result['strength']['input_torque_max_Nmm'] / 1000:.2f} N·m.")
     elif rr:
-        msg = (f"Giriş {spec['input_swing_deg']:g}° → çıkış {psi:g}° için doğruluk (≤ 1°) ya da iletim açısı "
-               f"({kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°) sağlanamadı. Öneri: giriş ve çıkış açılarını "
-               f"birbirine yaklaştırın ya da çıkış açısını küçültün.")
+        msg = (f"For input {spec['input_swing_deg']:g}° → output {psi:g}° the accuracy (≤ 1°) or the "
+               f"transmission angle ({kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°) cannot be met. Suggestion: bring "
+               f"the input and output angles closer or reduce the output angle.")
     else:
-        msg = (f"{psi:g}° salınım" + (f", Q = {Q:g}" if Q > 1 else "") +
-               f" ile iletim açısı sınırları ({kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°) sağlanamıyor.")
+        msg = (f"With a {psi:g}° swing" + (f" and Q = {Q:g}" if Q > 1 else "") +
+               f" the transmission angle limits ({kin.MU_MIN_DEG:g}–{kin.MU_MAX_DEG:g}°) cannot be met.")
         if Q > 1:
             q_best = max_feasible_q(a, psi)
-            msg += (f" Öneri: Q'yu en fazla {q_best:g} yapın." if q_best
-                    else " Öneri: hızlı dönüşten vazgeçin (Q = 1).")
+            msg += (f" Suggestion: Q of at most {q_best:g}." if q_best
+                    else " Suggestion: drop the quick return (Q = 1).")
         else:
             best = max_feasible_swing(a, psi)
             if best:
-                msg += f" Öneri: salınımı en fazla {best}° yapın."
+                msg += f" Suggestion: a swing of at most {best}°."
                 result["suggestion_swing"] = best
     result.update(status="ok" if passed else "failed",
                   message=" ".join(notes + [msg]))

@@ -1,4 +1,4 @@
-"""C9: duz disli modulu testleri."""
+"""C9: spur gear module tests."""
 
 import math
 import os
@@ -14,25 +14,25 @@ PETG = strength.MATERIALS["PETG"]
 
 
 def test_min_teeth_no_undercut():
-    """20 derece basinc acisi: z_min = 2 / sin^2(20) = 17.1."""
+    """20 degree pressure angle: z_min = 2 / sin^2(20) = 17.1."""
     assert gears.z_min() == pytest.approx(17.1, abs=0.05)
 
 
 def test_lewis_table_values():
     assert gears.lewis_y(17) == pytest.approx(0.303)
     assert gears.lewis_y(20) == pytest.approx(0.322)
-    assert gears.lewis_y(23) == pytest.approx((0.331 + 0.337) / 2)   # ara degerleme
+    assert gears.lewis_y(23) == pytest.approx((0.331 + 0.337) / 2)   # interpolation
 
 
 def test_contact_ratio_known_value():
-    """z1 = z2 = 20, m = 1: kavrama orani ~1.56 (klasik ders ornegi)."""
+    """z1 = z2 = 20, m = 1: contact ratio ~1.56 (classic textbook example)."""
     assert gears.contact_ratio(1.0, 20, 20) == pytest.approx(1.557, abs=0.01)
 
 
 def test_lewis_hand_calculation():
     """m=2, z1=20, b=20, T1=10 N m -> Ft = 2*10000/40 = 500 N, sigma = 500/(20*2*0.322) = 38.8 MPa (Kv=1)."""
     c = gears.check_pair(2.0, 20, 40, 20.0, 10000.0, PETG)
-    pinion = [x for x in c if x["name"].startswith("Pinyon")][0]
+    pinion = [x for x in c if x["name"].startswith("Pinion")][0]
     assert pinion["util"] * (35 / 3) == pytest.approx(500 / (20 * 2 * 0.322), rel=1e-6)
 
 
@@ -57,12 +57,12 @@ def test_impossible_torque_returns_none():
 
 
 def test_involute_tooth_geometry():
-    """Evolvent noktalari taban dairesi ile uc dairesi arasinda; yanlar x eksenine simetrik."""
+    """Involute points lie between the base and tip circles; the flanks are symmetric about x."""
     right, left, rf, ra = gears.involute_tooth(2.0, 20)
     rb = 20 * math.cos(gears.PHI)
     for (x1, y1), (x2, y2) in zip(right, left):
         r = math.hypot(x1, y1)
         assert max(rb, rf) - 1e-9 <= r <= ra + 1e-9
         assert x1 == pytest.approx(x2) and y1 == pytest.approx(-y2)
-    # uc noktasinda dis kalinligi pozitif (sivri degil)
+    # positive tooth thickness at the tip (not pointed)
     assert left[-1][1] > 0

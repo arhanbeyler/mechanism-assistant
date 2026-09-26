@@ -1,26 +1,26 @@
 """
-Katman cakismasi kontrolu (B8b).
+Layer interference check (B8b).
 
-Uzuvlar ust uste katmanlarda durur. Bir mafsal iki KOMSU olmayan katmani baglarsa
-(ornegin sabit uzuv katman 0, kol katman 3: O4 mili), mil aradaki katmanlardan gecer.
-Aradaki uzuvlar cevrim boyunca bu milin ustunden gecerse mekanizma kilitlenir.
+The links sit on top of each other in layers. If a joint connects two NON-adjacent layers
+(e.g. ground on layer 0, rocker on layer 3: the O4 shaft), the shaft passes through the layers between.
+If those links sweep over the shaft during the cycle, the mechanism jams.
 
-Uzuv bolgesi: w genisliginde govde (iki uc arasi) + uclarda R = D/2 yaricapli gobek.
-Nokta-bolge mesafesi = min(serit mesafesi - w/2, uc merkezi mesafesi - R).
-Mil etrafinda gereken bosluk: mil yaricapi + CLEARANCE.
+Link region: a web of width w (between the two ends) + bosses of radius R = D/2 at the ends.
+Point-to-region distance = min(strip distance - w/2, distance to an end centre - R).
+Clearance needed around the shaft: shaft radius + CLEARANCE.
 """
 
 import math
 
 from strength import LINK_ENDS, SHAFT_POINTS, section_with_bosses
 
-CLEARANCE = 1.0          # mm, mil ile gecen uzuv arasinda en az bosluk
+CLEARANCE = 1.0          # mm, smallest gap between the shaft and a passing link
 
-# Denenecek katman siralari (alttan uste). Ikisinde de A ve B pimleri komsu katmanlari baglar.
-LAYER_ORDERS = [("Sabit", "Krank", "Biyel", "Kol"),     # O4 mili krank ve biyel katmanlarindan gecer
-                ("Sabit", "Kol", "Biyel", "Krank")]     # O2 mili kol ve biyel katmanlarindan gecer
+# Layer orders to try (bottom to top). In both, the A and B pins connect adjacent layers.
+LAYER_ORDERS = [("Ground", "Crank", "Coupler", "Rocker"),     # the O4 shaft passes the crank and coupler layers
+                ("Ground", "Rocker", "Coupler", "Crank")]     # the O2 shaft passes the rocker and coupler layers
 
-JOINTS = [("Sabit", "Krank", "O2"), ("Krank", "Biyel", "A"), ("Biyel", "Kol", "B"), ("Kol", "Sabit", "O4")]
+JOINTS = [("Ground", "Crank", "O2"), ("Crank", "Coupler", "A"), ("Coupler", "Rocker", "B"), ("Rocker", "Ground", "O4")]
 
 
 def _seg_dist(p, a, b):
@@ -33,13 +33,13 @@ def _seg_dist(p, a, b):
 
 
 def region_distance(p, a, b, w, R0, R1):
-    """p noktasinin uzuv bolgesine (govde + gobekler) mesafesi; negatif = icinde."""
+    """Distance of point p to the link region (web + bosses); negative = inside."""
     return min(_seg_dist(p, a, b) - w / 2, math.dist(p, a) - R0, math.dist(p, b) - R1)
 
 
 def check_layers(mech, frames, section, order):
-    """Verilen katman sirasi icin, ara katmanlardan gecen her milin en kotu boslugu.
-    Dondurur: [(mafsal, gecilen uzuvlar, en kucuk bosluk mm)]."""
+    """For the given layer order, the worst clearance of every shaft passing through middle layers.
+    Returns [(joint, links passed, smallest clearance mm)]."""
     sec = section_with_bosses(section)
     d_pin, d_shaft = sec["hole"], sec["shaft"]
     layer = {name: i for i, name in enumerate(order)}
@@ -63,7 +63,7 @@ def check_layers(mech, frames, section, order):
 
 
 def choose_layer_order(mech, frames, section):
-    """Cakismasiz ilk katman sirasi. Dondurur: (sira, bosluklar, gecti_mi)."""
+    """First layer order without interference. Returns (order, clearances, passed)."""
     best = None
     for order in LAYER_ORDERS:
         res = check_layers(mech, frames, section, order)

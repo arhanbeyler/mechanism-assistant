@@ -1,17 +1,17 @@
 """
-B9: Sinirli acida calisan dort cubuk — fonksiyon ureteci sentezi (Freudenstein).
+B9: Four-bar with a limited input angle: function generator synthesis (Freudenstein).
 
-Istek: giris uzvu (krank yerine "giris kolu") delta_theta kadar donerken cikis kolu delta_phi kadar
-donsun (dogrusal iliski). Giris tam tur ATMAK ZORUNDA DEGIL: sonuc cift kol, uclu kol (Grashof degil)
-ya da krank-kol olabilir.
+Request: while the input link (an "input arm" rather than a crank) turns by delta_theta, the output
+rocker turns by delta_phi (linear relation). The input does NOT have to make full turns: the result can
+be a double-rocker, a triple-rocker (non-Grashof) or a crank-rocker.
 
-Freudenstein (O2 orijinde, O4 = (d, 0); theta: giris acisi, phi: cikis acisi, x ekseninden):
+Freudenstein (O2 at the origin, O4 = (d, 0); theta: input angle, phi: output angle, from the x axis):
     K1 cos(phi) - K2 cos(theta) + K3 = cos(theta - phi)
     K1 = d/a,  K2 = d/c,  K3 = (a^2 - b^2 + c^2 + d^2) / (2 a c)
-3 hassas nokta (Chebyshev araligi) -> 3x3 dogrusal sistem -> K1, K2, K3 -> uzuv oranlari (d = 1),
-sonra giris kolu = a olacak sekilde olceklenir. Serbest baslangic acilari (theta0, phi0) taranir;
-her aday BAGIMSIZ simulasyonla dogrulanir (montaj, ayni kol, yapisal hata, iletim acisi).
-Sadece standart kutuphane (Fusion icinde de calisir).
+3 precision points (Chebyshev spacing) -> 3x3 linear system -> K1, K2, K3 -> link ratios (d = 1),
+then scaled so that the input arm = a. The free start angles (theta0, phi0) are swept; every candidate
+is verified by an INDEPENDENT simulation (assembly, same branch, structural error, transmission angle).
+Standard library only (also runs inside Fusion).
 """
 
 import math
@@ -20,7 +20,7 @@ import kinematics as kin
 
 
 def _solve3(M, v):
-    """3x3 dogrusal sistem (Cramer)."""
+    """3x3 linear system (Cramer)."""
     def det(m):
         return (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
                 - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
@@ -42,7 +42,7 @@ def chebyshev(x0, dx, n=3):
 
 
 def _position(a, b, c, d, th, prev_B):
-    """Giris acisi th icin A ve B (B: onceki B'ye en yakin cozum -> ayni montaj kolu)."""
+    """A and B for input angle th (B: the solution closest to the previous B -> same assembly branch)."""
     A = (a * math.cos(th), a * math.sin(th))
     sols = kin._circle_intersections(A, b, (d, 0.0), c)
     if not sols:
@@ -52,14 +52,14 @@ def _position(a, b, c, d, th, prev_B):
 
 
 def simulate_range(a, b, c, d, th0, dth, phi0, n=61):
-    """Giris th0 -> th0 + dth. Ilk B, phi0'a en yakin kol. Dondurur: kareler ya da None (kilitlenme)."""
+    """Input th0 -> th0 + dth. First B: the branch closest to phi0. Returns frames or None (locks)."""
     frames, prev = [], (d + c * math.cos(phi0), c * math.sin(phi0))
     for k in range(n):
         th = th0 + dth * k / (n - 1)
         A, B = _position(a, b, c, d, th, prev)
         if B is None:
             return None
-        if math.dist(B, prev) > 0.5 * c and k > 0:      # kol atladi (tekil konumdan gecis)
+        if math.dist(B, prev) > 0.5 * c and k > 0:      # branch jump (passing a singular position)
             return None
         prev = B
         ab = (A[0] - B[0], A[1] - B[1])
@@ -79,13 +79,13 @@ def _unwrap(angles):
 
 
 def candidates(a_len, in_swing_deg, out_swing_deg, mu_design=45.0, step_deg=5, max_ratio=8.0, top=40):
-    """Kinematik olarak uygun (hata <= 1 derece, iletim acisi tasarim araliginda) adaylar,
-    dengeli orandan kotuye sirali. Mukavemet/katman cakismasi gibi sonraki kontrollerden gecemeyen
-    olursa siradaki denenir (pipeline)."""
+    """Kinematically valid candidates (error <= 1 degree, transmission angle within the design range),
+    sorted from the most balanced link ratio down. If one fails a later check (strength, layer
+    interference) the pipeline tries the next."""
     out = []
     synthesize(a_len, in_swing_deg, out_swing_deg, mu_design, step_deg, max_ratio, collect=out)
     out.sort(key=lambda m: (round(m["ratio"], 2), m["size"]))
-    # birbirine cok benzeyenleri ayikla (komsu tarama noktalari)
+    # drop near-duplicates (neighbouring sweep points)
     distinct = []
     for m in out:
         if all(max(abs(m[k] - n[k]) for k in "abcd") > 0.05 * m["a"] for n in distinct):
@@ -97,14 +97,15 @@ def candidates(a_len, in_swing_deg, out_swing_deg, mu_design=45.0, step_deg=5, m
 
 def synthesize(a_len, in_swing_deg, out_swing_deg, mu_design=45.0, step_deg=5, max_ratio=8.0, collect=None):
     """
-    Dondurur: en iyi tasarim (dict) ya da None.
-    Secim: yapisal hata <= 1 derece ve iletim acisi [mu_design, 180-mu_design] saglayanlar icinde
-    en DENGELI oranli (en uzun / en kisa uzuv en kucuk; esitlikte kucuk olan). "En kompakt"
-    secimi gobeklerin sigmayacagi cok kisa uzuvlar uretiyordu. Uygun yoksa iletim acisi en iyi olan.
+    Returns the best design (dict) or None.
+    Choice: among those with structural error <= 1 degree and transmission angle within
+    [mu_design, 180 - mu_design], the most BALANCED ratio (longest / shortest link smallest; ties: the
+    smaller one). "Most compact" produced links too short for their bosses. If nothing is valid, the one
+    with the best transmission angle.
     """
     dth, dphi_abs = math.radians(in_swing_deg), math.radians(out_swing_deg)
     best = best_ok = None
-    for sign in (1, -1):                                  # cikis ayni ya da ters yonde donebilir
+    for sign in (1, -1):                                  # the output may turn the same or the opposite way
         dphi = sign * dphi_abs
         for i in range(0, 360, step_deg):
             th0 = math.radians(i)
@@ -128,8 +129,8 @@ def synthesize(a_len, in_swing_deg, out_swing_deg, mu_design=45.0, step_deg=5, m
                 if not fr:
                     continue
                 phi_sim = _unwrap([f["phi"] for f in fr])
-                # Yapisal hata: simule cikis ile istenen dogrusal iliski arasindaki en buyuk fark
-                # (phi_sim[0] ile phi0 arasinda 2*pi farki olabilir: kaydirilir)
+                # Structural error: largest difference between the simulated output and the wanted
+                # linear relation (phi_sim[0] and phi0 may differ by 2*pi: shifted)
                 shift = phi_sim[0] - phi0
                 err = max(abs(ps - shift - (phi0 + dphi * k / (len(fr) - 1))) for k, ps in enumerate(phi_sim))
                 mus = [f["mu"] for f in fr]
@@ -151,11 +152,11 @@ def synthesize(a_len, in_swing_deg, out_swing_deg, mu_design=45.0, step_deg=5, m
 
 
 def frames_for(m, n=61):
-    """Tasarimi bizim koordinatlara (O4 orijinde) cevirip simule eder.
-    Dondurur: (kinematics uyumlu mech, kareler)."""
+    """Moves the design into our coordinates (O4 at the origin) and simulates it.
+    Returns (kinematics-compatible mech, frames)."""
     a, b, c, d = m["a"], m["b"], m["c"], m["d"]
     fr = simulate_range(a, b, c, d, m["th0"], m["dth"], m["phi0"], n)
-    shift = (-d, 0.0)                                     # O4 -> orijin
+    shift = (-d, 0.0)                                     # O4 -> origin
     out = []
     for f in fr:
         out.append({"theta": f["theta"], "mu": f["mu"],
@@ -167,7 +168,7 @@ def frames_for(m, n=61):
 
 
 def measure_range(frames):
-    """Simulasyondan: giris ve cikis salinimi, iletim acisi araligi."""
+    """From the simulation: input and output swing, transmission angle range."""
     th = [f["theta"] for f in frames]
     ph = [math.degrees(x) for x in _unwrap([math.radians(f["rocker"]) for f in frames])]
     return {"in_swing": th[-1] - th[0], "out_swing": ph[-1] - ph[0],

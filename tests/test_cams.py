@@ -1,4 +1,4 @@
-"""C11a: kam modulu testleri."""
+"""C11a: cam module tests."""
 
 import math
 import os
@@ -12,7 +12,7 @@ import cams  # noqa: E402
 
 @pytest.mark.parametrize("motion", ["cycloidal", "harmonic", "poly345"])
 def test_laws_boundary_values(motion):
-    """Yukselmenin basinda s=0, sonunda s=h; sikloidal ve 3-4-5'te uclarda v=0."""
+    """s = 0 at the start of the rise and s = h at its end; v = 0 at both ends for cycloidal and 3-4-5."""
     h, beta = 20.0, math.radians(120)
     s0, v0, _ = cams.law(motion, 0.0, h, beta)
     s1, v1, _ = cams.law(motion, 1.0, h, beta)
@@ -31,7 +31,7 @@ def test_velocity_is_derivative_of_displacement(motion):
 
 
 def test_cycloidal_peak_acceleration():
-    """Sikloidal: a_max = 2 pi h / beta^2 (Norton)."""
+    """Cycloidal: a_max = 2 pi h / beta^2 (Norton)."""
     h, beta = 20.0, math.radians(120)
     amax = max(abs(cams.law("cycloidal", i / 1000, h, beta)[2]) for i in range(1001))
     assert amax == pytest.approx(2 * math.pi * h / beta ** 2, rel=1e-4)
@@ -52,7 +52,7 @@ def test_steeper_motion_needs_bigger_cam():
 
 
 def test_profile_is_offset_of_pitch_curve():
-    """Kam yuzeyi ile hatve egrisi arasindaki en kisa mesafe her yerde makara yaricapi."""
+    """The shortest distance between the cam surface and the pitch curve is the roller radius everywhere."""
     d, _ = cams.design(20, 120, 60, 120)
     pts = cams.profile(d, n=720)
     Rp = d["Rb"] + d["Rf"]

@@ -1,16 +1,16 @@
 """
-Yerel sonlu eleman dogrulamasi (tamamen bu bilgisayarda: gmsh + scikit-fem, internet yok).
+Local finite element verification (entirely on this computer: gmsh + scikit-fem, no internet).
 
-Deney: tek uzuv konsol kiris. O4 deligi (x=0) sabit, B deligine (x=L) +y yonde
-toplam F (delik yuzeyine yayili). Uzuv duzleminde egilme.
+Experiment: one link as a cantilever. The O4 hole (x = 0) is fixed, the B hole (x = L) carries a total
+force F in +y (spread over the hole surface). In-plane bending.
 
-Karsilastirma (el hesabi, strength.py ile ayni bagintilar):
-  uc sehimi    delta = F L^3 / (3 E I) + F L / (kappa G A)   (Euler-Bernoulli + Timoshenko kayma)
-  orta kesit   sigma = M c / I,  M = F (L - x0),  c = w/2    (delik ve kisittan uzak: temiz karsilastirma)
+Comparison (hand calculation, same relations as strength.py):
+  tip deflection  delta = F L^3 / (3 E I) + F L / (kappa G A)   (Euler-Bernoulli + Timoshenko shear)
+  mid section     sigma = M c / I,  M = F (L - x0),  c = w/2    (far from hole and support: a clean comparison)
 
-Birimler: mm, N, MPa. Eleman: kuadratik tetrahedron (P2) — ince plakada dogrusal
-elemanlarin yapay sertligini (locking) onler.
-Not: Bu modul Fusion icinde degil, normal Python'da calisir (numpy/scipy/gmsh gerekir).
+Units: mm, N, MPa. Element: quadratic tetrahedron (P2), which avoids the artificial stiffness (locking)
+of linear elements in thin plates.
+Note: this module runs in normal Python, not inside Fusion (needs numpy / scipy / gmsh).
 """
 
 import math
@@ -21,9 +21,9 @@ import numpy as np
 
 
 def mesh_link(L, w, t, d, h, d1=None, D0=None, D1=None):
-    """gmsh ile uzuv geometrisi (iki uc gobegi + govde + iki delik) ve tetrahedral ag. Dondurur: msh yolu.
-    d: x=0'daki delik (mil), d1: x=L'deki delik (pim; verilmezse d).
-    D0, D1: gobek caplari (verilmezse w: klasik yuvarlak uclu cubuk)."""
+    """Link geometry with gmsh (two end bosses + web + two holes) and a tetrahedral mesh. Returns the msh path.
+    d: hole at x = 0 (shaft), d1: hole at x = L (pin; d if not given).
+    D0, D1: boss diameters (w if not given: a plain bar with round ends)."""
     import gmsh
     gmsh.initialize()
     try:
@@ -40,7 +40,7 @@ def mesh_link(L, w, t, d, h, d1=None, D0=None, D1=None):
         occ.synchronize()
         gmsh.option.setNumber("Mesh.MeshSizeMax", h)
         gmsh.option.setNumber("Mesh.MeshSizeMin", h / 3)
-        gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 12)   # delik cevresinde sik ag
+        gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 12)   # fine mesh around the holes
         gmsh.model.mesh.generate(3)
         path = os.path.join(tempfile.gettempdir(), f"link_{os.getpid()}.msh")
         gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
@@ -61,8 +61,8 @@ def hand_calc(L, w, t, d, F, E, nu, x0=None):
 
 
 def solve_cantilever(L, w, t, d, F, E, nu, h=None, d_load=None, D0=None, D1=None):
-    """P2 dogrusal elastik cozum. d: sabit (mil) deligi, d_load: yuklu (pim) deligi,
-    D0/D1: gobek caplari. Dondurur: uc sehimi, orta kesit gerilmesi, en buyuk von Mises, ag bilgisi."""
+    """P2 linear elastic solution. d: fixed (shaft) hole, d_load: loaded (pin) hole,
+    D0/D1: boss diameters. Returns tip deflection, mid-section stress, largest von Mises, mesh info."""
     import skfem
     from scipy.sparse.linalg import spsolve
     from skfem.models.elasticity import lame_parameters, linear_elasticity
@@ -79,7 +79,7 @@ def solve_cantilever(L, w, t, d, F, E, nu, h=None, d_load=None, D0=None, D1=None
     K = skfem.asm(linear_elasticity(lam, mu), basis)
 
     def on_hole(xc, dh):
-        tol = 0.12 * dh                      # duz ucgenler egri delik yuzeyinden biraz iceride
+        tol = 0.12 * dh                      # flat triangles sit slightly inside the curved hole surface
         return lambda x: np.abs(np.hypot(x[0] - xc, x[1]) - dh / 2) < tol
 
     fixed = mesh.facets_satisfying(on_hole(0.0, d), boundaries_only=True)
@@ -95,20 +95,20 @@ def solve_cantilever(L, w, t, d, F, E, nu, h=None, d_load=None, D0=None, D1=None
 
     @skfem.LinearForm
     def traction(v, w_):
-        return (F / A_hole) * v[1]           # toplam F, +y yonunde, delik yuzeyine yayili
+        return (F / A_hole) * v[1]           # total F in +y, spread over the hole surface
 
     f = traction.assemble(fb)
     D = basis.get_dofs(fixed).all()
     u = skfem.solve(*skfem.condense(K, f, D=D), solver=spsolve)
 
-    # Uc sehimi: yuklu delik yuzeyindeki dugumlerin ortalama y yer degistirmesi
+    # Tip deflection: mean y displacement of the nodes on the loaded hole surface
     load_nodes = np.unique(mesh.facets[:, loaded])
     uy = u[basis.nodal_dofs[1, load_nodes]]
     tip = float(np.mean(uy))
 
-    # Gerilme: kuadratur noktalarinda sigma = 2 mu eps + lam tr(eps) I
+    # Stress at the quadrature points: sigma = 2 mu eps + lam tr(eps) I
     ui = basis.interpolate(u)
-    g = ui.grad                               # (3, 3, eleman, nokta)
+    g = ui.grad                               # (3, 3, element, point)
     eps = 0.5 * (g + np.swapaxes(g, 0, 1))
     tr = eps[0, 0] + eps[1, 1] + eps[2, 2]
     sig = 2 * mu * eps
@@ -117,12 +117,12 @@ def solve_cantilever(L, w, t, d, F, E, nu, h=None, d_load=None, D0=None, D1=None
     vm = np.sqrt(0.5 * ((sig[0, 0] - sig[1, 1]) ** 2 + (sig[1, 1] - sig[2, 2]) ** 2 +
                         (sig[2, 2] - sig[0, 0]) ** 2) +
                  3 * (sig[0, 1] ** 2 + sig[1, 2] ** 2 + sig[0, 2] ** 2))
-    X = basis.global_coordinates().value      # (3, eleman, nokta)
+    X = basis.global_coordinates().value      # (3, element, point)
 
     x0 = L / 2
     band = (np.abs(X[0] - x0) < max(h, 1.0))
-    sigma_mid = float(np.max(np.abs(sig[0, 0][band])))       # orta kesitte en buyuk |sigma_xx|
-    far = np.hypot(X[0], X[1]) > 2.0 * d                      # sabit delikten uzak bolge
+    sigma_mid = float(np.max(np.abs(sig[0, 0][band])))       # largest |sigma_xx| at the mid section
+    far = np.hypot(X[0], X[1]) > 2.0 * d                      # region away from the fixed hole
     return {"tip_delta": tip, "sigma_mid": sigma_mid,
             "vm_max_far": float(np.max(vm[far])), "vm_max_all": float(np.max(vm)),
             "nodes": int(mesh.p.shape[1]), "elements": int(mesh.t.shape[1]), "dofs": int(basis.N),
@@ -139,22 +139,22 @@ def compare(L, w, t, d, F, E, nu, h=None, d_load=None, D0=None, D1=None):
 
 
 def verify_design(lengths, section, load, material, crank_torque=None):
-    """Panel icin: kol ve krank icin FEA ile el hesabini karsilastir.
-    lengths: {a,b,c,d} mm; section: {hole, links:{Krank,Kol:{width,thickness}}};
-    load: uctaki yuk N; material: {E, nu} MPa; crank_torque: en buyuk tahrik torku N*mm."""
+    """For the panel: compare FEA with the hand calculation for the rocker and the crank.
+    lengths: {a,b,c,d} mm; section: {hole, links:{Crank,Rocker:{width,thickness}}};
+    load: tip load N; material: {E, nu} MPa; crank_torque: largest drive torque N*mm."""
     out = {}
-    cases = {"Kol": (lengths["c"], load)}
+    cases = {"Rocker": (lengths["c"], load)}
     if crank_torque:
-        cases["Krank"] = (lengths["a"], crank_torque / lengths["a"])   # uctaki dik kuvvet
+        cases["Crank"] = (lengths["a"], crank_torque / lengths["a"])   # perpendicular force at the tip
     from strength import HUB_C, section_with_bosses
     section = section_with_bosses(section)
     for name, (L, F) in cases.items():
         s = section["links"][name]
         d_pin = section["hole"]
-        d = section.get("shaft", d_pin)          # krank ve kol milden (O2, O4) tutulur
+        d = section.get("shaft", d_pin)          # the crank and rocker are held by shafts (O2, O4)
         r = compare(L, s["width"], s["thickness"], d, F, material["E"], material["nu"], d_load=d_pin,
                     D0=s["boss0"], D1=s["boss1"])
-        # Tasarim modeli (strength.py ile ayni): egilme + kayma + gobek (mil) donmesi
+        # Design model (same as strength.py): bending + shear + hub (shaft) rotation
         d_hub = F * L ** 2 / (HUB_C * material["E"] * s["thickness"] * (d / 2) ** 2)
         model = r["hand"]["delta"] + d_hub
         out[name] = {"L": L, "F": F, "width": s["width"], "thickness": s["thickness"], "hole": d_pin,
@@ -172,20 +172,20 @@ if __name__ == "__main__":
     import json
     import sys
     import time
-    if "--json" in sys.argv:          # eklentiden cagrilir: girdi stdin'den JSON, cikti JSON
+    if "--json" in sys.argv:          # called by the add-in: JSON in on stdin, JSON out
         req = json.loads(sys.stdin.read())
         print(json.dumps(verify_design(**req)))
         sys.exit(0)
-    cases = [("Al 6061 kol (ince)", 60, 9, 3, 3, 49.05, 68900, 0.33),
-             ("PETG kol (kisa-genis)", 60, 29, 3, 4, 49.05, 2000, 0.38)]
+    cases = [("Al 6061 rocker (slender)", 60, 9, 3, 3, 49.05, 68900, 0.33),
+             ("PETG rocker (short, wide)", 60, 29, 3, 4, 49.05, 2000, 0.38)]
     for name, *args in cases:
         t0 = time.time()
         r = compare(*args)
         f, hc = r["fea"], r["hand"]
-        print(f"\n{name}: {f['elements']} eleman, {f['dofs']} serbestlik, {time.time() - t0:.1f} s")
-        print(f"  Uc sehimi   FEA {f['tip_delta']:.4f} mm | el (EB) {hc['delta_bending']:.4f} "
-              f"| el (EB+kayma) {hc['delta']:.4f}  -> fark {r['err_delta_pct']:+.1f}% "
-              f"(sadece EB'ye gore {r['err_delta_eb_pct']:+.1f}%)")
-        print(f"  Orta kesit  FEA {f['sigma_mid']:.2f} MPa | el {hc['sigma_mid']:.2f} MPa -> fark {r['err_sigma_pct']:+.1f}%")
-        print(f"  von Mises   en buyuk (sabit delikten uzak) {f['vm_max_far']:.1f} MPa, "
-              f"tum parca {f['vm_max_all']:.1f} MPa")
+        print(f"\n{name}: {f['elements']} elements, {f['dofs']} DOF, {time.time() - t0:.1f} s")
+        print(f"  Tip deflection  FEA {f['tip_delta']:.4f} mm | hand (EB) {hc['delta_bending']:.4f} "
+              f"| hand (EB+shear) {hc['delta']:.4f}  -> diff {r['err_delta_pct']:+.1f}% "
+              f"(vs EB only {r['err_delta_eb_pct']:+.1f}%)")
+        print(f"  Mid section     FEA {f['sigma_mid']:.2f} MPa | hand {hc['sigma_mid']:.2f} MPa -> diff {r['err_sigma_pct']:+.1f}%")
+        print(f"  von Mises       largest (away from the fixed hole) {f['vm_max_far']:.1f} MPa, "
+              f"whole part {f['vm_max_all']:.1f} MPa")

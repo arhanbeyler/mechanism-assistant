@@ -1,7 +1,7 @@
 """
-Yerel FEA testleri (gmsh + scikit-fem). Kaba agla ~2 s.
-Gerilme el hesabiyla ortusmeli; sehim el hesabindan BUYUK olmali (el hesabi kok
-bolgesini mukemmel ankastre sayar, gercekte parca kucuk bir delikten tutulur).
+Local FEA tests (gmsh + scikit-fem). About 2 s with a coarse mesh.
+The stress must match the hand calculation; the deflection must be LARGER than the hand calculation
+(which treats the root as perfectly clamped, while the real part is held by a small hole).
 """
 
 import os
@@ -25,16 +25,16 @@ def test_mid_section_stress_matches_beam_theory(al_bar):
 
 
 def test_fea_deflection_not_below_ideal_clamp(al_bar):
-    """Delikten tutulan kok, ideal ankastreden daha esnek: FEA sehimi el hesabindan kucuk olamaz."""
+    """A root held by a hole is more flexible than an ideal clamp: the FEA deflection cannot be smaller."""
     assert al_bar["fea"]["tip_delta"] >= al_bar["hand"]["delta"]
-    assert al_bar["err_delta_pct"] < 30.0            # ince uzuvda fark makul kalir
+    assert al_bar["err_delta_pct"] < 30.0            # the difference stays moderate for a slender link
 
 
-def test_verify_design_runs_for_kol_and_krank():
+def test_verify_design_runs_for_rocker_and_crank():
     out = fea_local.verify_design(
         lengths={"a": 30, "b": 52, "c": 60, "d": 73.5},
-        section={"hole": 3.0, "links": {"Kol": {"width": 9, "thickness": 3},
-                                        "Krank": {"width": 8, "thickness": 3}}},
+        section={"hole": 3.0, "links": {"Rocker": {"width": 9, "thickness": 3},
+                                        "Crank": {"width": 8, "thickness": 3}}},
         load=49.05, material={"E": 68900, "nu": 0.33}, crank_torque=2064.0)
-    assert set(out) == {"Kol", "Krank"}
-    assert out["Krank"]["F"] == pytest.approx(2064.0 / 30)
+    assert set(out) == {"Rocker", "Crank"}
+    assert out["Crank"]["F"] == pytest.approx(2064.0 / 30)

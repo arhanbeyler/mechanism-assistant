@@ -1,30 +1,30 @@
 """
-Kinematik motor v0 — krank-kol (crank-rocker) dort cubuk mekanizmasi.
+Kinematics engine: crank-rocker four-bar linkage.
 
-Isimlendirme (Norton):
-    a = krank (O2-A)      b = biyel / coupler (A-B)
-    c = kol / rocker (O4-B)   d = sabit uzuv / ground (O2-O4)
+Naming (Norton):
+    a = crank (O2-A)       b = coupler (A-B)
+    c = rocker (O4-B)      d = ground link (O2-O4)
 
-Sentez: Krank uzunlugu (a) ve kol salinim acisi (psi) verilir,
-zaman orani Q = 1 (hizli donus yok). Norton'un grafik yontemi:
+Synthesis: crank length (a) and rocker swing angle (psi) are given, time ratio Q = 1 (no quick
+return). Norton's graphical method:
     c = a / sin(psi/2)
-    O2, kolun iki uc konumu B1-B2'den gecen dogru uzerinde;
-    |O2B1| = b + a (uzanmis), |O2B2| = b - a (katlanmis).
-Kalan serbest parametre b; iletim acisi 90 dereceye en yakin kalacak
-sekilde taranarak secilir.
+    O2 lies on the line through the rocker's two extreme positions B1-B2;
+    |O2B1| = b + a (extended), |O2B2| = b - a (folded).
+The remaining free parameter b is swept so that the transmission angle stays as close to 90 degrees
+as needed.
 """
 
 import math
 import sys
 
-# Not: Bu dosya bilerek sadece Python'un standart kutuphanesini kullanir (numpy yok),
-# cunku Fusion 360'in kendi Python'unda numpy bulunmaz. Noktalar (x, y) demetleridir.
+# Note: this file deliberately uses only the Python standard library (no numpy), because Fusion 360's
+# own Python has no numpy. Points are (x, y) tuples.
 
 MU_MIN_DEG = 40.0
 MU_MAX_DEG = 140.0
 
 
-# ---------------------------------------------------------------- 2B vektor yardimcilari
+# ---------------------------------------------------------------- 2D vector helpers
 
 def _add(p, q):
     return (p[0] + q[0], p[1] + q[1])
@@ -47,7 +47,7 @@ def _dot(p, q):
 
 
 def _cross2(u, v):
-    """2B capraz carpim (z bileseni): isaret, donus yonunu verir."""
+    """2D cross product (z component): its sign gives the turning direction."""
     return u[0] * v[1] - u[1] * v[0]
 
 
@@ -56,61 +56,61 @@ def _linspace(start, stop, n, endpoint=True):
     return [start + i * step for i in range(n)]
 
 
-# ---------------------------------------------------------------- kontroller
+# ---------------------------------------------------------------- checks
 
 def grashof(a, b, c, d):
-    """Grashof kontrolu ve sinifi. Dondurur: (saglaniyor_mu, sinif)."""
+    """Grashof check and class. Returns (satisfied, class)."""
     links = sorted([a, b, c, d])
     s, p, q, l = links[0], links[1], links[2], links[3]
     if s + l > p + q:
-        return False, "Grashof DEGIL (hicbir uzuv tam donemez)"
+        return False, "NON-Grashof (no link can fully rotate)"
     if math.isclose(s + l, p + q):
-        return True, "Ozel Grashof (degisim noktasi var)"
-    shortest = min((a, "krank"), (b, "biyel"), (c, "kol"), (d, "sabit"))[1]
+        return True, "Special Grashof (has a change point)"
+    shortest = min((a, "crank"), (b, "coupler"), (c, "rocker"), (d, "ground"))[1]
     kind = {
-        "krank": "krank-kol (crank-rocker)",
-        "sabit": "cift krank (double-crank)",
-        "biyel": "cift kol (double-rocker)",
-        "kol": "krank-kol (kol tarafindan)",
+        "crank": "crank-rocker",
+        "ground": "double-crank",
+        "coupler": "double-rocker",
+        "rocker": "crank-rocker (driven from the rocker side)",
     }[shortest]
     return True, kind
 
 
 def transmission_extremes(a, b, c, d):
-    """Iletim acisinin uc degerleri (derece). Krank sabit uzuvla dogrusal iken olusur."""
+    """Extreme transmission angles (degrees). They occur when the crank is collinear with the ground link."""
     def mu(diag):
         cos_mu = (b * b + c * c - diag * diag) / (2 * b * c)
         return math.degrees(math.acos(max(-1.0, min(1.0, cos_mu))))
     return mu(abs(d - a)), mu(d + a)
 
 
-# ---------------------------------------------------------------- sentez
+# ---------------------------------------------------------------- synthesis
 
 def synthesize_crank_rocker(a, psi_deg, mu_design=45.0, b_steps=2000):
     """
-    Krank (a) ve salinim (psi) icin dort cubuk sentezi.
+    Four-bar synthesis for crank (a) and swing (psi).
 
-    Odunlesim: b uzadikca iletim acisi 90'a yaklasir ama mekanizma buyur.
-    Iletim acisini [mu_design, 180 - mu_design] icinde tutan EN KISA b secilir.
-    Hicbiri saglamazsa iletim acisi en iyi olan dondurulur.
+    Trade-off: a longer b brings the transmission angle towards 90 degrees but makes the mechanism
+    bigger. The SHORTEST b that keeps the transmission angle within [mu_design, 180 - mu_design] is
+    chosen. If none does, the one with the best transmission angle is returned.
     """
     psi = math.radians(psi_deg)
     c = a / math.sin(psi / 2)
 
-    # Koordinatlar: O4 orijinde, B1/B2 kolun uc konumlari (x eksenine simetrik)
+    # Coordinates: O4 at the origin, B1/B2 are the rocker's extreme positions (symmetric about x)
     bx = c * math.cos(psi / 2)
     by = c * math.sin(psi / 2)
 
     best = None
-    for b in _linspace(1.05 * a, 15 * a, b_steps):   # kisadan uzuna
-        o2 = (bx, -by - (b - a))            # B1-B2 dogrusu uzerinde, B2'nin altinda
+    for b in _linspace(1.05 * a, 15 * a, b_steps):   # short to long
+        o2 = (bx, -by - (b - a))            # on the line B1-B2, below B2
         d = math.hypot(*o2)
         mu1, mu2 = transmission_extremes(a, b, c, d)
-        worst = max(abs(90 - mu1), abs(90 - mu2))  # 90'dan en buyuk sapma
+        worst = max(abs(90 - mu1), abs(90 - mu2))  # largest deviation from 90
         cand = dict(a=a, b=b, c=c, d=d, o2=o2, b_ref=(bx, by), mu_min=min(mu1, mu2),
                     mu_max=max(mu1, mu2), worst_dev=worst, size=b + c + d, Q=1.0)
         if worst <= 90 - mu_design:
-            return cand                     # hedefi saglayan ilk (en kompakt) cozum
+            return cand                     # first (most compact) solution meeting the target
         if best is None or worst < best["worst_dev"]:
             best = cand
     return best
@@ -118,12 +118,12 @@ def synthesize_crank_rocker(a, psi_deg, mu_design=45.0, b_steps=2000):
 
 def synthesize_quick_return(a, psi_deg, Q, mu_design=45.0, n=3600):
     """
-    Hizli donuslu (Q > 1) krank-kol sentezi (Norton).
+    Quick-return (Q > 1) crank-rocker synthesis (Norton).
 
-    alpha = 180 (Q-1)/(Q+1). O2, B1-B2 kirisini alpha acisiyla goren
-    cember uzerindedir. Uzanmis konum: |O2B1| = b + a, katlanmis: |O2B2| = b - a.
-    Birim kol (c=1) ile tasarlanir, sonra krank = a olacak sekilde olceklenir.
-    Cember uzerinde taranir; iletim hedefini saglayan EN KOMPAKT secilir.
+    alpha = 180 (Q-1)/(Q+1). O2 lies on the circle that sees the chord B1-B2 under the angle alpha.
+    Extended position: |O2B1| = b + a, folded: |O2B2| = b - a.
+    Designed with a unit rocker (c = 1), then scaled so that the crank = a.
+    The circle is swept; the MOST COMPACT design meeting the transmission target is chosen.
     """
     if Q <= 1.0:
         return synthesize_crank_rocker(a, psi_deg, mu_design)
@@ -146,28 +146,28 @@ def synthesize_quick_return(a, psi_deg, Q, mu_design=45.0, n=3600):
             v1, v2 = _scale(_sub(B1, o2), 1 / L1), _scale(_sub(B2, o2), 1 / L2)
             ang = math.acos(max(-1.0, min(1.0, _dot(v1, v2))))
             if abs(ang - alpha) > 1e-6 or abs(L1 - L2) < 1e-6:
-                continue                     # cemberin yanlis yayi
+                continue                     # wrong arc of the circle
             a_u, b_u = abs(L1 - L2) / 2, (L1 + L2) / 2
-            # Uzanmis (ext) ve katlanmis (fold) konumlar AYNI montaj kolunda olmali:
-            # biyel-kol arasindaki isaretli aci iki konumda da ayni isarette.
+            # The extended (ext) and folded (fold) positions must be on the SAME assembly branch:
+            # the signed coupler-rocker angle has the same sign in both.
             ext, fold = (B1, B2) if L1 > L2 else (B2, B1)
             A_ext = _add(o2, _scale(_sub(ext, o2), a_u / _norm(_sub(ext, o2))))
             A_fold = _sub(o2, _scale(_sub(fold, o2), a_u / _norm(_sub(fold, o2))))
             s_ext = _cross2(_sub(ext, A_ext), _scale(ext, -1))
             s_fold = _cross2(_sub(fold, A_fold), _scale(fold, -1))
             if s_ext * s_fold <= 0:
-                continue                     # farkli montaj kollari: gercekte olusmaz
-            k = a / a_u                      # olcek: krank = a
+                continue                     # different assembly branches: never happens in reality
+            k = a / a_u                      # scale: crank = a
             b, c, d = b_u * k, k, _norm(o2) * k
             if not grashof(a, b, c, d)[0] or min(a, b, c, d) != a:
-                continue                     # krank-kol olmali (en kisa = krank)
+                continue                     # must be a crank-rocker (shortest = crank)
             mu1, mu2 = transmission_extremes(a, b, c, d)
             worst = max(abs(90 - mu1), abs(90 - mu2))
             cand = dict(a=a, b=b, c=c, d=d, o2=_scale(o2, k), b_ref=_scale(ext, k),
                         mu_min=min(mu1, mu2), mu_max=max(mu1, mu2),
                         worst_dev=worst, size=b + c + d, Q=Q)
-            # Esitlikte ilk bulunan kalir (1e-9 tolerans): ayna-simetrik cozumler arasinda
-            # yuvarlama gurultusu secimi degistirmesin, ayni girdi hep ayni ciktiyi versin.
+            # Ties keep the first one found (1e-9 tolerance): rounding noise between mirror-symmetric
+            # solutions must not change the choice, so the same input always gives the same output.
             if worst <= 90 - mu_design and (best_ok is None or cand["size"] < best_ok["size"] - 1e-9):
                 best_ok = cand
             if best is None or worst < best["worst_dev"] - 1e-9:
@@ -175,7 +175,7 @@ def synthesize_quick_return(a, psi_deg, Q, mu_design=45.0, n=3600):
     return best_ok or best
 
 
-# ---------------------------------------------------------------- konum analizi
+# ---------------------------------------------------------------- position analysis
 
 def _circle_intersections(p0, r0, p1, r1):
     x0, y0 = p0
@@ -183,7 +183,7 @@ def _circle_intersections(p0, r0, p1, r1):
     dx, dy = x1 - x0, y1 - y0
     dist = math.hypot(dx, dy)
     if dist > r0 + r1 or dist < abs(r0 - r1):
-        return []  # mekanizma bu konuma ulasamiyor (kilitlenme)
+        return []  # the mechanism cannot reach this position (it locks)
     k = (r0 * r0 - r1 * r1 + dist * dist) / (2 * dist)
     h = math.sqrt(max(0.0, r0 * r0 - k * k))
     mx, my = x0 + k * dx / dist, y0 + k * dy / dist
@@ -192,12 +192,12 @@ def _circle_intersections(p0, r0, p1, r1):
 
 
 def simulate(m, n=360):
-    """Krank 360 derece doner; her adimda A, B noktalari ve iletim acisi."""
+    """The crank turns 360 degrees; at every step the points A, B and the transmission angle."""
     o2 = tuple(m["o2"])
     o4 = (0.0, 0.0)
-    ground_angle = math.atan2(-o2[1], -o2[0])  # O2 -> O4 yonu
+    ground_angle = math.atan2(-o2[1], -o2[0])  # direction O2 -> O4
 
-    # Baslangic: sentezdeki uzanmis konum (krank, kol ucu B_ref'e bakar) -> dogru montaj kolu
+    # Start: the extended position from the synthesis (crank towards the rocker tip B_ref) -> right branch
     b_ref = m.get("b_ref")
     th0 = 0.0
     if b_ref is not None:
@@ -209,8 +209,8 @@ def simulate(m, n=360):
         A = _add(o2, (m["a"] * math.cos(ground_angle + th), m["a"] * math.sin(ground_angle + th)))
         sols = _circle_intersections(A, m["b"], o4, m["c"])
         if not sols:
-            raise RuntimeError(f"Mekanizma krank acisi {math.degrees(th):.1f} derecede kilitleniyor")
-        # Sureklilik: onceki B'ye en yakin cozumu sec (montaj kolu degismesin)
+            raise RuntimeError(f"The mechanism locks at crank angle {math.degrees(th):.1f} degrees")
+        # Continuity: take the solution closest to the previous B (the assembly branch must not change)
         if prev_b is None:
             B = max(sols, key=lambda s: s[0])
         else:
@@ -224,13 +224,13 @@ def simulate(m, n=360):
     return frames
 
 
-# ---------------------------------------------------------------- rapor
+# ---------------------------------------------------------------- report
 
 def measure(frames):
-    """Simulasyondan olculen degerler: salinim, zaman orani, iletim acisi araligi."""
+    """Values measured from the simulation: swing, time ratio, transmission angle range."""
     rock = [f["rocker"] for f in frames]
     mus = [f["mu"] for f in frames]
-    # Zaman orani: kolun iki uc konumu arasindaki krank donusleri
+    # Time ratio: crank rotation between the rocker's two extreme positions
     n = len(frames)
     i_max, i_min = rock.index(max(rock)), rock.index(min(rock))
     go = ((i_min - i_max) % n) * 360.0 / n
@@ -247,25 +247,25 @@ def report(m, frames, psi_target):
     mu_ok = MU_MIN_DEG <= min(mus) and max(mus) <= MU_MAX_DEG
 
     print("=" * 52)
-    print(f"  Krank a  = {m['a']:8.2f} mm")
-    print(f"  Biyel b  = {m['b']:8.2f} mm")
-    print(f"  Kol   c  = {m['c']:8.2f} mm")
-    print(f"  Sabit d  = {m['d']:8.2f} mm")
+    print(f"  Crank   a = {m['a']:8.2f} mm")
+    print(f"  Coupler b = {m['b']:8.2f} mm")
+    print(f"  Rocker  c = {m['c']:8.2f} mm")
+    print(f"  Ground  d = {m['d']:8.2f} mm")
     print("-" * 52)
-    print(f"  Grashof         : {'✓' if ok else '✗'} {kind}")
-    print(f"  Salinim (hedef) : {psi_target:.2f} deg")
-    print(f"  Salinim (simul.): {swing:.2f} deg")
-    print(f"  Zaman orani Q   : hedef {m.get('Q', 1.0):.2f} / simul. {q_meas:.2f}")
-    print(f"  Toplam boy      : {m['b'] + m['c'] + m['d']:.1f} mm (b+c+d)")
-    print(f"  Iletim acisi    : {min(mus):.1f} .. {max(mus):.1f} deg "
-          f"{'✓' if mu_ok else '✗'} (sinir {MU_MIN_DEG:g}..{MU_MAX_DEG:g})")
+    print(f"  Grashof          : {'✓' if ok else '✗'} {kind}")
+    print(f"  Swing (target)   : {psi_target:.2f} deg")
+    print(f"  Swing (simulated): {swing:.2f} deg")
+    print(f"  Time ratio Q     : target {m.get('Q', 1.0):.2f} / simulated {q_meas:.2f}")
+    print(f"  Total length     : {m['b'] + m['c'] + m['d']:.1f} mm (b+c+d)")
+    print(f"  Transmission     : {min(mus):.1f} .. {max(mus):.1f} deg "
+          f"{'✓' if mu_ok else '✗'} (limits {MU_MIN_DEG:g}..{MU_MAX_DEG:g})")
     print("=" * 52)
     return ok and mu_ok
 
 
 def to_fusion_dict(m, frames, passed):
-    """Fusion cizicisinin kullandigi veri: uzuv boylari + baslangic konumu.
-    Baslangic: uzanmis konumdan 45 derece ileri (tam dogrusal konum gorselde anlasilmiyor)."""
+    """Data used by the Fusion builder: link lengths + start position.
+    Start: 45 degrees past the extended position (the exactly collinear pose is hard to read)."""
     f0 = frames[len(frames) // 8]
     return {
         "type": "crank_rocker",
@@ -281,7 +281,7 @@ def to_fusion_dict(m, frames, passed):
 
 
 def export_json(m, frames, passed, path=None):
-    """Fusion script'inin okuyacagi dosya (output/mechanism.json)."""
+    """File read by the Fusion script (output/mechanism.json)."""
     import json
     import os
 
@@ -291,7 +291,7 @@ def export_json(m, frames, passed, path=None):
     data = to_fusion_dict(m, frames, passed)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2)
-    print(f"  Kaydedildi: {path}")
+    print(f"  Saved: {path}")
 
 
 def animate(m, frames, save_path=None):
@@ -306,21 +306,21 @@ def animate(m, frames, save_path=None):
     ax.set_xlim(min(xs) - pad, max(xs) + pad)
     ax.set_ylim(min(ys) - pad, max(ys) + pad)
     ax.set_aspect("equal")
-    ax.set_title("Dort cubuk mekanizmasi")
+    ax.set_title("Four-bar linkage")
     ax.plot([o2[0], 0], [o2[1], 0], "k--", lw=1)
     ax.plot([f["B"][0] for f in frames], [f["B"][1] for f in frames], ":", color="gray")
     ax.plot(*o2, "ks", ms=8)
     ax.plot(0, 0, "ks", ms=8)
-    crank, = ax.plot([], [], "-o", lw=4, color="tab:red", label="krank a")
-    coupler, = ax.plot([], [], "-o", lw=4, color="tab:blue", label="biyel b")
-    rocker, = ax.plot([], [], "-o", lw=4, color="tab:green", label="kol c")
+    crank, = ax.plot([], [], "-o", lw=4, color="tab:red", label="crank a")
+    coupler, = ax.plot([], [], "-o", lw=4, color="tab:blue", label="coupler b")
+    rocker, = ax.plot([], [], "-o", lw=4, color="tab:green", label="rocker c")
     ax.legend(loc="upper left")
 
     curve = sorted((f["theta"], f["mu"]) for f in frames)
     ax2.plot([p[0] for p in curve], [p[1] for p in curve], color="tab:purple")
-    ax2.axhspan(MU_MIN_DEG, MU_MAX_DEG, color="tab:green", alpha=0.1, label="guvenli bolge")
-    ax2.set_xlabel("Krank acisi (deg)")
-    ax2.set_ylabel("Iletim acisi mu (deg)")
+    ax2.axhspan(MU_MIN_DEG, MU_MAX_DEG, color="tab:green", alpha=0.1, label="safe band")
+    ax2.set_xlabel("Crank angle (deg)")
+    ax2.set_ylabel("Transmission angle mu (deg)")
     ax2.set_xlim(0, 360)
     ax2.set_ylim(0, 180)
     ax2.legend()
@@ -346,7 +346,7 @@ def animate(m, frames, save_path=None):
 
 
 if __name__ == "__main__":
-    # Kullanim: python kinematics.py [krank_mm] [salinim_deg] [--png cikti.png]
+    # Usage: python kinematics.py [crank_mm] [swing_deg] [Q] [--png out.png]
     argv = sys.argv[1:]
     if "--png" in argv:
         i = argv.index("--png")

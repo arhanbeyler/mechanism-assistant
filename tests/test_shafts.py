@@ -1,4 +1,4 @@
-"""C11b: mil (DE-Goodman) testleri."""
+"""C11b: shaft (DE-Goodman) tests."""
 
 import math
 import os
@@ -74,7 +74,7 @@ def test_layout_is_continuous_and_hub_at_midspan(feature):
 
 
 def test_layout_draws_only_the_analysed_notch():
-    """Hesap tek bir K_t ile yapildi: baska kademe/kanal cizilmemeli."""
+    """The analysis uses a single K_t: no other step / groove may be drawn."""
     for feature in ("keyseat", "plain"):
         assert len(shafts.layout(28.0, feature)["segments"]) == 1
     sh = shafts.layout(20.0, "round_shoulder")
@@ -86,7 +86,7 @@ def test_keyseat_inside_hub():
     lay = shafts.layout(28.0, "keyseat")
     ft = lay["feature"]
     assert lay["hub"][0] < ft["x"] - ft["length"] / 2 and ft["x"] + ft["length"] / 2 < lay["hub"][1]
-    assert ft["t1"] < ft["h"]                     # kama yuvadan tasar (gobek tarafi)
+    assert ft["t1"] < ft["h"]                     # the key sticks out of the seat (hub side)
 
 
 def test_profile_fillet_is_tangent_quarter_arc():
@@ -103,7 +103,7 @@ def test_span_is_respected_or_widened():
     assert shafts.layout(20.0, "plain", span=10)["span"] >= 3 * 20.0
 
 
-# ------------------------------------------------------------------ rulman, kama, sehim, kritik hiz
+# ------------------------------------------------------------------ bearings, key, deflection, critical speed
 
 def _uniform(d, span):
     lay = shafts.layout(d, "plain", span=span)
@@ -139,7 +139,7 @@ def test_critical_speed_does_not_depend_on_load_and_drops_with_mass():
 
 
 def test_key_length_from_shear_and_crushing():
-    """F = 2T/d; ezilme (sig taraf) ve kesme ile gereken boy; secilen standart boy ikisini de saglar."""
+    """F = 2T/d; length needed for crushing (shallow side) and shear; the chosen standard length meets both."""
     T, d, ny = 300000.0, 30.0, 1.5
     key, checks = shafts.key_design(T, d, ny)
     F = 2 * T / d
@@ -161,10 +161,11 @@ def test_bearing_shoulder_rule_and_l10():
 
 
 def test_torque_carrying_journal_can_govern():
-    """Duz milde gobek icin kucuk cap yeterken, torku tasiyan keskin omuzlu rulman oturmasi capi buyutur."""
+    """On a plain shaft a small hub diameter would do, but the torque-carrying sharp-shouldered bearing seat
+    forces a larger diameter."""
     g, checks = shafts.design(60000.0, 100000.0, "1045", "plain", n=2.0, rpm=300)
     assert g["raised"] and g["d"] > next(x for x in shafts.STANDARD_D if x >= g["d_min"])
-    assert any("oturması" in name for name in g["raised_by"])
+    assert any("seat" in name for name in g["raised_by"])
     assert all(c["util"] <= 1.0 for c in checks)
 
 
@@ -180,4 +181,4 @@ def test_design_layout_has_bearing_steps():
 def test_no_speed_skips_life_and_critical_speed():
     _, checks = shafts.design(60000.0, 100000.0, "1045", "keyseat")
     names = [c["name"] for c in checks]
-    assert not any("ömrü" in n or "Kritik" in n for n in names)
+    assert not any("life" in n or "Critical" in n for n in names)

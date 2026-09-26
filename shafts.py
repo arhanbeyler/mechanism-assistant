@@ -1,21 +1,22 @@
 """
-C11b: Mil tasarimi — Shigley, Bolum 6-7 (yorulma, DE-Goodman) + rulman, kama, sehim, kritik hiz.
+C11b: Shaft design: Shigley, Chapters 6-7 (fatigue, DE-Goodman) + bearings, key, deflection, critical speed.
 
-Donen mil: egilme tam degisken (Ma = M, Mm = 0), tork sabit (Tm = T, Ta = 0).
+Rotating shaft: fully reversed bending (Ma = M, Mm = 0), steady torque (Tm = T, Ta = 0).
 DE-Goodman:  d = [ 16 n / pi * ( 2 Kf Ma / Se + sqrt(3) Kfs Tm / Sut ) ]^(1/3)
-             (genel: 1/Se sqrt(4 (Kf Ma)^2 + 3 (Kfs Ta)^2) + 1/Sut sqrt(4 (Kf Mm)^2 + 3 (Kfs Tm)^2))
+             (general: 1/Se sqrt(4 (Kf Ma)^2 + 3 (Kfs Ta)^2) + 1/Sut sqrt(4 (Kf Mm)^2 + 3 (Kfs Tm)^2))
 Se = ka kb kc kd ke Se',  Se' = 0.5 Sut (Sut <= 1400 MPa)
-  ka = a Sut^b  (talasli: a = 4.51, b = -0.265)
-  kb = 1.24 d^-0.107 (2.79-51 mm), 1.51 d^-0.157 (51-254 mm)   -> d'ye bagli: iterasyon
-  kc = 1 (egilme), kd = 1 (oda sicakligi), ke = 0.897 (%90 guvenilirlik)
-Gerilme yigilmasi (ilk iterasyon, Shigley Tablo 7-1; muhafazakar Kf = Kt):
-  kama yuvasi (parmak freze) Kt 2.14 / Kts 3.0; keskin omuz 2.7 / 2.2; yuvarlatilmis omuz 1.7 / 1.5;
-  segman kanali 5.0 / 3.0; duz mil 1.0 / 1.0
-Akma: von Mises tepe  sigma' = sqrt((32 Kf M / (pi d^3))^2 + 3 (16 Kfs T / (pi d^3))^2)  <= Sy / ny
+  ka = a Sut^b  (machined: a = 4.51, b = -0.265)
+  kb = 1.24 d^-0.107 (2.79-51 mm), 1.51 d^-0.157 (51-254 mm)   -> depends on d: iteration
+  kc = 1 (bending), kd = 1 (room temperature), ke = 0.897 (90 % reliability)
+Stress concentration (first iteration, Shigley Table 7-1; conservative Kf = Kt):
+  keyseat (end-milled) Kt 2.14 / Kts 3.0; sharp shoulder 2.7 / 2.2; well-rounded shoulder 1.7 / 1.5;
+  retaining-ring groove 5.0 / 3.0; plain shaft 1.0 / 1.0
+Yield: von Mises peak  sigma' = sqrt((32 Kf M / (pi d^3))^2 + 3 (16 Kfs T / (pi d^3))^2)  <= Sy / ny
 
-Yuk modeli: iki yatak arasinda, aciklik ortasindaki gobege etkiyen tek radyal kuvvet F (M = F L / 4),
-sol uctan tork girisi. Rulman oturmalari keskin omuzla kademeli (rulman radyusu kucuk: Tablo 7-1 keskin).
-Birimler: N, mm, MPa, N*mm, kg.
+Load model: one radial force F on the hub at mid-span between two bearings (M = F L / 4), torque input
+at the left end. The bearing seats are stepped with sharp shoulders (small bearing corner radius:
+Table 7-1 "sharp").
+Units: N, mm, MPa, N*mm, kg.
 """
 
 import math
@@ -25,11 +26,11 @@ SHAFT_MATERIALS = {
     "1045": {"name": "AISI 1045 CD", "Sut": 630.0, "Sy": 530.0},
 }
 FEATURES = {
-    "keyseat": ("kama yuvası", 2.14, 3.0),
-    "sharp_shoulder": ("keskin omuz", 2.7, 2.2),
-    "round_shoulder": ("yuvarlatılmış omuz", 1.7, 1.5),
-    "ring_groove": ("segman kanalı", 5.0, 3.0),
-    "plain": ("düz mil", 1.0, 1.0),
+    "keyseat": ("keyseat", 2.14, 3.0),
+    "sharp_shoulder": ("sharp shoulder", 2.7, 2.2),
+    "round_shoulder": ("rounded shoulder", 1.7, 1.5),
+    "ring_groove": ("retaining-ring groove", 5.0, 3.0),
+    "plain": ("plain shaft", 1.0, 1.0),
 }
 STANDARD_D = [6, 8, 10, 12, 14, 15, 16, 17, 18, 20, 22, 25, 28, 30, 32, 35, 38, 40, 42, 45, 48, 50,
               55, 60, 65, 70, 75, 80, 90, 100, 110, 120]
@@ -37,8 +38,8 @@ KE_90 = 0.897
 E_STEEL = 207000.0           # MPa
 RHO_STEEL = 7.85e-6          # kg/mm^3
 
-# Sabit bilyali rulmanlar (ISO 15 olculeri; C: dinamik yuk sayisi, kN, yaklasik SKF katalog degerleri)
-# (ad, delik, dis cap, genislik, C)
+# Deep-groove ball bearings (ISO 15 dimensions; C: basic dynamic load rating, kN, approximate SKF values)
+# (name, bore, outer diameter, width, C)
 BEARINGS = [
     ("6200", 10, 30, 9, 5.07), ("6201", 12, 32, 10, 6.89), ("6202", 15, 35, 11, 7.8), ("6203", 17, 40, 12, 9.56),
     ("6204", 20, 47, 14, 13.5), ("6205", 25, 52, 15, 14.8), ("6206", 30, 62, 16, 20.3), ("6207", 35, 72, 17, 27.0),
@@ -50,14 +51,14 @@ BEARINGS = [
     ("6308", 40, 90, 23, 42.3), ("6309", 45, 100, 25, 55.3), ("6310", 50, 110, 27, 65.0), ("6311", 55, 120, 29, 74.1),
     ("6312", 60, 130, 31, 85.2),
 ]
-SHOULDER_FRAC = 0.2          # rulman omuz capi da_min ~ delik + 0.2 (dis cap - delik) (katalog: rulmani tutabilmek icin)
-LIFE_H = 20000.0             # hedef L10 omru, saat (Shigley Tablo 11-4: tam gun calisan genel makineler 20-30 bin saat)
-SLOPE_MAX = 0.001            # rad, sabit bilyali rulmanda egim (Shigley Tablo 7-2, 0.001-0.003; alt sinir)
-DEFL_MAX = 0.13              # mm, gobekte cokme (Tablo 7-2, duz disli, modul ~1.3-2.5)
-CRIT_RATIO = 2.0             # kritik hiz >= 2 x calisma hizi (Shigley 7-6)
-KEY_SY = 390.0               # kama malzemesi AISI 1020 CD (Shigley ornek 7-6)
+SHOULDER_FRAC = 0.2          # bearing shoulder diameter da_min ~ bore + 0.2 (OD - bore) (catalogue: to hold the bearing)
+LIFE_H = 20000.0             # target L10 life, hours (Shigley Table 11-4: machines in full-day use, 20-30 thousand h)
+SLOPE_MAX = 0.001            # rad, slope at a deep-groove ball bearing (Shigley Table 7-2, 0.001-0.003; lower bound)
+DEFL_MAX = 0.13              # mm, deflection at the hub (Table 7-2, spur gear, module ~1.3-2.5)
+CRIT_RATIO = 2.0             # critical speed >= 2 x running speed (Shigley 7-6)
+KEY_SY = 390.0               # key material AISI 1020 CD (Shigley example 7-6)
 KEY_LENGTHS = [6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32, 36, 40, 45, 50, 56, 63, 70, 80, 90, 100, 110, 125, 140]
-KEY_MAX_RATIO = 1.5          # kama boyu <= 1.5 d (daha uzunu yuku esit dagitmaz; Shigley 7-7)
+KEY_MAX_RATIO = 1.5          # key length <= 1.5 d (a longer one does not share the load; Shigley 7-7)
 
 
 def kb(d):
@@ -78,7 +79,7 @@ def de_goodman_d(M, T, Sut, Se, Kf, Kfs, n):
 
 
 def de_goodman_n(d, M, T, Sut, Se, Kf, Kfs):
-    """Verilen cap icin yorulma emniyet katsayisi."""
+    """Fatigue safety factor of a given diameter."""
     return math.pi * d ** 3 / (16 * (2 * Kf * M / Se + math.sqrt(3) * Kfs * T / Sut))
 
 
@@ -88,8 +89,8 @@ def von_mises_peak(d, M, T, Kf, Kfs):
     return math.sqrt(s * s + 3 * t * t)
 
 
-# ------------------------------------------------------------------ kama (DIN 6885)
-# DIN 6885-1 paralel kama: (mil capi ust siniri, b, h, t1 mil yuvasi derinligi)  [mm]
+# ------------------------------------------------------------------ key (DIN 6885)
+# DIN 6885-1 parallel key: (upper shaft diameter, b, h, t1 keyseat depth in the shaft)  [mm]
 KEYS = [(8, 2, 2, 1.2), (10, 3, 3, 1.8), (12, 4, 4, 2.5), (17, 5, 5, 3.0), (22, 6, 6, 3.5), (30, 8, 7, 4.0),
         (38, 10, 8, 5.0), (44, 12, 8, 5.0), (50, 14, 9, 5.5), (58, 16, 10, 6.0), (65, 18, 11, 7.0),
         (75, 20, 12, 7.5), (85, 22, 14, 9.0), (95, 25, 14, 9.0), (110, 28, 16, 10.0), (130, 32, 18, 11.0)]
@@ -100,31 +101,32 @@ def key_for(d):
 
 
 def key_design(T, d, ny):
-    """Kama boyu: kesme (tau = F / (b l) <= 0.577 Sy / ny) ve ezilme (F / (l t) <= Sy / ny, t = yuvanin sig tarafi)
-    ile, F = 2T/d. En az d, standart boya yuvarlanir. Dondurur: (kama sozlugu, kontroller) ya da (None, kontroller)."""
+    """Key length from shear (tau = F / (b l) <= 0.577 Sy / ny) and crushing (F / (l t) <= Sy / ny, t = the shallow
+    side of the seat), F = 2T/d. At least d, rounded up to a standard length.
+    Returns (key dict, checks) or (None, checks)."""
     b, h, t1 = key_for(d)
     F = 2 * T / d
-    t = min(t1, h - t1)                            # gobek tarafi (h - t1) cogu zaman daha sig
+    t = min(t1, h - t1)                            # the hub side (h - t1) is usually the shallower one
     need = max(F * ny / (b * 0.577 * KEY_SY), F * ny / (t * KEY_SY))
     length = next((L for L in KEY_LENGTHS if L >= max(need, d)), None)
-    if length is None or length > KEY_MAX_RATIO * d:     # bu capta tek kama yetmez -> tasarim bir ust capa
-        return None, [{"group": "Kama", "name": "Kama boyu", "util": need / (KEY_MAX_RATIO * d),
-                       "detail": f"gereken {need:.0f} mm > 1.5·d = {KEY_MAX_RATIO * d:.0f} mm"}]
+    if length is None or length > KEY_MAX_RATIO * d:     # one key is not enough at this d -> next diameter
+        return None, [{"group": "Key", "name": "Key length", "util": need / (KEY_MAX_RATIO * d),
+                       "detail": f"needs {need:.0f} mm > 1.5·d = {KEY_MAX_RATIO * d:.0f} mm"}]
     n_shear = 0.577 * KEY_SY * b * length / F
     n_crush = KEY_SY * t * length / F
     checks = [
-        {"group": "Kama", "name": "Kama kesmesi", "util": ny / n_shear,
+        {"group": "Key", "name": "Key shear", "util": ny / n_shear,
          "detail": f"{b}×{h}×{length} (DIN 6885, 1020 CD), F = {F:.0f} N, n = {n_shear:.1f}"},
-        {"group": "Kama", "name": "Kama ezilmesi", "util": ny / n_crush,
-         "detail": f"temas yüksekliği {t:g} mm, n = {n_crush:.1f} (en az {ny:g})"},
+        {"group": "Key", "name": "Key crushing", "util": ny / n_crush,
+         "detail": f"contact height {t:g} mm, n = {n_crush:.1f} (at least {ny:g})"},
     ]
     return {"b": b, "h": h, "t1": t1, "length": float(length), "F": F}, checks
 
 
-# ------------------------------------------------------------------ rulman ve oturma kademesi
+# ------------------------------------------------------------------ bearings and bearing seats
 
 def bearing_candidates(d):
-    """Bu gobek capindaki mile takilabilecek rulmanlar (omuz rulmani tutabilmeli), her seriden en buyuk delikli."""
+    """Bearings that fit a shaft with this hub diameter (the shoulder must hold them): largest bore of each series."""
     out = []
     for series in ("62", "63"):
         fits = [b for b in BEARINGS if b[0].startswith(series) and b[1] + SHOULDER_FRAC * (b[2] - b[1]) <= d + 1e-9]
@@ -138,7 +140,7 @@ def l10_hours(C_kN, P_N, rpm):
 
 
 def journal_checks(brg, R, T, mat, n, ny, rpm):
-    """Sol rulman oturmasi (tork da tasir): omuzda M = R B/2, keskin omuz Kt; ve rulman omru."""
+    """Left bearing seat (it also carries the torque): M = R B/2 at the shoulder, sharp-shoulder Kt; and bearing life."""
     name, bore, OD, B, C = brg
     Kf, Kfs = FEATURES["sharp_shoulder"][1:]
     M = R * B / 2
@@ -146,33 +148,33 @@ def journal_checks(brg, R, T, mat, n, ny, rpm):
     nf = de_goodman_n(bore, M, T, mat["Sut"], Se, Kf, Kfs)
     sv = von_mises_peak(bore, M, T, Kf, Kfs)
     checks = [
-        {"group": "Rulman", "name": "Rulman oturması yorulması", "util": n / nf,
-         "detail": f"Ø{bore} keskin omuz (K_f {Kf:g}/{Kfs:g}), M = {M / 1000:.1f} N·m, n_f = {nf:.2f}"},
-        {"group": "Rulman", "name": "Rulman oturması akması", "util": ny * sv / mat["Sy"],
+        {"group": "Bearing", "name": "Bearing seat fatigue", "util": n / nf,
+         "detail": f"Ø{bore} sharp shoulder (K_f {Kf:g}/{Kfs:g}), M = {M / 1000:.1f} N·m, n_f = {nf:.2f}"},
+        {"group": "Bearing", "name": "Bearing seat yield", "util": ny * sv / mat["Sy"],
          "detail": f"σ' = {sv:.0f} MPa, n_y = {mat['Sy'] / sv:.2f}"},
     ]
     if rpm:
         life = l10_hours(C, R, rpm)
-        checks.append({"group": "Rulman", "name": f"Rulman ömrü ({name})", "util": LIFE_H / life,
-                       "detail": f"L10 = {life:,.0f} saat (hedef {LIFE_H:,.0f}), P = {R:.0f} N, C = {C:g} kN, {rpm:.0f} rpm"})
+        checks.append({"group": "Bearing", "name": f"Bearing life ({name})", "util": LIFE_H / life,
+                       "detail": f"L10 = {life:,.0f} h (target {LIFE_H:,.0f}), P = {R:.0f} N, C = {C:g} kN, {rpm:.0f} rpm"})
     return checks
 
 
-# ------------------------------------------------------------------ geometri
+# ------------------------------------------------------------------ geometry
 
 def groove_for(d):
-    """Segman kanali (DIN 471'e yakin): (genislik m, derinlik t)."""
+    """Retaining-ring groove (close to DIN 471): (width m, depth t)."""
     m = 1.1 if d <= 17 else 1.3 if d <= 25 else 1.6 if d <= 38 else 1.85 if d <= 48 else 2.15
     return m, round(max(0.2, 0.03 * d), 2)
 
 
-# Tablo 7-1'in dayandigi oranlar: omuz D/d = 1.5; keskin r/d = 0.02, yuvarlatilmis r/d = 0.1
+# Ratios behind Table 7-1: shoulder D/d = 1.5; sharp r/d = 0.02, well-rounded r/d = 0.1
 SHOULDER_RATIO = 1.5
 FILLET_RATIO = {"sharp_shoulder": 0.02, "round_shoulder": 0.1}
 
 
 def _set_radius(segs, x0, x1, r):
-    """[x0, x1] araligini r yaricapli yap (gerekirse parcalari bol)."""
+    """Give the interval [x0, x1] radius r (splitting segments where needed)."""
     out = []
     for a, b, rr in segs:
         if b <= x0 or a >= x1:
@@ -187,19 +189,19 @@ def _set_radius(segs, x0, x1, r):
 
 
 def layout(d, feature, span=None, bearing=None, key_len=None, hub_len=None):
-    """Iki yatakli, sol ucu tahrikli mil: sol uc (tork girisi) | rulman 1 | gobek oturmasi (aciklik
-    ortasi, en buyuk M) | rulman 2. Cizilen gerilme yigilmalari = hesaplananlar (gobekteki ozellik +
-    rulman omuzlari). bearing: BEARINGS satiri (yoksa gorsel yatak, delik = d).
-    Dondurur: {"length", "segments": [(x0, x1, r)], "bearings": [(xc, genislik, dis cap)], "journal",
-    "hub": (x0, x1), "feature": {...}, "span", "d"} (x ekseni mil ekseni, mm)."""
+    """Two-bearing shaft driven at the left end: left end (torque input) | bearing 1 | hub seat (mid-span,
+    largest M) | bearing 2. The stress raisers drawn are exactly the ones analysed (hub feature +
+    bearing shoulders). bearing: a BEARINGS row (else a visual bearing with bore = d).
+    Returns {"length", "segments": [(x0, x1, r)], "bearings": [(xc, width, OD)], "journal",
+    "hub": (x0, x1), "feature": {...}, "span", "d"} (x axis = shaft axis, mm)."""
     if bearing:
         bname, bore, OD, B = bearing[0], float(bearing[1]), float(bearing[2]), float(bearing[3])
     else:
         bname, bore, OD, B = None, float(d), float(round(1.8 * d)), max(6.0, round(0.5 * d))
-    Lh = max(1.5 * d, (key_len or 0) + 0.2 * d, hub_len or 0)   # gobek kamadan (ve takilan parcadan) uzun
+    Lh = max(1.5 * d, (key_len or 0) + 0.2 * d, hub_len or 0)   # hub seat longer than the key (and the part on it)
     Lc = max(3.0, round(0.25 * d))
     L = float(span) if span else round(5 * d)
-    L = max(L, Lh + 2 * Lc + B + 0.5 * d)         # gobek + omuz rulmanlara carpmasin
+    L = max(L, Lh + 2 * Lc + B + 0.5 * d)         # hub + collar must not reach the bearings
     stub = round(1.5 * d)
     xb1 = stub + B / 2
     xb2 = xb1 + L
@@ -208,18 +210,18 @@ def layout(d, feature, span=None, bearing=None, key_len=None, hub_len=None):
     hub = (xm - Lh / 2, xm + Lh / 2)
     r = d / 2
     segs = [(0.0, total, r)]
-    if bore < d:                                  # rulman oturmalari (omuz rulmanin ic yuzunde)
+    if bore < d:                                  # bearing seats (shoulder at the inner face of the bearing)
         segs = _set_radius(segs, 0.0, xb1 + B / 2, bore / 2)
         segs = _set_radius(segs, xb2 - B / 2, total, bore / 2)
     feat = {"kind": feature}
     if feature in FILLET_RATIO:
         D = round(SHOULDER_RATIO * d)
-        xs = hub[0]                               # omuz yuzu = gobegin dayandigi yuz
+        xs = hub[0]                               # shoulder face = the face the hub rests against
         segs = _set_radius(segs, xs - Lc, xs, D / 2)
         feat.update(x=xs, D=float(D), fillet=round(FILLET_RATIO[feature] * d, 2), collar=Lc)
     elif feature == "ring_groove":
         m, t = groove_for(d)
-        xg = hub[1] + 0.5                         # gobegi sagdan tutan segman
+        xg = hub[1] + 0.5                         # ring holding the hub from the right
         segs = _set_radius(segs, xg, xg + m, r - t)
         feat.update(x=xg, width=m, depth=t)
     elif feature == "keyseat":
@@ -231,13 +233,13 @@ def layout(d, feature, span=None, bearing=None, key_len=None, hub_len=None):
 
 
 def profile(lay):
-    """Donel profil (x, r) noktalari, soldan saga ust hat; eksen uzerinden kapatilir. Omuz radyusu
-    yay yerine ('arc', merkez, bas, son) olarak isaretlenir."""
+    """Revolve profile (x, r) points, upper outline from left to right; closed along the axis. A shoulder
+    fillet is marked as ('arc', centre, start, end)."""
     pts = [(0.0, 0.0)]
     feat = lay["feature"]
     for x0, x1, r in lay["segments"]:
         if pts[-1][1] != r:
-            if feat.get("fillet") and abs(x0 - feat["x"]) < 1e-9:   # omuz -> kucuk cap: ic kose radyusu
+            if feat.get("fillet") and abs(x0 - feat["x"]) < 1e-9:   # shoulder -> smaller diameter: inner-corner fillet
                 rf, rs = feat["fillet"], r
                 pts.append((x0, rs + rf))
                 pts.append(("arc", (x0 + rf, rs + rf), (x0, rs + rf), (x0 + rf, rs)))
@@ -249,7 +251,7 @@ def profile(lay):
     return pts
 
 
-# ------------------------------------------------------------------ sehim ve kritik hiz
+# ------------------------------------------------------------------ deflection and critical speed
 
 def radius_at(lay, x):
     for a, b, r in lay["segments"]:
@@ -259,16 +261,16 @@ def radius_at(lay, x):
 
 
 def beam(lay, F, masses=(), N=4000):
-    """Iki rulman arasinda basit mesnetli kademeli mil, ortada F: M/(EI) iki kez sayisal integral
-    (Shigley 4-10 yontemi), y(rulman) = 0. Kritik hiz: Rayleigh, sekil = bu statik sehim egrisi:
-    w^2 = F y(F noktasi) / sum(m y^2) (mil kutlesi + masses [(x, kg)]; uclardaki cikintilar dahil degil).
-    Dondurur: {"slope1", "slope2" (rad), "y_hub" (mm), "n_crit" (rpm)}."""
+    """Stepped shaft simply supported by two bearings, F at mid-span: M/(EI) integrated twice numerically
+    (Shigley 4-10 method), y(bearings) = 0. Critical speed: Rayleigh with this static deflection curve as
+    the shape: w^2 = F y(at F) / sum(m y^2) (shaft mass + masses [(x, kg)]; the overhangs are not included).
+    Returns {"slope1", "slope2" (rad), "y_hub" (mm), "n_crit" (rpm)}."""
     (xb1, _, _), (xb2, _, _) = lay["bearings"]
     L = xb2 - xb1
     xm = (xb1 + xb2) / 2
     h = L / N
     xs = [xb1 + i * h for i in range(N + 1)]
-    kap = []                                      # birim yukte (1 N) egrilik: sekil yukten bagimsiz, sonra F ile olcek
+    kap = []                                      # curvature under a unit load (1 N): the shape does not depend on F; scaled by F later
     for x in xs:
         M = 0.5 * (x - xb1) if x <= xm else 0.5 * (xb2 - x)
         I = math.pi * (2 * radius_at(lay, x)) ** 4 / 64
@@ -280,7 +282,7 @@ def beam(lay, F, masses=(), N=4000):
     c1 = -y[-1] / L                               # y(xb2) = 0
     th = [t + c1 for t in th]
     y = [yy + c1 * (x - xb1) for yy, x in zip(y, xs)]
-    y1 = abs(y[N // 2])                           # 1 N'de gobek cokmesi
+    y1 = abs(y[N // 2])                           # hub deflection at 1 N
     mass_term = sum(RHO_STEEL * math.pi * radius_at(lay, x) ** 2 * h * yy ** 2 for x, yy in zip(xs, y))
     for xmass, m in masses:
         i = min(N, max(0, round((xmass - xb1) / h)))
@@ -289,7 +291,7 @@ def beam(lay, F, masses=(), N=4000):
     return {"slope1": F * abs(th[0]), "slope2": F * abs(th[-1]), "y_hub": F * y1, "n_crit": w * 60 / (2 * math.pi)}
 
 
-# ------------------------------------------------------------------ tasarim
+# ------------------------------------------------------------------ design
 
 def _hub_checks(d, M, T, mat, feature, n, ny):
     fname, Kf, Kfs = FEATURES[feature]
@@ -297,33 +299,33 @@ def _hub_checks(d, M, T, mat, feature, n, ny):
     nf = de_goodman_n(d, M, T, mat["Sut"], Se, Kf, Kfs)
     sv = von_mises_peak(d, M, T, Kf, Kfs)
     return Se, nf, sv, [
-        {"group": "Yorulma", "name": "DE-Goodman yorulma emniyeti", "util": n / nf,
-         "detail": f"n_f = {nf:.2f} (hedef {n:g}), S_e = {Se:.0f} MPa, K_f/K_fs = {Kf:g}/{Kfs:g} ({fname})"},
-        {"group": "Akma", "name": "İlk çevrimde akma (von Mises)", "util": ny * sv / mat["Sy"],
-         "detail": f"σ' = {sv:.0f} MPa, n_y = {mat['Sy'] / sv:.2f} (en az {ny:g})"},
+        {"group": "Fatigue", "name": "DE-Goodman fatigue safety", "util": n / nf,
+         "detail": f"n_f = {nf:.2f} (target {n:g}), S_e = {Se:.0f} MPa, K_f/K_fs = {Kf:g}/{Kfs:g} ({fname})"},
+        {"group": "Yield", "name": "First-cycle yield (von Mises)", "util": ny * sv / mat["Sy"],
+         "detail": f"σ' = {sv:.0f} MPa, n_y = {mat['Sy'] / sv:.2f} (at least {ny:g})"},
     ]
 
 
 def design(M_Nmm, T_Nmm, material="1045", feature="keyseat", n=2.0, ny=1.5, span=None, rpm=None,
            F_N=None, hub_len=None, hub_mass=0.0):
-    """Dondurur: (tasarim, kontroller). Once gobek kesiti (DE-Goodman, kb <-> d iterasyonu) -> en kucuk
-    standart cap; sonra bu capla rulman, kama, sehim ve kritik hiz. Biri gecmezse bir ust standart cap
-    (Shigley'in yinelemeli mil tasarimi). Hicbiri olmazsa (None, son capin kontrolleri).
-    Sistemden (E1): M yerine gobekteki radyal kuvvet F_N (M = F L / 4, L milin aciklik uzunlugu),
-    gobege takilan parcanin boyu hub_len ve kutlesi hub_mass (kg, kritik hiz)."""
+    """Returns (design, checks). First the hub section (DE-Goodman, kb <-> d iteration) -> smallest standard
+    diameter; then bearings, key, deflection and critical speed at that diameter. If one fails, the next
+    standard diameter (Shigley's iterative shaft design). If none works: (None, checks of the last one).
+    From a system (E1): instead of M, the radial force F_N on the hub (M = F L / 4, L = the shaft's span),
+    the length hub_len and the mass hub_mass (kg, critical speed) of the part on the hub."""
     mat = SHAFT_MATERIALS[material]
     _, Kf, Kfs = FEATURES[feature]
     d = 20.0
-    for _ in range(50):                          # kb(d) <-> d (ve F verildiyse aciklik) yakinsamasi
+    for _ in range(50):                          # kb(d) <-> d (and, with F given, span) convergence
         M_it = F_N * layout(d, feature, span, hub_len=hub_len)["span"] / 4 if F_N is not None else M_Nmm
         d_new = de_goodman_d(M_it, T_Nmm, mat["Sut"], endurance(mat["Sut"], d), Kf, Kfs, n)
         if abs(d_new - d) < 1e-6:
             break
         d = d_new
     d_min = d
-    last = [{"group": "Çap", "name": "Standart çap", "util": 99.0,
-             "detail": f"gereken Ø{d_min:.1f} mm > Ø{STANDARD_D[-1]} mm"}]
-    raised_by = None                              # ilk denenen capta gecmeyen kontroller (neden buyutuldu)
+    last = [{"group": "Diameter", "name": "Standard diameter", "util": 99.0,
+             "detail": f"needs Ø{d_min:.1f} mm > Ø{STANDARD_D[-1]} mm"}]
+    raised_by = None                              # checks failing at the first diameter tried (why it was raised)
     for d_std in (x for x in STANDARD_D if x >= d_min - 1e-9):
         g, checks = _evaluate(float(d_std), M_Nmm, T_Nmm, mat, feature, n, ny, span, rpm, F_N, hub_len, hub_mass)
         last = checks
@@ -343,8 +345,8 @@ def _evaluate(d, M, T, mat, feature, n, ny, span, rpm, F_N=None, hub_len=None, h
         if key is None:
             return None, checks
     klen = key and key["length"]
-    L0 = layout(d, feature, span, key_len=klen, hub_len=hub_len)["span"]   # rulman oncesi aciklik
-    F = F_N if F_N is not None else 4 * M / L0    # ortadaki kuvvet: M = F L / 4
+    L0 = layout(d, feature, span, key_len=klen, hub_len=hub_len)["span"]   # span before the bearing is known
+    F = F_N if F_N is not None else 4 * M / L0    # force at mid-span: M = F L / 4
     R = F / 2
     brg, jc = None, []
     for cand in bearing_candidates(d):
@@ -360,22 +362,22 @@ def _evaluate(d, M, T, mat, feature, n, ny, span, rpm, F_N=None, hub_len=None, h
     Se, nf, sv, hub = _hub_checks(d, M, T, mat, feature, n, ny)
     checks = hub + checks
     if brg is None:
-        checks += jc or [{"group": "Rulman", "name": "Rulman seçimi", "util": 99.0,
-                          "detail": f"Ø{d:g} mile uygun rulman yok (katalog Ø10–Ø80)"}]
+        checks += jc or [{"group": "Bearing", "name": "Bearing selection", "util": 99.0,
+                          "detail": f"no bearing fits a Ø{d:g} shaft (catalogue Ø10–Ø80)"}]
         return None, checks
     checks += jc
     xm = sum(b[0] for b in lay["bearings"]) / 2
     bm = beam(lay, F, [(xm, hub_mass)] if hub_mass else ())
     checks += [
-        {"group": "Sehim", "name": "Rulmanda eğim", "util": max(bm["slope1"], bm["slope2"]) / SLOPE_MAX,
-         "detail": f"{max(bm['slope1'], bm['slope2']) * 1000:.2f} mrad (sabit bilyalı sınır {SLOPE_MAX * 1000:g} mrad)"},
-        {"group": "Sehim", "name": "Göbekte çökme", "util": bm["y_hub"] / DEFL_MAX,
-         "detail": f"{bm['y_hub'] * 1000:.1f} µm (düz dişli sınırı {DEFL_MAX * 1000:.0f} µm)"},
+        {"group": "Deflection", "name": "Slope at the bearings", "util": max(bm["slope1"], bm["slope2"]) / SLOPE_MAX,
+         "detail": f"{max(bm['slope1'], bm['slope2']) * 1000:.2f} mrad (deep-groove ball limit {SLOPE_MAX * 1000:g} mrad)"},
+        {"group": "Deflection", "name": "Deflection at the hub", "util": bm["y_hub"] / DEFL_MAX,
+         "detail": f"{bm['y_hub'] * 1000:.1f} µm (spur gear limit {DEFL_MAX * 1000:.0f} µm)"},
     ]
     if rpm:
-        extra = f", göbekte {hub_mass:.2f} kg dahil" if hub_mass else ""
-        checks.append({"group": "Titreşim", "name": "Kritik hız", "util": CRIT_RATIO * rpm / bm["n_crit"],
-                       "detail": f"{bm['n_crit']:,.0f} rpm (çalışma {rpm:.0f} rpm'in en az {CRIT_RATIO:g} katı{extra})"})
+        extra = f", incl. {hub_mass:.2f} kg on the hub" if hub_mass else ""
+        checks.append({"group": "Vibration", "name": "Critical speed", "util": CRIT_RATIO * rpm / bm["n_crit"],
+                       "detail": f"{bm['n_crit']:,.0f} rpm (at least {CRIT_RATIO:g}× the running {rpm:.0f} rpm{extra})"})
     return {"d": d, "Se": Se, "nf": nf, "ny": mat["Sy"] / sv, "Kf": FEATURES[feature][1], "Kfs": FEATURES[feature][2],
             "feature": feature, "material": mat["name"], "M": M, "T": T, "F": F, "rpm": rpm, "hub_mass": hub_mass,
             "bearing": {"name": brg[0], "bore": brg[1], "OD": brg[2], "B": brg[3], "C": brg[4],
