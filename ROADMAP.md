@@ -62,7 +62,7 @@ In a system one module's output is another's input (forces, diameters and masses
 - [ ] **G1. Helical and bevel gears, worm gear** (self-locking)
 - [ ] **G2. Planetary gear set**
 - [ ] **G3. Belt and pulley (V, timing), chain and sprocket**
-- [x] **G4. Rack and pinion.** Pinion and rack Lewis bending (rack Y = 0.485), rack contact ratio, shaft and hub; lightest pinion + rack. Fusion: involute pinion on a straight-flank rack, motion link one turn = πd (sense by overlap test); zero tooth overlap over 10 teeth, travel exact. Panel card still to do
+- [x] **G4. Rack and pinion.** Pinion and rack Lewis bending (rack Y = 0.485), rack contact ratio, shaft and hub; lightest pinion + rack. Fusion: involute pinion on a straight-flank rack, motion link one turn = πd (sense by overlap test); zero tooth overlap over 10 teeth, travel exact; panel card
 - [x] **G5. Power screw (trapezoidal).** ISO Tr sizes; torques checked against Shigley example 8-1; self-locking required (checked with lubricated friction, torques with dry); column, thread and nut checks. Fusion: modelled Tr threads from Fusion's library, motion link one turn = one lead. Findings: each modelled helix starts at its own start face, so the nut must start a whole number of pitches from the thread's start (off by a quarter pitch the threads overlap 780 mm³); the link's sense follows the joint axis, so it is chosen by a quarter-turn overlap test; moving an occurrence before its joints exist did not take effect
 
 ## H. Machine elements
