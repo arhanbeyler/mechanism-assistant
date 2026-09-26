@@ -15,6 +15,7 @@ import cam_system
 import cams
 import chain
 import coupler
+import fits
 import function_gen
 import geneva
 import gears
@@ -43,6 +44,18 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "press_fit": {
+        "title": "Press fit (ISO fits)",
+        "params": [
+            {"key": "torque_Nm", "label": "Torque", "unit": "N·m", "min": 1, "max": 5000, "step": 1, "default": 200},
+            {"key": "shaft_diameter_mm", "label": "Shaft Ø", "unit": "mm", "min": 0, "max": 120, "step": 1, "default": 40,
+             "zero_label": "sized"},
+            {"key": "hub_diameter_mm", "label": "Hub Ø", "unit": "mm", "min": 0, "max": 300, "step": 5, "default": 0,
+             "zero_label": "2 d"},
+            {"key": "hub_length_mm", "label": "Hub length", "unit": "mm", "min": 0, "max": 250, "step": 5, "default": 0,
+             "zero_label": "sized"},
+        ],
+    },
     "welded_joint": {
         "title": "Welded bracket",
         "params": [
@@ -500,10 +513,15 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None,
                        force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None, planets=None, helix_deg=None, output_torque_Nm=None,
                        self_locking=None, grip_mm=None, bolts=None, member_material=None, bolt_class=None,
-                       fluctuating=None, arm_mm=None, bar_width_mm=None, bar_height_mm=None, weld_pattern=None):
+                       fluctuating=None, arm_mm=None, bar_width_mm=None, bar_height_mm=None, weld_pattern=None,
+                       shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "press_fit":
+        return design_from_spec({"mechanism_type": "press_fit", "torque_Nm": torque_Nm,
+                                 "shaft_diameter_mm": shaft_diameter_mm or None, "hub_diameter_mm": hub_diameter_mm or None,
+                                 "hub_length_mm": hub_length_mm or None})
     if kind == "welded_joint":
         return design_from_spec({"mechanism_type": "welded_joint", "force_N": force_N, "arm_mm": arm_mm,
                                  "bar_width_mm": bar_width_mm or None, "bar_height_mm": bar_height_mm or None,
@@ -629,6 +647,8 @@ def design_from_spec(spec, on_status=None):
         return _bolted_joint(result, spec, say)
     if mtype == "welded_joint":
         return _welded_joint(result, spec, say)
+    if mtype == "press_fit":
+        return _press_fit(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -644,7 +664,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1706,6 +1726,43 @@ def _welded_joint(result, spec, say):
     msg = (f"All checks passed. {a['h']:g} mm fillet weld ({welded.PATTERNS[pattern]}, {a['weld_length']:.0f} mm long, "
            f"throat {a['throat']:.1f} mm) on a {a['b']:g} × {a['d']:g} mm bar: τ = {a['tau']:.0f} MPa of {a['tau_all']:.0f} allowed; "
            f"the bar sees σ = {a['sigma_bar']:.0f} MPa at the wall.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _press_fit(result, spec, say):
+    """H3: press (shrink) fit of a hub on a shaft, ISO 286 H7 fits. Required: the torque; the shaft is sized in
+    torsion when not given, the hub 2 d x 1..2 d (reported)."""
+    result["mechanism_type"] = "press_fit"
+    T = spec.get("torque_Nm")
+    if not T:
+        return dict(result, status="missing", message="Missing for the press fit: the torque it must transmit (N·m).")
+    notes = []
+    d = spec.get("shaft_diameter_mm")
+    if not d:
+        d = chain.shaft_bore(float(T) * 1000.0)
+        if d is None:
+            return dict(result, status="failed", message="No shaft up to Ø100 carries this torque.")
+        notes.append(f"Shaft not given: Ø{d:g} mm from torsion.")
+    d = float(d)
+    if not 3 < d <= fits.TABLE[-1][0]:
+        return dict(result, status="missing", message=f"Fits are tabulated for Ø3–{fits.TABLE[-1][0]} mm (given: {d:g}).")
+    D_hub, L = spec.get("hub_diameter_mm"), spec.get("hub_length_mm")
+    notes.append(f"Hub and shaft C45 (quenched and tempered), friction μ = {fits.MU:g} (dry, conservative).")
+    say("Press fit: H7 fits k6..s6, Lamé pressure, torque at the smallest and stress at the largest interference...")
+    a, s_checks = fits.design(float(T) * 1000.0, d, float(D_hub) if D_hub else None, float(L) if L else None)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if a is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            f"No standard H7 press fit on Ø{d:g} both carries {float(T):g} N·m at its smallest interference and keeps "
+            f"the hub elastic at its largest: use a key or a spline, a larger shaft, or a tighter-toleranced fit."]))
+    hl, hh, sl, sh = a["limits"]
+    result.update(press_fit=a, checks=checks, notes=notes, target={"torque_Nm": float(T)},
+                  fusion={"type": "press_fit", "passed_checks": True, "d": d, "D_hub": a["D_hub"], "L": a["L"]})
+    msg = (f"All checks passed. Ø{d:g} H7/{a['fit']} ({a['description']}): hole +{hh / 1000:.3f}/+{hl / 1000:.3f}, shaft "
+           f"+{sh / 1000:.3f}/+{sl / 1000:.3f} mm, interference {a['i_min']}–{a['i_max']} µm. Hub Ø{a['D_hub']:g} × {a['L']:g} mm "
+           f"holds {a['T_min'] / 1000:.0f} N·m even at the smallest interference; heat the hub by about {a['dT_assembly']:.0f} °C to assemble.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
