@@ -139,7 +139,8 @@ def check_link(name, forces, length, mat, w, t, d, d_shaft=None):
     P_cr = math.pi ** 2 * E * I_min / length ** 2
     checks = [{"group": "Buckling", "name": f"{name} buckling", "util": F_ab * n / P_cr,
                "detail": f"F_AB = {F_ab:.0f} N, P_cr = {P_cr:.0f} N"}]
-    moment = {"Crank": forces["M_crank_max"], "Rocker": forces["M_rocker"]}.get(name, 0.0)
+    moment = {"Crank": forces["M_crank_max"], "Rocker": forces["M_rocker"],
+              "Coupler": forces.get("M_coupler", 0.0)}.get(name, 0.0)   # coupler: only with a coupler-point load
     kt = kt_hole_tension(d_net, D_net) if mat.get("brittle") else 1.0
     s_hub = moment / S_hub + kt * F_ab / A_net
     s_web = moment / S_web + F_ab / A_web            # conservative: moment at the boss edge ~ M
@@ -150,7 +151,16 @@ def check_link(name, forces, length, mat, w, t, d, d_shaft=None):
 
     # Stiffness: crank and rocker as tip-loaded cantilevers (in-plane), the others axial stretch
     limit = length / DEFLECTION_RATIO
-    if moment:
+    if moment and name == "Coupler":
+        # F2: the coupler point P overhangs B; A-B is a simply supported span, B-P a cantilever
+        Lb, Lo = forces["coupler_span"], forces["coupler_overhang"]
+        P_tip = moment / Lo
+        I_in = t * w ** 3 / 12.0
+        G = E / (2 * (1 + mat.get("nu", 0.35)))
+        delta = P_tip * Lo ** 2 * (Lb + Lo) / (3 * E * I_in) + P_tip * Lo / ((5.0 / 6.0) * G * w * t)
+        limit = (Lb + Lo) / DEFLECTION_RATIO
+        kind = "deflection at the coupler point (bending + shear)"
+    elif moment:
         P_tip = moment / length                      # perpendicular force at the tip
         I_in = t * w ** 3 / 12.0
         G = E / (2 * (1 + mat.get("nu", 0.35)))

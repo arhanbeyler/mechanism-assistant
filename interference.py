@@ -37,8 +37,9 @@ def region_distance(p, a, b, w, R0, R1):
     return min(_seg_dist(p, a, b) - w / 2, math.dist(p, a) - R0, math.dist(p, b) - R1)
 
 
-def check_layers(mech, frames, section, order):
+def check_layers(mech, frames, section, order, ends=LINK_ENDS):
     """For the given layer order, the worst clearance of every shaft passing through middle layers.
+    ends: the points each link runs between (F2: the straight-line coupler runs A -> P).
     Returns [(joint, links passed, smallest clearance mm)]."""
     sec = section_with_bosses(section)
     d_pin, d_shaft = sec["hole"], sec["shaft"]
@@ -53,20 +54,22 @@ def check_layers(mech, frames, section, order):
         worst = float("inf")
         for fr in frames:
             pts = {"O2": tuple(mech["o2"]), "O4": (0.0, 0.0), "A": tuple(fr["A"]), "B": tuple(fr["B"])}
+            if "P" in fr:
+                pts["P"] = tuple(fr["P"])
             for name in between:
                 s = sec["links"][name]
-                e0, e1 = LINK_ENDS[name]
+                e0, e1 = ends[name]
                 dist = region_distance(pts[p], pts[e0], pts[e1], s["width"], s["boss0"] / 2, s["boss1"] / 2)
                 worst = min(worst, dist - r_need)
         out.append((p, between, worst))
     return out
 
 
-def choose_layer_order(mech, frames, section):
+def choose_layer_order(mech, frames, section, ends=LINK_ENDS):
     """First layer order without interference. Returns (order, clearances, passed)."""
     best = None
     for order in LAYER_ORDERS:
-        res = check_layers(mech, frames, section, order)
+        res = check_layers(mech, frames, section, order, ends)
         margin = min((r[2] for r in res), default=float("inf"))
         if margin >= 0:
             return order, res, True

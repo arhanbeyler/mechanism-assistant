@@ -45,6 +45,12 @@ CASES = [
     ("strok 80 mm, 10 mm kaçıklık, 1200 devir piston", dict(mechanism_type="slider_crank", stroke_mm=80, offset_mm=10,
                                                             speed_rpm=1200)),
     ("25 mm krank ile ileri geri giden bir piston", dict(mechanism_type="slider_crank", crank_length_mm=25)),
+    ("krankla dönen, bir noktası 100 mm düz bir çizgide giden mekanizma",
+     dict(mechanism_type="straight_line", stroke_mm=100)),
+    ("Hoeckens mekanizması, 8 cm doğrusal yol, 60 devir", dict(mechanism_type="straight_line", stroke_mm=80,
+                                                              speed_rpm=60)),
+    ("straight-line linkage with a 150 mm straight path, pushing 10 N, PETG",
+     dict(mechanism_type="straight_line", stroke_mm=150, max_load_N=10, material="PETG")),
     ("20 mm kaldıran, 120 derecede yükselen kam, 600 devirde dönecek, itici 200 gram",
      dict(mechanism_type="cam", cam_rise_mm=20, rise_deg=120, speed_rpm=600, follower_mass_kg=0.2)),
     # English: the panel's example sentences
@@ -53,6 +59,8 @@ CASES = [
     ("1.5 kW 1450 rpm motor, 1:4 gearbox", dict(mechanism_type="reducer", gear_ratio=4, power_kW=1.5, speed_rpm=1450)),
     ("turn a 4 cm arm 45° and the other arm turns 120°",
      dict(mechanism_type="rocker_rocker", crank_length_mm=40, input_swing_deg=45, output_swing_deg=120)),
+    ("a crank-driven point that moves 100 mm in a straight line",
+     dict(mechanism_type="straight_line", stroke_mm=100)),
     ("piston with a 50 mm stroke and a 150 mm connecting rod", dict(mechanism_type="slider_crank", stroke_mm=50,
                                                                     rod_length_mm=150)),
     ("çevrim oranı 2.5 olan dişli", dict(mechanism_type="spur_gear", gear_ratio=2.5, torque_Nm=None)),
@@ -79,6 +87,7 @@ FB = {"mechanism_type": "crank_rocker", "crank_length_mm": 30, "output_swing_deg
       "quick_return": False, "time_ratio": None, "max_load_N": None, "material": "PLA"}
 RED = {"mechanism_type": "reducer", "gear_ratio": 3, "torque_Nm": 20, "power_kW": None, "speed_rpm": 1450,
        "material": "steel", "shaft_material": "1045"}
+SL = {"mechanism_type": "straight_line", "stroke_mm": 100, "max_load_N": None, "speed_rpm": None, "material": None}
 EDIT_CASES = [
     (FB, "krankı 40 mm yap", dict(crank_length_mm=40, output_swing_deg=60)),
     (FB, "alüminyum olsun", dict(material="aluminum", crank_length_mm=30)),
@@ -91,6 +100,7 @@ EDIT_CASES = [
     (RED, "oranı 4 yap", dict(gear_ratio=4, torque_Nm=20)),
     (RED, "devri iki katına çıkar", dict(speed_rpm=2900)),
     (RED, "use 1020 steel for the shafts", dict(shaft_material="1020")),
+    (SL, "düz yolu 150 mm yap, 15 N itsin", dict(stroke_mm=150, max_load_N=15)),
 ]
 
 

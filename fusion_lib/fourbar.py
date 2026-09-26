@@ -45,7 +45,8 @@ def build_link_body(comp, length, sec):
     """Link body in the component: first the solid outline (web of width w + end bosses of diameter
     sec["boss0"]/["boss1"], else w) is extruded, then the holes (sec["hole0"]/["hole1"], else sec["hole"])
     are cut from a separate sketch. (Picking regions in one sketch was unreliable when the web was
-    narrower than the hole.) Returns the BRepBody."""
+    narrower than the hole.) sec["mid_holes"]: local x of extra pin holes along the link (F2: the
+    straight-line coupler's B), each with a boss like the end's. Returns the BRepBody."""
     w, t = sec["width"], sec["thickness"]
     d0 = sec.get("hole0", sec["hole"])
     d1 = sec.get("hole1", sec["hole"])
@@ -60,6 +61,8 @@ def build_link_body(comp, length, sec):
     outline.sketchCurves.sketchLines.addTwoPointRectangle(P(0, mm(-w / 2), 0), P(mm(length), mm(w / 2), 0))
     outline.sketchCurves.sketchCircles.addByCenterRadius(P(0, 0, 0), mm(R0))
     outline.sketchCurves.sketchCircles.addByCenterRadius(P(mm(length), 0, 0), mm(R1))
+    for x in sec.get("mid_holes", ()):
+        outline.sketchCurves.sketchCircles.addByCenterRadius(P(mm(x), 0, 0), mm(R1))
     solid = adsk.core.ObjectCollection.create()
     for prof in outline.profiles:
         solid.add(prof)
@@ -69,6 +72,8 @@ def build_link_body(comp, length, sec):
     holes.name = "Holes"
     holes.sketchCurves.sketchCircles.addByCenterRadius(P(0, 0, 0), mm(d0 / 2))
     holes.sketchCurves.sketchCircles.addByCenterRadius(P(mm(length), 0, 0), mm(d1 / 2))
+    for x in sec.get("mid_holes", ()):
+        holes.sketchCurves.sketchCircles.addByCenterRadius(P(mm(x), 0, 0), mm(sec["hole"] / 2))
     cut = adsk.core.ObjectCollection.create()
     for prof in holes.profiles:
         cut.add(prof)
@@ -141,6 +146,10 @@ def _clear(design):
         j.deleteMe()
     for o in list(root.occurrences):
         o.deleteMe()
+    for sk in list(root.sketches):           # root-level drawings (F2: coupler-point path) and their planes
+        sk.deleteMe()
+    for pl in list(root.constructionPlanes):
+        pl.deleteMe()
 
 
 # Appearances (same colours as the panel): component name -> Fusion Appearance Library appearance.
@@ -205,7 +214,8 @@ def build(mech, reuse=True):
              "shaft": "shaft",                # C11b: two-bearing shaft
              "reducer": "reducer",            # E1: single-stage reducer (system)
              "slider_crank": "slider_crank",  # F1: slider-crank (piston)
-             "reducer2": "reducer2"}.get(mech.get("type"))   # E2: two-stage reducer
+             "reducer2": "reducer2",          # E2: two-stage reducer
+             "straight_line": "straight_line"}.get(mech.get("type"))   # F2: Hoeckens straight-line linkage
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

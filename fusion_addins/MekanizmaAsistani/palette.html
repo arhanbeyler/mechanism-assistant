@@ -100,6 +100,7 @@ Everything is computed on this computer, with a local AI.</div>
       <button class="chip">30 mm crank, 60° swing, 5 kg at the tip, PETG</button>
       <button class="chip">1.5 kW 1450 rpm motor, 1:4 gearbox</button>
       <button class="chip">turn a 4 cm arm 45° and the other arm turns 120°</button>
+      <button class="chip">a crank-driven point that moves 100 mm in a straight line</button>
     </div>
     <div class="input">
       <textarea id="text" placeholder="Describe the mechanism... (Enter: send)"></textarea>
@@ -365,7 +366,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -374,7 +375,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -672,7 +673,49 @@ Everything is computed on this computer, with a local AI.</div>
       <text class="lbl" x="${X(xl) - 2}" y="${Y(ys[2]) - 4}" text-anchor="end">out</text></svg>`;
   }
 
+  function renderStraightCard(d) {           // F2: Hoeckens straight-line linkage
+    const s = d.straight;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const sec = (d.section_mm && d.section_mm.links) || {};
+    const secTxt = (n) => sec[n] ? ` (${f(sec[n].width, 0)}×${f(sec[n].thickness, 0)})` : "";
+    const rows = [["Crank a", `${f(s.a, 1)} mm${secTxt("Crank")}`],
+                  ["Coupler AB / AP", `${f(s.b, 1)} / ${f(s.p, 1)} mm${secTxt("Coupler")}`],
+                  ["Rocker c", `${f(s.c, 1)} mm${secTxt("Rocker")}`], ["Ground d", `${f(s.d, 1)} mm${secTxt("Ground")}`],
+                  ["Straight path", `${f(s.stroke, 1)} mm`], ["Deviation", `${f(s.deviation, 2)} mm`],
+                  ["Crank turn on the line", `${f(s.fraction * 360, 0)}°`],
+                  ["Speed along the line", `±${f(s.speed_variation * 50, 0)}%`], ["Lift on return", `${f(s.lift, 1)} mm`]];
+    if (s.v_mean_mm_s) rows.push(["Mean speed", `${f(s.v_mean_mm_s, 0)} mm/s`]);
+    if (d.strength) rows.push(["Crank torque", `${f(d.strength.input_torque_max_Nmm / 1000, 2)} N·m`],
+                              ["Pin / shaft", `Ø${f(d.section_mm.hole, 0)} / Ø${f(d.section_mm.shaft, 0)}`]);
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Straight-line linkage</h3><table>${rows.map(([k, v]) =>
+          `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Mechanism · path of P</h3>${straightSvg(s)}</div>
+      </div>`;
+  }
+
+  function straightSvg(s) {                  // links in the drawn pose + the coupler-point path (to scale)
+    const W = 220, H = 150, pad = 8, p = s.points;
+    const all = s.path.concat([p.O2, p.O4, p.A, p.B, p.P]);
+    const xs = all.map((q) => q[0]), ys = all.map((q) => q[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const sc = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad) / (y1 - y0));
+    const X = (x) => (W - (x1 - x0) * sc) / 2 + (x - x0) * sc, Y = (y) => (H + (y1 - y0) * sc) / 2 - (y - y0) * sc;
+    const ln = (a, b, c, w) => `<line x1="${X(a[0])}" y1="${Y(a[1])}" x2="${X(b[0])}" y2="${Y(b[1])}" stroke="var(${c})" stroke-width="${w}" stroke-linecap="round"/>`;
+    const path = s.path.map((q) => `${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join(" ");
+    const pivot = (q) => `<circle cx="${X(q[0])}" cy="${Y(q[1])}" r="3.5" fill="var(--panel)" stroke="var(--text)" stroke-width="1.5"/>`;
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <polygon points="${path}" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 2"/>
+      ${ln(s.line[0], s.line[1], "--warn", 2.5)}
+      ${ln(p.O2, p.O4, "--ground", 3)}${ln(p.O2, p.A, "--crank", 4)}${ln(p.A, p.P, "--coupler", 3)}${ln(p.O4, p.B, "--rocker", 3)}
+      ${pivot(p.O2)}${pivot(p.O4)}<circle cx="${X(p.P[0])}" cy="${Y(p.P[1])}" r="3.5" fill="var(--warn)"/>
+      <text class="lbl" x="${X(p.P[0]) + 5}" y="${Y(p.P[1]) - 5}">P</text></svg>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "straight_line") return renderStraightCard(d);
     if (d.mechanism_type === "reducer" && d.reducer2) return renderReducer2Card(d);
     if (d.mechanism_type === "slider_crank") return renderSliderCard(d);
     if (d.mechanism_type === "reducer") return renderReducerCard(d);

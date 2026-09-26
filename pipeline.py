@@ -11,6 +11,7 @@ import re
 
 import cam_system
 import cams
+import coupler
 import function_gen
 import gears
 import interference
@@ -28,6 +29,16 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "straight_line": {
+        "title": "Straight-line linkage",
+        "params": [
+            {"key": "stroke_mm", "label": "Straight path", "unit": "mm", "min": 20, "max": 300, "step": 5, "default": 100},
+            {"key": "max_load_N", "label": "Force on the point", "unit": "N", "min": 0, "max": 300, "step": 5,
+             "default": 0, "zero_label": "none"},
+            {"key": "speed_rpm", "label": "Crank speed", "unit": "rpm", "min": 0, "max": 300, "step": 5, "default": 0,
+             "zero_label": "not given"},
+        ],
+    },
     "slider_crank": {
         "title": "Slider-crank (piston)",
         "params": [
@@ -158,7 +169,7 @@ _INPUT_TURN = re.compile(
 
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
-_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam")
+_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line")
 
 
 def input_turn_backstop(text, spec):
@@ -283,6 +294,10 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "straight_line":
+        return design_from_spec({"mechanism_type": "straight_line", "stroke_mm": stroke_mm,
+                                 "max_load_N": max_load_N or None, "speed_rpm": speed_rpm or None,
+                                 "material": material})
     if kind == "slider_crank":
         return design_from_spec({"mechanism_type": "slider_crank", "stroke_mm": stroke_mm, "offset_mm": offset_mm,
                                  "rod_length_mm": rod_length_mm, "max_load_N": max_load_N or None,
@@ -327,6 +342,8 @@ def design_from_spec(spec, on_status=None):
     mtype = spec["mechanism_type"]
     if mtype == "slider_crank":
         return _slider_crank(result, spec, say)
+    if mtype == "straight_line":
+        return _straight_line(result, spec, say)
     if mtype == "reducer":
         return _reducer(result, spec, say)
     if mtype == "spur_gear":
@@ -339,8 +356,9 @@ def design_from_spec(spec, on_status=None):
         return _shaft(result, spec, say)
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
-                    message="Supported: four-bar linkages (crank-rocker or limited-angle input), reducer, "
-                            "spur gears, compression springs, cams and shafts. This request is not one of them.")
+                    message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
+                            "linkage, slider-crank, reducers (one or two stages), spur gears, compression springs, "
+                            "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
                  ("output_swing_deg", "output arm turning angle")) if rr else
@@ -525,6 +543,87 @@ def _slider_crank(result, spec, say):
             st = result["strength"]
             msg += (f" Max rod force {st['rod_force_max_N']:.0f} N, max crank torque "
                     f"{st['input_torque_max_Nmm'] / 1000:.2f} N·m.")
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _straight_line(result, spec, say):
+    """F2: Hoeckens straight-line linkage. Required: the length of the straight path."""
+    result["mechanism_type"] = "straight_line"
+    S = spec.get("stroke_mm")
+    if not S:
+        return dict(result, status="missing",
+                    message="Missing for the straight-line linkage: the length of the straight path (mm).")
+    S, F, rpm = float(S), float(spec.get("max_load_N") or 0.0), spec.get("speed_rpm")
+    notes = []
+    mat_key = spec.get("material")
+    if F and mat_key not in strength.MATERIALS:
+        mat_key = "PLA"
+        notes.append("Material not given: PLA (3D print) assumed.")
+    mat = strength.MATERIALS.get(mat_key or "PLA", strength.MATERIALS["PLA"])
+    say("Hoeckens linkage: coupler curve, straight part, forces...")
+    d, s_checks = coupler.design_straight(S, mat, F, rpm)
+    m, seg = d["mech"], d["segment"]
+    motion = [c for c in s_checks if c["group"] == "Motion"]
+    checks = [{"name": c["name"], "ok": c["util"] <= 1.0 + 1e-9, "detail": c["detail"]} for c in motion]
+    strength_ok = True
+    if F:
+        say("Strength and section sizing...")
+        strength_ok = d["section"] is not None
+        worst = {}
+        for c in s_checks:
+            if c["group"] != "Motion" and (c["group"] not in worst or c["util"] > worst[c["group"]]["util"]):
+                worst[c["group"]] = c
+        checks += [{"name": f"{k}: {c['name']}", "ok": c["util"] <= 1.0,
+                    "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for k, c in worst.items()]
+        section = d["section"] or strength.DEFAULT_SECTION
+        result["strength"] = {"material": mat["name"], "safety_factor": mat["n"], "load_N": F,
+                              "input_torque_max_Nmm": d["T_max"], "coupler_moment_Nmm": d["forces"]["M_coupler"]}
+    else:
+        section = strength.DEFAULT_SECTION
+        notes.append("No force on the point given, so no strength calculation: default section (10×4 mm, Ø4 pin).")
+    section = strength.section_with_bosses(section)
+    # Layers: the coupler runs A -> P; frames moved to the four-bar frame of interference.py (O4 at the origin)
+    sh = lambda p: (p[0] - m["d"], p[1])
+    lay_frames = [{"A": sh(f["A"]), "B": sh(f["B"]), "P": sh(f["P"])} for f in d["frames"][::2]]
+    order, clearances, layers_ok = interference.choose_layer_order(
+        {"o2": (-m["d"], 0.0)}, lay_frames, section, dict(strength.LINK_ENDS, Coupler=("A", "P")))
+    margin = min((c[2] for c in clearances), default=0.0)
+    checks.append({"name": "Layers (a shaft passes a moving link)", "ok": layers_ok,
+                   "detail": f"smallest gap {margin + interference.CLEARANCE:.1f} mm "
+                             f"(needed {interference.CLEARANCE:g})"})
+    passed = all(c["ok"] for c in checks)
+    fr0 = d["frames"][(seg["i0"] + seg["count"] // 3) % len(d["frames"])]     # drawn pose: P on the line
+    r3 = lambda p: [round(p[0], 3), round(p[1], 3)]
+    pts = {"O2": [0.0, 0.0], "O4": [m["d"], 0.0], "A": r3(fr0["A"]), "B": r3(fr0["B"]), "P": r3(fr0["P"])}
+    (cx, cy), u = seg["centroid"], seg["direction"]
+    ends = [r3((cx - u[0] * seg["length"] / 2, cy - u[1] * seg["length"] / 2)),
+            r3((cx + u[0] * seg["length"] / 2, cy + u[1] * seg["length"] / 2))]
+    path = [r3(f["P"]) for f in d["frames"][::4]]
+    lift = max(abs(coupler._cross(u, (f["P"][0] - cx, f["P"][1] - cy))) for f in d["frames"])   # step height
+    lengths = {k: round(m[k], 3) for k in ("a", "b", "c", "d", "p")}
+    info = {**lengths, "stroke": seg["length"], "deviation": seg["deviation"], "fraction": seg["fraction"],
+            "theta0": seg["theta0"], "theta1": seg["theta1"], "speed_variation": d["speed_variation"], "lift": lift,
+            "v_mean_mm_s": d["v_mean_mm_s"], "mu_work": d["mu_work"], "mu_all": d["mu_all"], "T_max": d["T_max"],
+            "path": path, "line": ends, "points": pts}
+    ok = passed and strength_ok
+    result.update(straight=info, checks=checks, notes=notes, section_mm=section, target={"stroke": S},
+                  fusion={"type": "straight_line", "passed_checks": ok, "lengths_mm": lengths, "points_mm": pts,
+                          "section_mm": section, "layer_order": list(order), "path": path, "line": ends})
+    if not strength_ok:
+        msg = f"No {mat['name']} section carries {F:g} N. Suggestion: a stronger material or a smaller force."
+    elif not passed:
+        msg = "The design does not meet the checks above."
+    else:
+        msg = (f"All checks passed. Hoeckens linkage: crank {m['a']:g} mm, coupler {m['b']:g} mm with the point "
+               f"{m['p']:g} mm from the crank pin, rocker {m['c']:g} mm, ground {m['d']:g} mm. The point runs "
+               f"{seg['length']:.1f} mm straight (within {seg['deviation']:.2f} mm) for "
+               f"{seg['fraction'] * 360:.0f}° of the crank turn, then lifts off and returns fast; its speed along "
+               f"the line varies by ±{d['speed_variation'] * 50:.0f}%.")
+        if rpm:
+            msg += f" Mean speed on the line {d['v_mean_mm_s']:.0f} mm/s at {rpm:g} rpm."
+        if F:
+            msg += f" Max crank torque {d['T_max'] / 1000:.2f} N·m."
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
     return result
 

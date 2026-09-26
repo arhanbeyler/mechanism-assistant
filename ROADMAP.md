@@ -50,7 +50,8 @@ In a system one module's output is another's input (forces, diameters and masses
 
 ## F. New mechanisms (motion)
 - [x] **F1. Slider-crank (piston).** Stroke → crank (exact formula, offset by bisection), rod = shortest whole mm with b/a ≥ 3 and rod angle ≤ 20°; x, v, a over the cycle; crank torque by virtual work (checked against the moment of the rod force); crank and rod sized with the four-bar strength checks; Fusion: base + rails + crank + rod + piston with a slider joint, the solver's piston position equals x(θ) at 36 angles (0.000 mm)
-- [ ] **F2. Coupler curves and path synthesis.** "This point should follow that path"; Chebyshev / Hoeckens straight-line linkages
+- [x] **F2. Coupler curves and a straight-line linkage.** Coupler-point curve of any four-bar (point at distance p, angle γ on the coupler); straight part = longest run of the curve within 0.2 % of its length from its best-fit line (absolute limit iterated to a fixed point: the relative limit is not monotone). Hoeckens linkage scaled to the asked straight path (100 mm → crank 22.5 mm, 100.4 mm straight within 0.19 mm over 212° of the crank turn, speed ±28 %, lift 20 mm on return). Load at the point: coupler statics (rocker = two-force member) give the crank torque, equal to virtual work; the coupler is checked as an overhanging beam. Fusion: the coupler runs A → P with a hole at B, the path is drawn as a spline with its straight part; the drawn point stays within 0.0023 mm of the engine curve over a full turn
+- [ ] **F2b. Path synthesis.** "This point should pass through these points": precision-point / optimisation synthesis of a four-bar coupler curve; Chebyshev lambda and Watt linkages as alternatives
 - [ ] **F3. Geneva mechanism.** Intermittent rotation
 - [ ] **F4. Scotch yoke, Whitworth quick return, six-bar (Watt / Stephenson)**
 - [ ] **F5. Toggle clamp.** Dead-centre locking, mechanical advantage
