@@ -131,6 +131,16 @@ Sliders in the panel re-run the engine live and colour the swing slider by feasi
 * **Geometry checks in Fusion:** Gear teeth overlap 0 mm³ at 5 positions and the ratio is confirmed. Cam–roller
   gap is 0.000 mm with 0 mm³ overlap at 8 angles. Spring length and diameter match the design. Shaft length,
   diameter and volume match the layout for all 5 notch types.
+* **Fusion's solver agrees with the engines:** Watt six-bar output swing 149.43° vs 149.42° and 181.0° vs 181.0°;
+  the path-synthesis point traced through its target points within 0.2 mm; Whitworth stroke 200.0 mm and Q 1.50;
+  planetary carrier ratio and planet rotation exact; worm, helical, bevel, chain, belt and rack drives turn with no
+  tooth overlap.
+* **Textbook examples reproduced (tests):** Shigley's V-belt example 17-4, worm example 15-4, torsion spring
+  example 10-8, power screw example 8-1, helical geometry, bevel forces, the H7/s6 48 mm fit, chain ratings
+  (Table 17-20) and the DIN 2093 disc-spring catalogue forces.
+* **Independent checks inside the engines:** the four-bar's dynamic torque (matrix method) equals the energy method
+  and, at a slow crank, the statics; press work per stroke equals F·s; the Willis ratio matches pitch-point
+  velocities; weld line properties match integration along the lines.
 
 More findings are in [ROADMAP.md](ROADMAP.md).
 
@@ -170,7 +180,14 @@ function_gen.py      Freudenstein function generator (limited-input four-bar)
 strength.py          link, pin and shaft sizing; hub compliance; K_t; deflection
 interference.py      layer order and shaft-to-link clearance over the cycle
 fea_local.py         gmsh + scikit-fem link model (with hub) vs hand calculation
-gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py press.py pathsynth.py sixbar.py coupling.py disc_spring.py extension_spring.py spline.py whitworth.py   module engines
+module engines (one per element), for example:
+  gears.py helical.py bevel.py worm.py planetary.py rack_pinion.py        gears
+  chain.py vbelt.py power_screw.py coupling.py clutch.py flywheel.py       power transmission
+  springs.py torsion_spring.py extension_spring.py disc_spring.py         springs
+  bolted.py welded.py fits.py spline.py shafts.py                          joints and shafts
+  coupler.py pathsynth.py sixbar.py geneva.py toggle.py slotted.py whitworth.py ratchet.py slider_crank.py cams.py
+                                                                           linkages and mechanisms
+  dynamics.py press.py snapfit.py flexure.py                               dynamics, systems, printing
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)
 reducer.py reducer2.py cam_system.py   systems: modules sized together until their constraints agree
 fusion_lib/          Fusion builders (one per module) + shared document handling
@@ -181,12 +198,14 @@ tools/               hub-compliance calibration, LLM evaluation
 
 ## Limitations
 
-* The scope is narrow on purpose: a handful of element types, each with a textbook method. Anything else gets
-  "unsupported" instead of a guess.
-* Four-bar sizing is for quasi-static loads (no dynamic or inertia forces). Plastics use a single yield value
-  with no creep or anisotropy from printing.
+* The scope is deliberate: each module has one textbook method (Shigley, Norton, DIN / ISO tables it quotes).
+  Anything else gets "unsupported" instead of a guess.
+* Inertia is included for the four-bar at a given crank speed (K2); the other mechanisms are sized quasi-statically.
+  Plastics use a single yield value with no creep or anisotropy from printing.
+* Chains, belts and some couplings are drawn static (a chain or a belt looks the same when it moves); gears and
+  linkages move with Fusion joints.
 * The FEA covers the most loaded link as a cantilever with its hub. It is not a full-assembly contact analysis.
 * The development bridge (127.0.0.1, token-protected) executes Python inside Fusion. It exists for automated
   testing and should stay local.
 
-Planned next: see [ROADMAP.md](ROADMAP.md): more systems (press, folding platform), path synthesis, print-in-place pins and a physical print.
+Planned next: see [ROADMAP.md](ROADMAP.md): the folding platform (a senior-project candidate), print-in-place pins and a physical print.
