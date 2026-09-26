@@ -169,7 +169,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Coupler": "Plastic - Matte (Blue)", "Driver": "Plastic - Matte (Red)", "Wheel": "Plastic - Matte (Green)",
                "Handle": "Plastic - Matte (Red)", "Arm": "Plastic - Matte (Green)",
                "Ratchet": "Plastic - Matte (Green)", "Pawl": "Plastic - Matte (Red)",
-               "Screw": "Steel - Satin", "Nut": "Brass - Matte",
+               "Screw": "Steel - Satin", "Nut": "Brass - Matte", "Rack": "Plastic - Matte (Green)",
                "Yoke": "Plastic - Matte (Green)", "Ram": "Plastic - Matte (Green)", "Lever": "Plastic - Matte (Blue)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
@@ -237,7 +237,8 @@ def build(mech, reuse=True):
              "toggle_clamp": "toggle_clamp",    # F5: toggle clamp
              "scotch_yoke": "slotted", "quick_return": "slotted",   # F4: slot mechanisms
              "ratchet": "ratchet",              # F6: ratchet and pawl
-             "power_screw": "power_screw"}.get(mech.get("type"))   # G5: power screw
+             "power_screw": "power_screw",      # G5: power screw
+             "rack_pinion": "rack_pinion"}.get(mech.get("type"))   # G4: rack and pinion
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

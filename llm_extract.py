@@ -36,7 +36,7 @@ def _schema(props):
 # ---------------------------------------------------------------- 1) router
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
                                    "enum": ["fourbar", "slider_crank", "straight_line", "geneva", "toggle_clamp",
-                                            "scotch_yoke", "quick_return", "ratchet", "power_screw",
+                                            "scotch_yoke", "quick_return", "ratchet", "power_screw", "rack_pinion",
                                             "reducer", "spur_gear",
                                             "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
@@ -46,6 +46,8 @@ ROUTER_PROMPT = (
     "'spring': a spring (yay, basma yayı, konik yay). "
     "'slider_crank': a piston or slider moved back and forth by a crank (piston, pistonlu, krank-biyel, strok, "
     "stroke, 'ileri geri giden', reciprocating slider, 'X mm strok'). "
+    "'rack_pinion': a rack and pinion turning rotation into straight motion (kremayer, kremayer-pinyon, dişli kremayer, "
+    "rack and pinion). "
     "'power_screw': a lead / power screw that moves or lifts a load along its axis (trapez vida, güç vidası, "
     "hareket vidası, kriko, vidalı kaldırıcı / pres, lead screw, jack, 'vida ile X kg kaldırsın'). "
     "'ratchet': a ratchet wheel and pawl that turns one way only (cırcır, mandal, tırnaklı çark, 'geri "
@@ -175,6 +177,16 @@ QUICK_RETURN = (_schema(dict(SLOTTED, time_ratio={"type": ["number", "null"]})),
     "time_ratio: slow stroke time / fast stroke time ('dönüş 1.5 kat hızlı' -> 1.5, 'Q = 1.6') if given. "
     "max_load_N: cutting force on the ram if given. speed_rpm: crank speed if given. material only if named."))
 
+RACK_PINION = (_schema({
+    "force_N": {"type": ["number", "null"]},
+    "travel_mm": {"type": ["number", "null"]},
+    "speed_rpm": {"type": ["number", "null"]},
+    "material": MATERIAL,
+}), COMMON + (
+    "The user wants a rack and pinion. force_N: the force on the rack in newtons; only a MASS in kg is multiplied "
+    "by 9.81 ('20 kg' -> 196.2, '2 kN' -> 2000). travel_mm: rack travel / stroke if given. speed_rpm: pinion speed "
+    "if given. material only if named."))
+
 POWER_SCREW = (_schema({
     "force_N": {"type": ["number", "null"]},
     "travel_mm": {"type": ["number", "null"]},
@@ -262,7 +274,7 @@ SHAFT = (_schema({
     "'plain' (düz) only if named. shaft_material: '1020' or '1045' only if named. safety_n: required safety "
     "factor if given ('emniyet katsayısı 2.5')."))
 
-MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "straight_line": STRAIGHT_LINE, "geneva": GENEVA, "toggle_clamp": TOGGLE_CLAMP, "scotch_yoke": SCOTCH_YOKE, "ratchet": RATCHET, "power_screw": POWER_SCREW,
+MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "straight_line": STRAIGHT_LINE, "geneva": GENEVA, "toggle_clamp": TOGGLE_CLAMP, "scotch_yoke": SCOTCH_YOKE, "ratchet": RATCHET, "power_screw": POWER_SCREW, "rack_pinion": RACK_PINION,
                      "quick_return": QUICK_RETURN, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # All fields (the pipeline expects one dict; fields of other modules are None)
@@ -271,18 +283,18 @@ for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
 KIND_TO_TYPE = {"slider_crank": "slider_crank", "straight_line": "straight_line", "geneva": "geneva",
-                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
+                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
 # ---------------------------------------------------------------- 3) edits of the current design (K1)
 KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "slider_crank": "slider_crank",
                 "straight_line": "straight_line", "geneva": "geneva", "toggle_clamp": "toggle_clamp",
-                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "reducer": "reducer", "spur_gear": "spur_gear",
+                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "reducer": "reducer", "spur_gear": "spur_gear",
                 "spring": "spring", "cam": "cam", "shaft": "shaft"}
 DESCRIPTION = {"fourbar": "four-bar linkage", "slider_crank": "slider-crank (piston) mechanism",
                "straight_line": "straight-line linkage (Hoeckens)", "geneva": "Geneva mechanism (intermittent rotation)",
                "toggle_clamp": "toggle clamp", "scotch_yoke": "Scotch yoke",
-               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "reducer": "single-stage gear reducer (gearbox)",
+               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "reducer": "single-stage gear reducer (gearbox)",
                "spur_gear": "spur gear pair", "spring": "compression spring", "cam": "disk cam with roller follower",
                "shaft": "rotating shaft"}
 NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}

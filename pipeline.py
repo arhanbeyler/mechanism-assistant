@@ -24,6 +24,7 @@ import springs
 import toggle
 import llm_extract
 import power_screw
+import rack_pinion
 import ratchet
 import reducer
 import reducer2
@@ -34,6 +35,15 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "rack_pinion": {
+        "title": "Rack and pinion",
+        "params": [
+            {"key": "force_N", "label": "Force on the rack", "unit": "N", "min": 10, "max": 20000, "step": 10, "default": 500},
+            {"key": "travel_mm", "label": "Travel", "unit": "mm", "min": 20, "max": 1000, "step": 10, "default": 200},
+            {"key": "speed_rpm", "label": "Pinion speed", "unit": "rpm", "min": 0, "max": 1500, "step": 10, "default": 0,
+             "zero_label": "not given"},
+        ],
+    },
     "power_screw": {
         "title": "Power screw (Tr)",
         "params": [
@@ -245,7 +255,7 @@ _INPUT_TURN = re.compile(
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
 _SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
-                "quick_return", "power_screw")
+                "quick_return", "power_screw", "rack_pinion")
 
 
 def input_turn_backstop(text, spec):
@@ -373,6 +383,9 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "rack_pinion":
+        return design_from_spec({"mechanism_type": "rack_pinion", "force_N": force_N, "travel_mm": travel_mm,
+                                 "speed_rpm": speed_rpm or None, "material": material})
     if kind == "power_screw":
         return design_from_spec({"mechanism_type": "power_screw", "force_N": force_N, "travel_mm": travel_mm,
                                  "screw_ends": screw_ends, "nut_material": nut_material, "speed_rpm": speed_rpm or None})
@@ -453,6 +466,8 @@ def design_from_spec(spec, on_status=None):
         return _ratchet(result, spec, say)
     if mtype == "power_screw":
         return _power_screw(result, spec, say)
+    if mtype == "rack_pinion":
+        return _rack_pinion(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -468,7 +483,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1159,6 +1174,46 @@ def _power_screw(result, spec, say):
     msg = (f"All checks passed. Tr{th['d']:g}×{th['P']:g} steel screw with a {d['nut_len']:g} mm {nut_key} "
            f"nut ({d['n_t']} threads): raising {F:g} N takes {d['T_R'] / 1000:.2f} N·m (+{d['T_c'] / 1000:.2f} at a ball thrust "
            f"bearing), efficiency {100 * d['efficiency']:.0f} %; it holds the load by itself (self-locking even lubricated).")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _rack_pinion(result, spec, say):
+    """G4: rack and pinion. Required: the force on the rack; travel defaults to 200 mm (reported)."""
+    result["mechanism_type"] = "rack_pinion"
+    F = spec.get("force_N")
+    if not F:
+        return dict(result, status="missing", message="Missing for the rack and pinion: the force on the rack (N or kg).")
+    notes = []
+    S = spec.get("travel_mm")
+    if not S:
+        S = 200.0
+        notes.append("Travel not given: 200 mm assumed.")
+    F, S, rpm = float(F), float(S), spec.get("speed_rpm")
+    mat_key = spec.get("material")
+    if mat_key not in strength.MATERIALS:
+        mat_key = "steel"
+        notes.append("Material not given: steel assumed.")
+    mat = strength.MATERIALS[mat_key]
+    say("Rack and pinion: module, teeth, face width, contact ratio...")
+    d, s_checks = rack_pinion.design(F, S, mat, rpm)
+    checks = [{"name": c["name"], "ok": c["util"] <= 1.0, "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"}
+              for c in s_checks]
+    if d is None:
+        return dict(result, status="failed", checks=checks,
+                    message=f"No pinion up to module {gears.MODULES[-1]:g} carries {F:g} N in {mat['name']}.")
+    motion = None
+    if rpm:
+        motion = {"rpm": float(rpm), "v_mm_s": d["per_turn"] * rpm / 60}
+        checks.append({"name": "Rack speed", "ok": True, "detail": f"{motion['v_mm_s']:.0f} mm/s at {rpm:g} rpm"})
+    info = dict(d, F=F, travel=S, material=mat["name"], motion=motion)
+    result.update(rack=info, checks=checks, notes=notes, target={"force": F},
+                  fusion={"type": "rack_pinion", "passed_checks": True, "m": d["module"], "z": d["z"],
+                          "b": d["face_width"], "bore": d["bore"], "back": d["back"], "rack_len": d["rack_len"],
+                          "travel": S})
+    msg = (f"All checks passed. Pinion m {d['module']:g}, {d['z']} teeth (Ø{d['d']:g} mm), rack {d['rack_len']:.0f} mm long, "
+           f"face {d['face_width']:g} mm: the rack moves {d['per_turn']:.1f} mm per pinion turn ({d['turns']:.2f} turns for "
+           f"{S:g} mm); holding {F:g} N takes {d['T'] / 1000:.2f} N·m on a Ø{d['bore']:g} steel shaft.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
