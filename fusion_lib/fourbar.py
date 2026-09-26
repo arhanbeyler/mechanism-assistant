@@ -152,6 +152,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
                "Shaft": "Steel - Satin", "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin",
+               "Intermediate shaft": "Steel - Satin",
                "Spring": "Steel - Satin", "Key": "Brass - Matte"}
 
 
@@ -167,7 +168,8 @@ def paint(design):
     """Colours the drawn components (visual only: a problem here must not break the drawing)."""
     try:
         for occ in design.rootComponent.occurrences:
-            key = "Spring" if occ.component.name.startswith("Spring ") else occ.component.name
+            name = occ.component.name
+            key = name if name in APPEARANCES else name.split(" ")[0]    # "Spring 3 (...)", "Pinion 1", "Gear 4"
             if key in APPEARANCES:
                 occ.appearance = _appearance(design, APPEARANCES[key])
             for body in occ.component.bRepBodies:
@@ -202,7 +204,8 @@ def build(mech, reuse=True):
              "cam": "cam",                    # C11a: cam + follower
              "shaft": "shaft",                # C11b: two-bearing shaft
              "reducer": "reducer",            # E1: single-stage reducer (system)
-             "slider_crank": "slider_crank"}.get(mech.get("type"))   # F1: slider-crank (piston)
+             "slider_crank": "slider_crank",  # F1: slider-crank (piston)
+             "reducer2": "reducer2"}.get(mech.get("type"))   # E2: two-stage reducer
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

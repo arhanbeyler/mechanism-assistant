@@ -104,13 +104,14 @@ def make_shaft(root, lay, name, matrix=None):
     rin.setAngleExtent(False, adsk.core.ValueInput.createByReal(2 * math.pi))
     shaft = rv.add(rin).bodies.item(0)
     shaft.name = f"Shaft Ø{lay['d']:g}"
-    feat = lay["feature"]
-    if feat["kind"] == "keyseat":                 # end-milled keyseat + key
-        r = lay["d"] / 2
+    keys = lay.get("keys") or ([lay["feature"]] if lay["feature"]["kind"] == "keyseat" else [])
+    r = lay["d"] / 2
+    for feat in keys:                             # end-milled keyseat + key (several on a multi-gear shaft)
         pocket = _obround(comp, r, feat["x"], feat["length"], feat["b"], "Keyseat")
         _extrude(comp, pocket, -feat["t1"], adsk.fusion.FeatureOperations.CutFeatureOperation, shaft)
         key = _obround(comp, r - feat["t1"], feat["x"], feat["length"], feat["b"], "Key")
-        _extrude(comp, key, feat["h"], adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0).name =             f"Key {feat['b']}×{feat['h']}×{feat['length']:g} (DIN 6885)"
+        body = _extrude(comp, key, feat["h"], adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
+        body.name = f"Key {feat['b']}×{feat['h']}×{feat['length']:g} (DIN 6885)"
     return occ, shaft
 
 

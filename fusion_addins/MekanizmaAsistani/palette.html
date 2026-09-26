@@ -365,7 +365,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.slider) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -374,7 +374,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.slider) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -547,16 +547,7 @@ Everything is computed on this computer, with a local AI.</div>
                   ["Keys", a.key ? `${a.key.b}×${a.key.h}×${a.key.length} / ${b.key.b}×${b.key.h}×${b.key.length}` : "–"],
                   ["Gear force", `${f(r.W, 0)} N`]]
       .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
-    // group summary: worst check per group (all rows are in d.checks; the card shows one line per group)
-    const groups = {};
-    for (const c of d.checks || []) {
-      const grp = c.name.split(":")[0];
-      groups[grp] = groups[grp] || { n: 0, bad: [] };
-      groups[grp].n++;
-      if (!c.ok) groups[grp].bad.push(c.name.split(": ").slice(1).join(": "));
-    }
-    const summary = Object.entries(groups).map(([k, v]) => ({ ok: v.bad.length === 0, name: k,
-      detail: v.bad.length ? v.bad.join(", ") : `${v.n} checks passed` }));
+    const summary = groupChecks(d.checks);     // one line per group (all rows are in d.checks)
     $("result").innerHTML = `
       <div class="grid">
         <div class="col"><h3>Reducer</h3><table>${rows}</table></div>
@@ -629,7 +620,60 @@ Everything is computed on this computer, with a local AI.</div>
       <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
   }
 
+  function groupChecks(checks) {             // one line per group ("Input shaft · Gear seat 1: ..." -> "Input shaft")
+    const groups = {};
+    for (const c of checks || []) {
+      const grp = c.name.split(/ · |: /)[0];
+      groups[grp] = groups[grp] || { n: 0, bad: [] };
+      groups[grp].n++;
+      if (!c.ok) groups[grp].bad.push(c.name.slice(grp.length).replace(/^( · |: )/, ""));
+    }
+    return Object.entries(groups).map(([k, v]) => ({ ok: v.bad.length === 0, name: k,
+      detail: v.bad.length ? v.bad.join(", ") : `${v.n} check${v.n === 1 ? "" : "s"} passed` }));
+  }
+
+  function renderReducer2Card(d) {           // E2: two-stage reducer
+    const r = d.reducer2;
+    if (!r) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const [g1, g2] = r.stages, s = r.shafts;
+    const life = (x) => x.bearing.life_h && x.bearing.life_h[0] ? `${Math.round(Math.min(...x.bearing.life_h) / 1000)}k` : "–";
+    const rows = [["Output", `${f(r.T[2] / 1000, 1)} N·m @ ${f(r.rpm[2], 0)} rpm`], ["Power", `${f(r.power_W / 1000, 2)} kW`],
+                  ["Ratio", `${f(g1.ratio, 3)} × ${f(g2.ratio, 3)} = ${f(r.ratio, 2)}`],
+                  ["Stage 1", `m ${g1.module}, z ${g1.z1}/${g1.z2}, b ${g1.face_width}, a ${f(g1.center_distance, 1)}`],
+                  ["Stage 2", `m ${g2.module}, z ${g2.z1}/${g2.z2}, b ${g2.face_width}, a ${f(g2.center_distance, 1)}`],
+                  ["Shafts", s.map((x) => `Ø${x.d}`).join(" / ")], ["Bearings", s.map((x) => x.bearing.name).join(" / ")],
+                  ["L10 life (h)", s.map(life).join(" / ")]]
+      .map(([k, v]) => `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("");
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Two-stage reducer</h3><table>${rows}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(groupChecks(d.checks))}</div>
+        <div class="col"><h3>Top view</h3>${reducer2Svg(r)}</div>
+      </div>`;
+  }
+
+  function reducer2Svg(r) {                  // walls, three shafts, four gears (to scale)
+    const W = 220, H = 150, pad = 8, h = r.housing, [g1, g2] = r.stages, ys = [0, g1.center_distance, g1.center_distance + g2.center_distance];
+    const ra = (g, big) => (big ? g.d2 : g.d1) / 2 + g.module;
+    const xl = h.x_walls[1] + h.t / 2 + 2 * r.shafts[0].d;
+    const yb = Math.min(h.y[0], -ra(g1, false)), y1 = Math.max(h.y[1], ys[2] + ra(g2, true), ys[1] + ra(g1, true));
+    const sc = Math.min((W - 2 * pad) / (2 * xl), (H - 2 * pad) / (y1 - yb));
+    const X = (x) => W / 2 + x * sc, Y = (y) => pad + (y - yb) * sc;
+    const rect = (x0, x1, ya, yb_, attr) => `<rect x="${X(x0)}" y="${Y(ya)}" width="${(x1 - x0) * sc}" height="${(yb_ - ya) * sc}" ${attr}/>`;
+    const walls = h.x_walls.map((x) => rect(x - h.t / 2, x + h.t / 2, h.y[0], h.y[1], `fill="var(--line)" stroke="var(--muted)"`)).join("");
+    const shaft = (s, y) => s.layout.segments.map(([a, b, rr]) => rect(a - s.layout.shift, b - s.layout.shift, y - rr, y + rr,
+      `fill="var(--panel)" stroke="var(--text)" stroke-width="0.6"`)).join("");
+    const [x1, x2] = r.x_stages;
+    const gear = (x, b, y, rad, col) => rect(x - b / 2, x + b / 2, y - rad, y + rad, `fill="${col}" opacity="0.85"`);
+    return `<svg viewBox="0 0 ${W} ${H}">${walls}${r.shafts.map((s, i) => shaft(s, ys[i])).join("")}
+      ${gear(x1, g1.face_width, ys[0], ra(g1, false), "var(--crank)")}${gear(x1, g1.face_width, ys[1], ra(g1, true), "var(--rocker)")}
+      ${gear(x2, g2.face_width, ys[1], ra(g2, false), "var(--crank)")}${gear(x2, g2.face_width, ys[2], ra(g2, true), "var(--rocker)")}
+      <text class="lbl" x="${X(-xl) + 2}" y="${Y(ys[0]) - 4}">in</text>
+      <text class="lbl" x="${X(xl) - 2}" y="${Y(ys[2]) - 4}" text-anchor="end">out</text></svg>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "reducer" && d.reducer2) return renderReducer2Card(d);
     if (d.mechanism_type === "slider_crank") return renderSliderCard(d);
     if (d.mechanism_type === "reducer") return renderReducerCard(d);
     if (d.mechanism_type === "shaft") return renderShaftCard(d);

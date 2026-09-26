@@ -42,7 +42,8 @@ def housing(g, s1, s2):
     t = float(max(b1["B"], b2["B"]))
     z0 = -(ra + CLEAR) - BASE_T
     return {"x_walls": [-span / 2, span / 2], "t": t,
-            "y": [-(b1["OD"] / 2 + WALL_MARGIN), a + b2["OD"] / 2 + WALL_MARGIN],
+            "y": [min(-(b1["OD"] / 2 + WALL_MARGIN), -(g["d1"] / 2 + g["module"] + CLEAR)),   # bearings or gear tips
+                  max(a + b2["OD"] / 2 + WALL_MARGIN, a + g["d2"] / 2 + g["module"] + CLEAR)],
             "z": [z0, max(b1["OD"], b2["OD"]) / 2 + WALL_MARGIN], "base_t": BASE_T,
             "seats": [(0.0, b1["OD"]), (a, b2["OD"])]}
 

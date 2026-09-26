@@ -16,8 +16,8 @@ Sentences can be written in English or Turkish.
 | ![four-bar](docs/img/fourbar.png) | ![gear](docs/img/gear.png) | ![spring](docs/img/spring.png) |
 | **Disk cam + roller follower** | **Two-bearing shaft (fatigue)** | **Single-stage reducer (system)** |
 | ![cam](docs/img/cam.png) | ![shaft](docs/img/shaft.png) | ![reducer](docs/img/reducer.png) |
-| **Slider-crank (piston)** | | |
-| ![slider-crank](docs/img/slider_crank.png) | | |
+| **Slider-crank (piston)** | **Two-stage reducer (system)** | |
+| ![slider-crank](docs/img/slider_crank.png) | ![two-stage reducer](docs/img/reducer2.png) | |
 
 ## Core rule: the LLM never produces a number
 
@@ -35,7 +35,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (41/41, incl. 11
+  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (43/43, incl. 11
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -58,6 +58,7 @@ flowchart LR
 | **Cam + follower spring (system)** | With speed and follower mass: the follower's acceleration sets the spring force needed against jump (1.3 × inertia); the preload is swept and the spring module designs the lightest spring that also passes with its real (rounded) rate | Contact force > 0 over the whole turn (recomputed from the motion table), all spring checks at the real top force |
 | Shaft | DE-Goodman fatigue with Marin factors, k_b iteration, Table 7-1 K_t; catalogue ball bearings; DIN 6885 key; diameter raised until every check passes | Fatigue n_f and yield at the hub and at the torque-carrying bearing seat, L10 life ≥ 20 000 h, key shear and crushing, slope ≤ 1 mrad and deflection ≤ 0.13 mm (numerical integration on the stepped shaft), Rayleigh critical speed ≥ 2× running speed |
 | **Reducer (system)** | Gear pair → gear forces and masses → both shafts → bearings → keys → housing, iterated until the constraints agree (gear bore = shaft, key ≤ face width, bearings side by side, common span) | All of the above + housing web; in Fusion, tooth overlap 0 mm³ at 6 angles and the output turns at exactly 1/i |
+| **Two-stage reducer (system)** | Ratios above 6: the ratio is split over two stages (lightest gear set near √i); three shafts, the intermediate one carries two gears (loads in two planes, reactions, M/EI deflection and Rayleigh speed with several masses); gear bores, key lengths, bearing seats and the common span iterated together | Per shaft: fatigue / yield at every seat, keys, bearing life, slopes and deflections at each gear; gear 2 clears the output shaft, gear 4 clears the input shaft, material between bearing seats; in Fusion, tooth overlap 0 in both stages at 5 angles, both ratios exact |
 
 In Fusion: **⟳ 1 turn** and **▶ continuous** buttons drive the input joint (gear motion link, cam follower from
 the s(θ) table, rocker-rocker oscillation within limits). The spring is animated as pre-built compression frames.
@@ -104,7 +105,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 175 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 192 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -136,5 +137,4 @@ tools/               hub-compliance calibration, LLM evaluation
 * The development bridge (127.0.0.1, token-protected) executes Python inside Fusion. It exists for automated
   testing and should stay local.
 
-Planned next: see [ROADMAP.md](ROADMAP.md): more systems (multi-stage reducer, cam + spring, press), slider-crank and
-path synthesis, edits in the chat, print-in-place pins and a physical print.
+Planned next: see [ROADMAP.md](ROADMAP.md): more systems (press, folding platform), path synthesis, print-in-place pins and a physical print.

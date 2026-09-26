@@ -93,8 +93,9 @@ REDUCER = (_schema({
     "material": MATERIAL,
     "shaft_material": {"type": ["string", "null"], "enum": ["1020", "1045", None]},
 }), COMMON + (
-    "The user wants a single-stage gear reducer (gearbox). gear_ratio: speed reduction ('1:4', '4 kat', "
-    "'oran 4' -> 4). torque_Nm: input torque in N·m if given. power_kW: motor power in kW ('1.5 kW' -> 1.5; "
+    "The user wants a gear reducer (gearbox; one or two stages, the engine picks the stages). gear_ratio: "
+    "speed reduction ('1:4', '4 kat', 'oran 4', 'devri 12 kat düşüren' -> the number; 'iki kademeli' / "
+    "'two-stage' is NOT the ratio). torque_Nm: input torque in N·m if given. power_kW: motor power in kW ('1.5 kW' -> 1.5; "
     "'750 W' -> 0.75; 1 HP = 0.746 kW). speed_rpm: input (motor) speed ('1450 devir', '1450 d/d', '1450 rpm'); a number followed by rpm, devir or "
     "d/d is ALWAYS speed_rpm, even when the ratio is also described with 'devri X kat düşüren'. "
     "material: gear material only if named. shaft_material: '1020' or '1045' only if named."))

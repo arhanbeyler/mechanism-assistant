@@ -18,8 +18,9 @@ import kinematics as kin
 import shafts
 import slider_crank
 import springs
-import reducer
 import llm_extract
+import reducer
+import reducer2
 import strength
 from llm_extract import extract_spec
 
@@ -44,7 +45,8 @@ MODULES = {
         "params": [
             {"key": "torque_Nm", "label": "Input torque", "unit": "N·m", "min": 1, "max": 400, "step": 1, "default": 20},
             {"key": "speed_rpm", "label": "Input speed", "unit": "rpm", "min": 100, "max": 3000, "step": 10, "default": 1450},
-            {"key": "gear_ratio", "label": "Ratio", "unit": "", "min": 1.2, "max": 6, "step": 0.1, "default": 3},
+            {"key": "gear_ratio", "label": "Ratio (> 6: two stages)", "unit": "", "min": 1.2, "max": 30, "step": 0.1,
+             "default": 3},
             {"key": "shaft_material", "label": "Shaft steel", "default": "1045",
              "options": [["1045", "AISI 1045 CD"], ["1020", "AISI 1020 CD"]]},
             {"key": "feature", "label": "Gear on shaft", "default": "keyseat",
@@ -406,8 +408,9 @@ def _reducer(result, spec, say):
     ratio = float(ratio)
     if ratio < 1:
         ratio = 1 / ratio
-    if not 1 < ratio <= 8:
-        return dict(result, status="missing", message=f"A single spur stage needs a ratio of 1–8 (given: {ratio:g}).")
+    if not 1 < ratio <= reducer2.MAX_RATIO:
+        return dict(result, status="missing",
+                    message=f"The reducer covers ratios of 1–{reducer2.MAX_RATIO:g} (given: {ratio:g}).")
     mat_key = spec.get("material") if spec.get("material") in strength.MATERIALS else None
     if mat_key is None:
         mat_key = "steel"
@@ -415,6 +418,8 @@ def _reducer(result, spec, say):
     feature = spec.get("feature") or "keyseat"
     shaft_mat = spec.get("shaft_material") or "1045"
     n = float(spec.get("safety_n") or 2.0)
+    if ratio > reducer2.SINGLE_MAX:
+        return _reducer2(result, spec, say, float(T), float(rpm), ratio, mat_key, shaft_mat, n, notes)
     say("Reducer: gear pair -> shafts -> bearings -> keys -> housing (iterating until they fit)...")
     r, r_checks = reducer.design(float(T) * 1000.0, float(rpm), ratio, mat_key, shaft_mat, feature, n)
     checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0, "detail": c["detail"]}
@@ -521,6 +526,32 @@ def _slider_crank(result, spec, say):
             msg += (f" Max rod force {st['rod_force_max_N']:.0f} N, max crank torque "
                     f"{st['input_torque_max_Nmm'] / 1000:.2f} N·m.")
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _reducer2(result, spec, say, T, rpm, ratio, mat_key, shaft_mat, n, notes):
+    """E2: two-stage reducer (ratio above one stage's practical limit)."""
+    notes.append(f"Ratio {ratio:g} > {reducer2.SINGLE_MAX:g}: two stages.")
+    say("Two-stage reducer: ratio split -> gears -> three shafts -> bearings -> housing...")
+    r, r_checks = reducer2.design(T * 1000.0, rpm, ratio, mat_key, shaft_mat, n)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0, "detail": c["detail"]} for c in r_checks]
+    result.update(checks=checks, notes=notes, target={"torque_Nm": T, "speed_rpm": rpm, "ratio": ratio})
+    if r is None:
+        bad = [c["name"] for c in checks if not c["ok"]]
+        return dict(result, status="failed", message=" ".join(notes + [
+            f"No two-stage reducer passes all checks (failing: {', '.join(bad[:6])}). Try a stronger material or "
+            "a smaller torque."]))
+    g1, g2 = r["stages"]
+    s = r["shafts"]
+    notes.append("Losses neglected (output torque = ratio × input torque): conservative for the output side.")
+    result.update(
+        reducer2=r, fusion={"type": "reducer2", "passed_checks": True, **r}, status="ok",
+        message=" ".join(notes + [
+            f"All checks passed. Stages {g1['ratio']:.3f} × {g2['ratio']:.3f} = {r['ratio']:.2f}; modules "
+            f"{g1['module']:g} / {g2['module']:g}, centre distances {g1['center_distance']:g} / "
+            f"{g2['center_distance']:g} mm. Shafts Ø{s[0]['d']:g} / Ø{s[1]['d']:g} / Ø{s[2]['d']:g} mm on bearings "
+            f"{' / '.join(x['bearing']['name'] for x in s)}. Output {r['T'][2] / 1000:.1f} N·m at "
+            f"{r['rpm'][2]:.0f} rpm ({r['power_W'] / 1000:.2f} kW)."]))
     return result
 
 

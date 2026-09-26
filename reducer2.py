@@ -23,6 +23,8 @@ import reducer
 import shaft_multi
 import strength
 
+SINGLE_MAX = 6.0     # above this ratio the reducer module uses two stages (one spur stage stays <= ~6)
+MAX_RATIO = 36.0     # two stages of at most 6 each
 GAP_AX = 6.0         # mm, axial gap between the two stages
 CLEAR = 3.0          # mm, gear tip to a neighbouring shaft
 MARGIN = 6.0         # mm, gear face to the bearing / wall
@@ -142,8 +144,10 @@ def design(T1_Nmm, rpm1, ratio, gear_material="steel", shaft_material="1045", n=
     bmax = max(shafts_out[i]["bearing"]["OD"] for i in range(3))
     ra_max = max(ra2, ra4, g1["d1"] / 2 + g1["module"], g2["d1"] / 2 + g2["module"])
     housing = {"x_walls": [-span / 2, span / 2], "t": float(max(r["bearing"]["B"] for r in shafts_out)),
-               "y": [-(shafts_out[0]["bearing"]["OD"] / 2 + reducer.WALL_MARGIN),
-                     a1 + a2 + shafts_out[2]["bearing"]["OD"] / 2 + reducer.WALL_MARGIN],
+               "y": [min(-(shafts_out[0]["bearing"]["OD"] / 2 + reducer.WALL_MARGIN),     # bearings or gear tips
+                         -(g1["d1"] / 2 + g1["module"] + reducer.CLEAR)),
+                     max(a1 + a2 + shafts_out[2]["bearing"]["OD"] / 2 + reducer.WALL_MARGIN,
+                         a1 + a2 + ra4 + reducer.CLEAR, a1 + ra2 + reducer.CLEAR)],
                "z": [-(ra_max + reducer.CLEAR) - reducer.BASE_T, bmax / 2 + reducer.WALL_MARGIN],
                "base_t": reducer.BASE_T,
                "seats": [(0.0, shafts_out[0]["bearing"]["OD"]), (a1, shafts_out[1]["bearing"]["OD"]),
