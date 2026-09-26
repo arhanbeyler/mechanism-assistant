@@ -36,8 +36,8 @@ Sentences can be written in English or Turkish.
 | ![crank press](docs/img/press.png) | ![path synthesis](docs/img/path_synthesis.png) | ![six-bar](docs/img/six_bar.png) |
 | **Flange coupling** | **Disc spring stack** | **Extension spring** |
 | ![flange coupling](docs/img/coupling.png) | ![disc springs](docs/img/disc_spring.png) | ![extension spring](docs/img/extension_spring.png) |
-| **Splined shaft (ISO 14)** | **Whitworth quick return** | |
-| ![spline](docs/img/spline.png) | ![Whitworth](docs/img/whitworth.png) | |
+| **Splined shaft (ISO 14)** | **Whitworth quick return** | **Dwell six-bar** |
+| ![spline](docs/img/spline.png) | ![Whitworth](docs/img/whitworth.png) | ![dwell](docs/img/dwell.png) |
 
 ## Core rule: the LLM never produces a number
 
@@ -55,7 +55,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (100/100, incl. 12
+  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (101/101, incl. 12
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -71,6 +71,7 @@ flowchart LR
 | Four-bar, full rotation | Crank-rocker Q = 1 (c = a / sin(ψ/2)), quick-return Q > 1 (Norton) | Grashof, transmission angle 40–140° (synthesis targets 45°), branch consistency, simulated swing and Q; with a crank speed (K2): drive torque, pin and shaking forces with the links' inertia by Norton's matrix method (checked against the energy method and, at a slow crank, against the statics; the mean torque equals the load's work per turn), sections resized when the dynamic forces are larger, the flywheel that keeps the speed within ±2.5 %, torque curve on the panel |
 | Four-bar, limited input | Freudenstein function generator, 3 Chebyshev precision points | Structural error ≤ 1°, transmission angle over the range, Fusion joint limits |
 | Watt six-bar | Chosen automatically when a four-bar cannot give the swing (over 90°, up to 300°): a crank-rocker drives, through its rocker's second arm, a Freudenstein function generator | The whole six-bar simulated over a crank turn (both loops, same branches): swing within 1°, both transmission angles 40–140°, every link buildable (≥ 12 mm, ratio ≤ 10); stage 2's load moved to stage 1 by virtual work; in Fusion (8 links, a rigid joint makes the ternary link) the solver's output swing equals the engine's (149.43° vs 149.42°, 181.0° vs 181.0°) |
+| Dwell six-bar | Crank, dwell (degrees of the crank turn) and output swing: a four-bar whose coupler point runs on a circular arc during the dwell, a link of the arc's radius to its centre, and the output rocker | Arc found by optimisation (Kasa circle fit, trivial arcs of A or B excluded, the point must leave the circle elsewhere); the whole six-bar simulated: the output moves 0.03° while the crank turns 90°, swing and both transmission angles checked; in Fusion the solver gives 0.035° and 40.06° (engine 40.06°) |
 | Slider-crank (piston) | Stroke given; crank from the exact stroke formula (with offset), rod the shortest whole mm with b/a ≥ 3 and rod angle ≤ 20° | Simulated stroke, rod ratio, rod angle (side load), quick-return Q with offset; crank torque by virtual work T = F·|dx/dθ| (tested against the rod-force moment); crank and rod sized like the four-bar links; piston speed / acceleration; in Fusion the solver's piston position equals x(θ) at 36 angles |
 | Straight-line linkage | Hoeckens four-bar (a : b : c : d = 1 : 2.5 : 2.5 : 2, point at 2 × AB) scaled to the asked straight path; the straight part is found on the simulated coupler curve (longest run within 0.2 % of its length from its best-fit line), not taken from a table | Straight length, deviation, crank-rotation share and speed variation on the line, lift on return, transmission angle on the working stroke; crank torque from coupler statics equals virtual work; links sized with the coupler also bending (point overhangs B); layer clearance; in Fusion the drawn point stays within 0.003 mm of the engine curve over a full turn |
 | Path synthesis | 3–8 points (x, y) the coupler point must pass through; a crank-rocker with the point on the coupler's line (a three-hole bar) | Nelder–Mead from 40 seeded starts on the squared distances to the coupler curve with penalties for Grashof, transmission angle 30–150° and link ratios; the report re-measures the misses on a finer curve; in Fusion the solver-driven point, traced over a turn, passes the points within 0.2 mm (1° steps) |
@@ -165,7 +166,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 334 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 337 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -185,7 +186,7 @@ module engines (one per element), for example:
   chain.py vbelt.py power_screw.py coupling.py clutch.py flywheel.py       power transmission
   springs.py torsion_spring.py extension_spring.py disc_spring.py         springs
   bolted.py welded.py fits.py spline.py shafts.py                          joints and shafts
-  coupler.py pathsynth.py sixbar.py geneva.py toggle.py slotted.py whitworth.py ratchet.py slider_crank.py cams.py
+  coupler.py pathsynth.py sixbar.py dwell.py geneva.py toggle.py slotted.py whitworth.py ratchet.py slider_crank.py cams.py
                                                                            linkages and mechanisms
   dynamics.py press.py snapfit.py flexure.py                               dynamics, systems, printing
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)

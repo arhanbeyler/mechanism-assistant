@@ -18,6 +18,7 @@ import clutch
 import chain
 import coupling
 import disc_spring
+import dwell
 import extension_spring
 import coupler
 import fits
@@ -58,6 +59,14 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "dwell": {
+        "title": "Dwell mechanism (six-bar)",
+        "params": [
+            {"key": "crank_length_mm", "label": "Crank", "unit": "mm", "min": 10, "max": 100, "step": 1, "default": 30},
+            {"key": "dwell_deg", "label": "Dwell (crank °)", "unit": "°", "min": 30, "max": 150, "step": 5, "default": 90},
+            {"key": "output_swing_deg", "label": "Output swing", "unit": "°", "min": 10, "max": 90, "step": 5, "default": 40},
+        ],
+    },
     "spline": {
         "title": "Splined shaft (ISO 14)",
         "params": [
@@ -625,10 +634,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
                        arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
                        undercut_mm=None, hold_force_N=None, releasable=None, repeated=None,
-                       working_stroke_mm=None, path_points=None, spline_use=None, whitworth=None, preview=False):
+                       working_stroke_mm=None, path_points=None, spline_use=None, whitworth=None, preview=False,
+                       dwell_deg=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "dwell":
+        return design_from_spec({"mechanism_type": "dwell", "crank_length_mm": crank_length_mm, "dwell_deg": dwell_deg,
+                                 "output_swing_deg": output_swing_deg, "_preview": bool(preview)})
     if kind == "spline":
         return design_from_spec({"mechanism_type": "spline", "torque_Nm": torque_Nm, "spline_use": spline_use})
     if kind == "extension_spring":
@@ -812,6 +825,8 @@ def design_from_spec(spec, on_status=None):
         return _extension_spring(result, spec, say)
     if mtype == "spline":
         return _spline(result, spec, say)
+    if mtype == "dwell":
+        return _dwell(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -829,7 +844,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, disc and extension springs, splines, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, disc and extension springs, splines, dwell mechanisms, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1456,6 +1471,63 @@ def _whitworth(result, spec, say, S, Q, F, rpm, mat, notes):
                f"{d['l']:.0f} mm rod: stroke {m['stroke']:.1f} mm, time ratio {m['Q']:.2f}.")
         if F:
             msg += f" Max crank torque {d['T_max'] / 1000:.2f} N·m."
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+_DWELL_CACHE = {}
+
+
+def _dwell(result, spec, say):
+    """F4d: single-dwell six-bar. Required: the crank, the dwell (crank degrees) and the output swing."""
+    result["mechanism_type"] = "dwell"
+    a, dw, sw = spec.get("crank_length_mm"), spec.get("dwell_deg"), spec.get("output_swing_deg")
+    missing = [n for v, n in ((a, "crank length"), (dw, "dwell (degrees of the crank turn)"), (sw, "output swing (°)"))
+               if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the dwell mechanism: {', '.join(missing)}.")
+    a, dw, sw = float(a), float(dw), float(sw)
+    if not (30 <= dw <= 150 and 10 <= sw <= 90):
+        return dict(result, status="missing", message="Dwell 30–150° of the crank and a swing of 10–90° are covered.")
+    notes = ["Default sections (no load given); the coupler point lies on the coupler's line."]
+    key = (round(a, 3), round(dw, 3), round(sw, 3))
+    if key not in _DWELL_CACHE:
+        if spec.get("_preview"):
+            result["six_bar_pending"] = True
+            return dict(result, status="failed", notes=notes, checks=[],
+                        message="Press Draw in Fusion to synthesize the dwell mechanism (about half a minute).")
+        say("Dwell six-bar: searching a coupler curve with a circular arc, then the output dyad...")
+        _DWELL_CACHE[key] = dwell.design(a, dw, sw)
+    m, frames = _DWELL_CACHE[key]
+    if m is None:
+        return dict(result, status="failed", message="No dwell linkage found for these values.")
+    me = m["measured"]
+    checks = [{"name": "Dwell (simulation)", "ok": me["dwell_motion"] <= 1.0,
+               "detail": f"the output moves {me['dwell_motion']:.2f}° while the crank turns {dw:g}°"},
+              {"name": "Output swing (simulation)", "ok": abs(me["swing"] - sw) <= 2.0, "detail": f"{me['swing']:.1f}° (target {sw:g}°)"},
+              {"name": "Transmission angle, four-bar", "ok": me["mu1_min"] >= dwell.MU_MIN and me["mu1_max"] <= 180 - dwell.MU_MIN,
+               "detail": f"{me['mu1_min']:.1f}° – {me['mu1_max']:.1f}°"},
+              {"name": "Transmission angle, output dyad", "ok": me["mu6_min"] >= dwell.MU_MIN and me["mu6_max"] <= 180 - dwell.MU_MIN,
+               "detail": f"{me['mu6_min']:.1f}° – {me['mu6_max']:.1f}°"}]
+    ok = all(c["ok"] for c in checks)
+    section = strength.section_with_bosses(strength.DEFAULT_SECTION)
+    f0 = frames[0]
+    r3 = lambda p: [round(p[0], 3), round(p[1], 3)]
+    pts = {"O2": [0.0, 0.0], "O4": [round(m["d"], 3), 0.0], "O6": r3(m["O6"]), "A": r3(f0["A"]), "B": r3(f0["B"]),
+           "P": r3(f0["P"]), "D": r3(f0["D"])}
+    order = sorted((("A", 0.0), ("B", m["b"]), ("P", m["p"])), key=lambda t: t[1])
+    info = {k: round(m[k], 2) for k in ("a", "b", "c", "d", "p", "r5", "c6")}
+    info.update(dwell=dw, swing=me["swing"], dwell_motion=me["dwell_motion"], mu1=[me["mu1_min"], me["mu1_max"]],
+                mu6=[me["mu6_min"], me["mu6_max"]], points=pts,
+                phi_curve=[(round(f["theta"], 1), round(f["phi"], 2)) for f in frames[::4]])
+    result.update(dwell=info, checks=checks, notes=notes, section_mm=section, target={"dwell": dw, "swing": sw},
+                  fusion={"type": "dwell", "passed_checks": ok, "points_mm": pts, "section_mm": section,
+                          "coupler_ends": [order[0][0], order[-1][0]]})
+    msg = (f"All checks passed. A four-bar (crank {a:g}, coupler {m['b']:.1f}, rocker {m['c']:.1f}, ground {m['d']:.1f} mm) "
+           f"whose coupler point {m['p']:.1f} mm along the coupler runs on a circular arc (radius {m['r5']:.1f} mm) for "
+           f"{dw:g}° of the crank; a {m['r5']:.1f} mm link from that point to the arc's centre drives the {m['c6']:.1f} mm "
+           f"output: it stands still (±{me['dwell_motion'] / 2:.2f}°) during the arc and swings {me['swing']:.1f}° otherwise."
+           if ok else "The best dwell linkage found does not meet the checks above: a longer dwell or a smaller swing is easier.")
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
     return result
 

@@ -134,6 +134,8 @@ CASES = [
                                                                  max_load_N=200)),
     ("vargel tezgahı için hızlı geri dönüş mekanizması, 200 mm strok, dönüş 1.6 kat hızlı, 500 N kesme kuvveti",
      dict(mechanism_type="quick_return", stroke_mm=200, time_ratio=1.6, max_load_N=500)),
+    ("30 mm krank, krank 90 derece dönerken çıkış beklesin, sonra 40 derece sallansın",
+     dict(mechanism_type="dwell", crank_length_mm=30, dwell_deg=90, output_swing_deg=40)),
     ("Whitworth hızlı geri dönüş mekanizması, 200 mm strok, Q 1.5", dict(mechanism_type="quick_return", stroke_mm=200,
                                                                         time_ratio=1.5, whitworth=True)),
     ("quick return mechanism, 150 mm stroke", dict(mechanism_type="quick_return", stroke_mm=150)),
