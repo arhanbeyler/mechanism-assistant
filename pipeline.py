@@ -625,7 +625,7 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
                        arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
                        undercut_mm=None, hold_force_N=None, releasable=None, repeated=None,
-                       working_stroke_mm=None, path_points=None, spline_use=None, whitworth=None):
+                       working_stroke_mm=None, path_points=None, spline_use=None, whitworth=None, preview=False):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
@@ -750,7 +750,8 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
         "output_swing_deg": output_swing_deg, "quick_return": (not rr) and time_ratio > 1.0,
         "time_ratio": time_ratio if (not rr and time_ratio > 1.0) else None,
         "input_swing_deg": input_swing_deg if rr else None,
-        "max_load_N": max_load_N or None, "material": material, "speed_rpm": speed_rpm or None})
+        "max_load_N": max_load_N or None, "material": material, "speed_rpm": speed_rpm or None,
+        "_preview": bool(preview)})
 
 
 def design_from_spec(spec, on_status=None):
@@ -2653,7 +2654,11 @@ def _six_bar(result, spec, notes, say, a, psi):
     """F4b: Watt II six-bar for a swing a four-bar cannot give with a good transmission angle."""
     say("Watt six-bar: crank-rocker + function generator in series, simulated as a whole...")
     key = (round(float(a), 3), round(float(psi), 3))
-    if key not in _SIX_CACHE:                         # slider previews ask again and again (4-7 s each)
+    if key not in _SIX_CACHE:
+        if spec.get("_preview"):                      # slider previews: 4-7 s each would pile up while dragging
+            notes.append("A Watt six-bar can give this swing: press Draw in Fusion to synthesize it (a few seconds).")
+            result["six_bar_pending"] = True          # the panel keeps Draw enabled
+            return None
         _SIX_CACHE[key] = sixbar.synthesize(a, psi)
     m, frames = _SIX_CACHE[key]
     if m is None or not m["ok"]:

@@ -32,3 +32,15 @@ def test_every_link_is_buildable():
     m, _ = sixbar.synthesize(30, 180)
     lens = [m["m1"][k] for k in "abcd"] + [m["a2"], m["b2"], m["c2"], m["d2"]]
     assert min(lens) >= sixbar.LINK_MIN and max(lens) / min(lens) <= sixbar.RATIO_MAX
+
+
+def test_slider_preview_does_not_run_the_slow_synthesis():
+    import time
+    pipeline._SIX_CACHE.pop((29.0, 170.0), None)
+    t = time.time()
+    r = pipeline.design_from_params(crank_length_mm=29, output_swing_deg=170, preview=True)
+    assert time.time() - t < 2 and r["status"] == "failed" and r.get("six_bar_pending")
+    full = pipeline.design_from_params(crank_length_mm=29, output_swing_deg=170)
+    assert full["mechanism_type"] == "six_bar"
+    again = pipeline.design_from_params(crank_length_mm=29, output_swing_deg=170, preview=True)
+    assert again["mechanism_type"] == "six_bar"                     # cached now
