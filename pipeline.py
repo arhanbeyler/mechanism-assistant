@@ -33,6 +33,7 @@ import shafts
 import sixbar
 import slotted
 import slider_crank
+import spline
 import snapfit
 import springs
 import toggle
@@ -56,6 +57,14 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "spline": {
+        "title": "Splined shaft (ISO 14)",
+        "params": [
+            {"key": "torque_Nm", "label": "Torque", "unit": "N·m", "min": 5, "max": 3000, "step": 5, "default": 100},
+            {"key": "spline_use", "label": "Hub", "default": "fixed",
+             "options": [["fixed", "Fixed"], ["sliding", "Slides when unloaded"], ["sliding_loaded", "Slides under load"]]},
+        ],
+    },
     "extension_spring": {
         "title": "Extension spring",
         "params": [
@@ -613,10 +622,12 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
                        arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
                        undercut_mm=None, hold_force_N=None, releasable=None, repeated=None,
-                       working_stroke_mm=None, path_points=None):
+                       working_stroke_mm=None, path_points=None, spline_use=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "spline":
+        return design_from_spec({"mechanism_type": "spline", "torque_Nm": torque_Nm, "spline_use": spline_use})
     if kind == "extension_spring":
         return design_from_spec({"mechanism_type": "extension_spring", "spring_force_N": spring_force_N,
                                  "spring_deflection_mm": spring_deflection_mm})
@@ -795,6 +806,8 @@ def design_from_spec(spec, on_status=None):
         return _disc_spring(result, spec, say)
     if mtype == "extension_spring":
         return _extension_spring(result, spec, say)
+    if mtype == "spline":
+        return _spline(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -812,7 +825,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, disc and extension springs, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits and living hinges, crank presses, path synthesis through given points, flange couplings, disc and extension springs, splines, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -2263,6 +2276,32 @@ def _extension_spring(result, spec, say):
     msg = (f"All checks passed. Wire Ø{s['d']:g} mm, coil Ø{s['D']:.1f} mm, {s['Nb']:g} body coils, free length {s['L0']:.1f} mm "
            f"inside the hooks; it starts to open at {s['Fi']:.1f} N (initial tension), k = {s['k']:.2f} N/mm, "
            f"{s['F']:.1f} N at {float(y):g} mm. The hooks decide: bending {s['sigma_A']:.0f} MPa.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _spline(result, spec, say):
+    """H3b: straight-sided spline (ISO 14). Required: the torque; the use (fixed / sliding) defaults to fixed."""
+    result["mechanism_type"] = "spline"
+    T = spec.get("torque_Nm")
+    if not T:
+        return dict(result, status="missing", message="Missing for the spline: the torque (N·m).")
+    use = spec.get("spline_use") if spec.get("spline_use") in spline.P_ALLOW else None
+    notes = [f"Service factor {spline.K_SERVICE:g}, steel shaft and hub (C45), 75 % of the teeth carrying."]
+    if use is None:
+        use = "fixed"
+        notes.append("Use not given: a fixed hub (100 MPa on the flanks).")
+    say("Spline: ISO 14 sizes, flank pressure, hub length...")
+    s, s_checks = spline.design(float(T) * 1000.0, use)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if s is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "No ISO 14 spline in the table carries it: a larger shaft or a fixed hub."]))
+    result.update(spline=s, checks=checks, notes=notes, target={"torque_Nm": float(T)},
+                  fusion={"type": "spline", "passed_checks": True, **{k: s[k] for k in ("N", "d", "D", "B", "L", "hub_od")}})
+    msg = (f"All checks passed. ISO 14 {s['series']} series {s['N']} × {s['d']} × {s['D']} (teeth {s['B']:g} mm wide), hub "
+           f"{s['L']:g} mm long: the flanks carry {s['cap'] / 1000:.0f} N·m for {s['Td'] / 1000:.0f} N·m.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 

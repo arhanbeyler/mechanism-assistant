@@ -61,6 +61,8 @@ CASES = [
     ("PETG kutu kapağı için 1.5 mm tırnaklı geçme, sökülebilir olsun", dict(mechanism_type="snap_fit", undercut_mm=1.5,
                                                                           material="PETG", releasable=True)),
     ("snap-fit clip with a 1 mm undercut that holds 20 N", dict(mechanism_type="snap_fit", undercut_mm=1, hold_force_N=20)),
+    ("100 Nm iletecek kamalı mil, göbek yük altında kayacak", dict(mechanism_type="spline", torque_Nm=100,
+                                                                  spline_use="sliding_loaded")),
     ("20 mm uzayınca 50 N çeken bir çekme yayı", dict(mechanism_type="extension_spring", spring_force_N=50,
                                                      spring_deflection_mm=20)),
     ("5 kN'da 2 mm çökecek tabak yay paketi", dict(mechanism_type="disc_spring", spring_force_N=5000,

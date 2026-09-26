@@ -36,6 +36,8 @@ Sentences can be written in English or Turkish.
 | ![crank press](docs/img/press.png) | ![path synthesis](docs/img/path_synthesis.png) | ![six-bar](docs/img/six_bar.png) |
 | **Flange coupling** | **Disc spring stack** | **Extension spring** |
 | ![flange coupling](docs/img/coupling.png) | ![disc springs](docs/img/disc_spring.png) | ![extension spring](docs/img/extension_spring.png) |
+| **Splined shaft (ISO 14)** | | |
+| ![spline](docs/img/spline.png) | | |
 
 ## Core rule: the LLM never produces a number
 
@@ -53,7 +55,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (98/98, incl. 12
+  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (99/99, incl. 12
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -90,6 +92,7 @@ flowchart LR
 | Bolted joint | Separating load (static or fluctuating), clamped thickness, plate material, bolt class, number of bolts (4 tried first); the smallest ISO metric bolt that passes, with nut, standard length | Shigley ch. 8: bolt stiffness from its threaded and plain lengths, member stiffness (Wileman; within 8 % of the frustum model), joint constant C (tested against the two-spring model), preload 0.75 F_p and tightening torque, yield / load / separation factors, Goodman fatigue (the load line meets the Goodman line at n_f, tested); in Fusion two flanges with clearance holes, hex bolts with a cosmetic ISO thread at the free end and nuts |
 | Welded bracket | Load and its arm, bar section (sized in bending when not given), weld all around / top and bottom / sides; the smallest fillet leg that passes | Shigley ch. 9: welds as lines (unit area and second moment, tested by integrating along the lines), primary and bending shear on the throat combined, AISC 0.30 S_ut (E70), AISC minimum leg for the thickness, bar bending 0.6 S_y; in Fusion the wall, the bar and triangular fillet beads touching both |
 | Press fit | Torque, shaft diameter (sized in torsion when not given), hub size optional; the loosest H7 fit (k6 … s6) and the shortest, slimmest hub that pass | ISO 286 limits (Shigley's H7/s6 48 mm example reproduced), Lamé pressure (same-material closed form tested), torque at the SMALLEST interference ×2, hub von Mises at the LARGEST, assembly temperature; says honestly when no standard fit works (small shafts: use a key or spline) |
+| Splined shaft | Torque, fixed or sliding hub (flank pressure 100 / 40 / 10 MPa); the smallest ISO 14 straight-sided spline (light / medium series) with a hub ≤ 1.5 D | Flank bearing with 75 % of the teeth carrying (formula tested), shaft torsion on the minor diameter, hub length; in Fusion the splined shaft and a hub with a 0.1 mm clearance spline hole (measured) |
 | Torsion spring | Moment at a working angle, arbor optional; the lightest music-wire spring in whole quarter body turns | Shigley 10-12: inner-fibre stress with K_i, S_y = 0.78 S_ut, rate d⁴E/(10.8 D N_a) with the legs' share, winding-down of the coil onto the arbor; Shigley example 10-8 reproduced (M 7.55 lbf·in, k' 29.2 lbf·in/turn, 93°); in Fusion a close-wound helix sweep with straight legs |
 | Disc spring stack | Force and the deflection at it, guide rod optional; the lightest stack of DIN 2093-proportioned discs (series A / B / C), nested and in series | DIN 2092 force and σ_OM (the 40 mm catalogue discs reproduced: 6.5 / 2.6 / 1.0 kN), working deflection ≤ 0.75 h0, stress ≤ 1400 MPa (51CrV4), stack deflection within 10 %, free and loaded length; in Fusion the discs revolved as cones, alternating, on a guide rod |
 | Extension spring | Force and the extension to reach it; the lightest music-wire spring with full-loop hooks | Shigley 10-10: initial tension from the preferred stress range, N_a = N_b + G/E, force = F_i + k y (tested), body torsion and the hooks' bending (A) and torsion (B), which govern; in Fusion a close-wound helix with loop hooks |
@@ -151,7 +154,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 327 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 330 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -166,7 +169,7 @@ function_gen.py      Freudenstein function generator (limited-input four-bar)
 strength.py          link, pin and shaft sizing; hub compliance; K_t; deflection
 interference.py      layer order and shaft-to-link clearance over the cycle
 fea_local.py         gmsh + scikit-fem link model (with hub) vs hand calculation
-gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py press.py pathsynth.py sixbar.py coupling.py disc_spring.py extension_spring.py   module engines
+gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py helical.py worm.py bevel.py bolted.py welded.py fits.py torsion_spring.py flywheel.py clutch.py snapfit.py flexure.py dynamics.py press.py pathsynth.py sixbar.py coupling.py disc_spring.py extension_spring.py spline.py   module engines
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)
 reducer.py reducer2.py cam_system.py   systems: modules sized together until their constraints agree
 fusion_lib/          Fusion builders (one per module) + shared document handling
