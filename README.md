@@ -98,7 +98,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
 3. **Fusion 360 add-in:** Link the add-in folder into Fusion's AddIns directory, then start it from
    *Utilities → Add-Ins*:
    ```bat
-   mklink /J "%APPDATA%\Autodesk\Autodesk Fusion 360\API\AddIns\MekanizmaAsistani" "<repo>\fusion_addins\MekanizmaAsistani"
+   mklink /J "%APPDATA%\Autodesk\Autodesk Fusion 360\API\AddIns\MechanismAssistant" "<repo>\fusion_addins\MechanismAssistant"
    ```
    The add-in finds the repository through the junction.
 4. For the **FEA button**, write the path of the Python from step 2 into a file named `.local_python` in the

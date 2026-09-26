@@ -119,9 +119,10 @@ def hole_edge(occ, local_x_mm, sec):
     raise RuntimeError(f"{occ.component.name}: no hole edge at x = {local_x_mm} mm")
 
 
-# Tag of the document drawn by the add-in. The group name stays as it is until the add-in folder / id is
-# renamed together with it (documents already drawn carry this tag).
-MARK_GROUP, MARK_NAME = "MekanizmaAsistani", "fourbar"
+# Tag of the document drawn by the add-in. Documents drawn before the add-in was renamed carry the old
+# group; they are still found and moved to the new one (_retag).
+MARK_GROUP, MARK_NAME = "MechanismAssistant", "fourbar"
+LEGACY_GROUP = "MekanizmaAsistani"
 
 
 def _find_marked_design(app):
@@ -132,9 +133,17 @@ def _find_marked_design(app):
             des = adsk.fusion.Design.cast(doc.products.itemByProductType("DesignProductType"))
         except Exception:
             continue
-        if des and des.attributes.itemByName(MARK_GROUP, MARK_NAME):
+        if des and (des.attributes.itemByName(MARK_GROUP, MARK_NAME) or des.attributes.itemByName(LEGACY_GROUP, MARK_NAME)):
             return doc, des
     return None, None
+
+
+def _retag(design):
+    """Old-group attributes of a document drawn before the rename -> the new group."""
+    for att in list(design.attributes.itemsByGroup(LEGACY_GROUP)):
+        if not design.attributes.itemByName(MARK_GROUP, att.name):
+            design.attributes.add(MARK_GROUP, att.name, att.value)
+        att.deleteMe()
 
 
 def _clear(design):
@@ -200,6 +209,7 @@ def build(mech, reuse=True):
     doc, design = _find_marked_design(app) if reuse else (None, None)
     if doc:
         doc.activate()
+        _retag(design)
         _clear(design)
     else:
         app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)

@@ -36,7 +36,7 @@ if ROOT not in sys.path:
 PALETTE_ID = "MechanismAssistantPalette"
 CMD_ID = "MechanismAssistantCmd"
 EVENT_ID = "MechanismAssistantMainThread"
-MARK_GROUP = "MekanizmaAsistani"    # attribute group of the drawn document (same as fusion_lib.fourbar)
+MARK_GROUP = "MechanismAssistant"   # attribute group of the drawn document (same as fusion_lib.fourbar)
 BRIDGE_PORT = 8765
 TOKEN_FILE = os.path.join(ROOT, ".bridge_token")
 LOG_FILE = os.path.join(ROOT, "output", "addin.log")

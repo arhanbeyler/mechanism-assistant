@@ -78,7 +78,7 @@ In a system one module's output is another's input (forces, diameters and masses
 
 ## L. Repository
 - [x] **L2. The whole repository in English.** Code, comments, panel texts, messages, ROADMAP, docs (Turkish sentences are still understood)
-- [ ] **L3. Rename the add-in folder / id** to `MechanismAssistant` (needs re-registering the add-in in Fusion; the document tag group changes with it)
+- [x] **L3. Rename the add-in folder / id** to `MechanismAssistant` (re-registered in Fusion once; documents drawn under the old tag group are still found and re-tagged)
 
 ## K. Usability
 - [x] **K1. Edits in the chat.** "Make the crank 40 mm", "use aluminium", "krankı 5 mm uzat", "devri iki katına çıkar": the LLM lists the changes (field, set / add / multiply, amount), the engine applies them to the design in the panel and redesigns. Every amount must appear in the message (unit conversions allowed); "a bit longer" gets a question, not a guess. llm_eval 36/36 (11 edit cases)
