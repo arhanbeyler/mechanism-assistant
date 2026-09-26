@@ -96,7 +96,7 @@ def pitch_length(C, D, d):
 
 def centre(Lp, D, d):
     a = Lp - math.pi / 2 * (D + d)
-    return 0.25 * (a + math.sqrt(a * a - 2 * (D - d) ** 2))
+    return 0.25 * (a + math.sqrt(max(a * a - 2 * (D - d) ** 2, 0.0)))
 
 
 def tensions(sec, H_d_hp, Nb, n, d, D, phi):
@@ -131,6 +131,8 @@ def evaluate(sec, d, D, n1, P_W, Ks, C_in=None):
         return None
     Lp = Li + s["Lc"]
     C = centre(Lp, D, d)
+    if D - d >= 2 * C:
+        return None                                         # the sheaves would overlap: not a drive
     phi = math.pi - 2 * math.asin((D - d) / (2 * C))
     Ha = k1(D, d, C) * k2(sec, Li) * tab
     Hd = Ks * P_W / HP

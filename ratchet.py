@@ -249,6 +249,10 @@ def design(T_Nmm, mat_key, z=24, D=None):
                 break
         if best and best[0][0] and not D:
             break                                           # the smallest passing radius
+    if best is None:                                        # e.g. a diameter too small for the teeth and a shaft
+        return None, [{"group": "Geometry", "name": "Room for the teeth and the shaft", "util": 9.9,
+                       "detail": f"{z} teeth and the shaft for {T_Nmm / 1000:g} N·m do not fit Ø{D:g} mm" if D
+                                 else f"no wheel up to Ø600 mm fits {z} teeth and the shaft"}]
     g, b, lp, w_pawl, d_pin, ds, c = best[1]
     mu = MU.get(mat_key, 0.3)
     checks = [{"group": "Motion", "name": "Pawl self-engages (hook > friction angle)",

@@ -136,6 +136,8 @@ def bearing_candidates(d):
 
 
 def l10_hours(C_kN, P_N, rpm):
+    if P_N <= 0:
+        return 1e9                                          # no radial load: the life is not limited by it
     return (C_kN * 1000.0 / P_N) ** 3 * 1e6 / (60.0 * rpm)
 
 

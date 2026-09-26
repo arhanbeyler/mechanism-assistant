@@ -102,6 +102,9 @@ In a system one module's output is another's input (forces, diameters and masses
 - [ ] **D13. README and demo video** (portfolio). README + Fusion images done (parts in the panel colours); the video is to be recorded: shot list in `docs/demo.md`
 - [ ] **D14. Later:** FreeCAD / AutoCAD support, a "free mode" (unverified, clearly labelled)
 
+## Robustness
+- [x] **Fuzz test of every module** (random slider values incl. the range ends, 2100 designs): chain / V-belt with a centre distance shorter than the wheels (asin > 1), a ratchet with no room inside a given diameter, a shaft bearing with no radial load (L10 = C/0) crashed; now they fail with a reason. `tests/test_fuzz_modules.py` keeps 8 fixed samples per module; `tools/fusion_smoke.py` builds every module in Fusion (36/36)
+
 ## Findings (for the report)
 - **For Q = 1** the relation is `c = a / sin(ψ/2)`. There is a trade-off between compactness and transmission angle.
   As the coupler gets longer, μ_min approaches 90 − ψ/2. So for ψ > 90° the 45° target cannot be met.

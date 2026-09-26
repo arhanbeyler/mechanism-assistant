@@ -75,7 +75,7 @@ def links(C, p, N1, N2):
 def centre(L, p, N1, N2):
     """Exact centre distance for a chain of L pitches."""
     A = (N1 + N2) / 2 - L
-    return p / 4 * (-A + math.sqrt(A * A - 8 * ((N2 - N1) / (2 * math.pi)) ** 2))
+    return p / 4 * (-A + math.sqrt(max(A * A - 8 * ((N2 - N1) / (2 * math.pi)) ** 2, 0.0)))
 
 
 def chordal(N):
@@ -84,7 +84,8 @@ def chordal(N):
 
 
 def wrap_deg(D1, D2, C):
-    return 180 - 2 * math.degrees(math.asin((D2 - D1) / (2 * C)))
+    s = (D2 - D1) / (2 * C)
+    return 0.0 if s >= 1 else 180 - 2 * math.degrees(math.asin(s))     # 0: the sprockets overlap (C too short)
 
 
 def shaft_bore(T_Nmm):
@@ -122,7 +123,7 @@ def evaluate(ch, strands, N1, N2, n1, P_W, Ks, C_mm=None):
          "detail": f"{Hd / 1000:.2f} kW design vs {Ha / 1000:.2f} kW allowed ({limit} limit)"},
         {"group": "Rating", "name": "Chain pull vs breaking load", "util": STATIC_MIN * F / Fu,
          "detail": f"{F:.0f} N, breaking {Fu / 1000:.1f} kN (x{Fu / F:.1f}, at least {STATIC_MIN:g})"},
-        {"group": "Geometry", "name": "Wrap on the small sprocket", "util": WRAP_MIN / wrap,
+        {"group": "Geometry", "name": "Wrap on the small sprocket", "util": WRAP_MIN / wrap if wrap > 0 else 9.9,
          "detail": f"{wrap:.0f}° (at least {WRAP_MIN:g}°)"},
         {"group": "Geometry", "name": "Sprockets clear each other", "util": (outside_diameter(p, N1) + outside_diameter(p, N2)) / 2 / (C - p),
          "detail": f"C = {C:.1f} mm"},

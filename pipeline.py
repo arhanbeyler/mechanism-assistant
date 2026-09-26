@@ -1554,6 +1554,10 @@ def _ratchet(result, spec, say):
     D = spec.get("outer_diameter_max_mm")
     say("Ratchet: hook angle from friction, tooth / pawl / pin sizing, the pawl's ride over the teeth...")
     d, s_checks = ratchet.design(float(T) * 1000, mat_key, z, float(D) if D else None)
+    if d is None:
+        return dict(result, status="failed", notes=notes, checks=[{"name": c["name"], "ok": False, "detail": c["detail"]}
+                                                                  for c in s_checks],
+                    message=" ".join(notes + [s_checks[0]["detail"] + ": a larger diameter or fewer teeth."]))
     g = d["geometry"]
     worst = {}
     for c in s_checks:
