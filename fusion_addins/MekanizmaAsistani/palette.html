@@ -366,7 +366,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -375,7 +375,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -714,7 +714,62 @@ Everything is computed on this computer, with a local AI.</div>
       <text class="lbl" x="${X(p.P[0]) + 5}" y="${Y(p.P[1]) - 5}">P</text></svg>`;
   }
 
+  function renderGenevaCard(d) {             // F3: Geneva (intermittent rotation)
+    const s = d.geneva;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const rows = [["Slots / step", `${s.n} / ${f(s.step, 0)}°`], ["Centre distance", `${f(s.C, 0)} mm`],
+                  ["Crank a", `${f(s.a, 1)} mm`], ["Wheel Ø", `${f(2 * s.R_o, 1)} mm`],
+                  ["Pin Ø / thickness", `${f(s.d_pin, 0)} / ${f(s.t, 0)} mm`],
+                  ["Index / dwell", `${f(s.index_deg, 0)}° / ${f(s.dwell_deg, 0)}°`],
+                  ["Peak wheel speed", `${f(s.w_ratio_max, 2)} × driver`],
+                  ["Shafts (driver / wheel)", `Ø${f(s.shaft_driver, 0)} / Ø${f(s.shaft_wheel, 0)}`]];
+    if (s.alpha_max) rows.push(["Peak wheel acc.", `${f(s.alpha_max, 0)} rad/s²`], ["Pin force", `${f(s.F_pin, 0)} N`],
+                               ["Driver torque", `${f(s.T_driver / 1000, 2)} N·m`]);
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Geneva</h3><table>${rows.map(([k, v]) =>
+          `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Top view · wheel angle φ(θ)</h3>${genevaSvg(s)}${phiSvg(s)}</div>
+      </div>`;
+  }
+
+  function genevaSvg(s) {                    // rest position: driver (disk + crank + pin) and the slotted wheel
+    const W = 220, H = 110, pad = 6, x0 = -s.a - s.d_pin, x1 = s.C + s.R_o, R = Math.max(s.R_o, s.a + s.d_pin);
+    const sc = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad) / (2 * R));
+    const X = (x) => pad + (x - x0) * sc, Y = (y) => H / 2 - y * sc;
+    let slots = "";
+    for (let k = 0; k < s.n; k++) {            // locking arcs: circles about each rest driver position, cut away
+      const g = Math.PI + k * 2 * Math.PI / s.n;
+      slots += `<circle cx="${X(s.C + s.C * Math.cos(g))}" cy="${Y(s.C * Math.sin(g))}" r="${(s.r_lock + 0.3) * sc}" fill="var(--panel)"/>`;
+    }
+    for (let k = 0; k < s.n; k++) {
+      const b = Math.PI + Math.PI / s.n + k * 2 * Math.PI / s.n, r0 = s.C - s.a;
+      slots += `<line x1="${X(s.C + r0 * Math.cos(b))}" y1="${Y(r0 * Math.sin(b))}" x2="${X(s.C + s.R_o * Math.cos(b))}"
+        y2="${Y(s.R_o * Math.sin(b))}" stroke="var(--panel)" stroke-width="${Math.max(1.5, s.slot_w * sc)}" stroke-linecap="round"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <circle cx="${X(s.C)}" cy="${Y(0)}" r="${s.R_o * sc}" fill="var(--rocker)"/>${slots}
+      <circle cx="${X(0)}" cy="${Y(0)}" r="${s.r_lock * sc}" fill="var(--crank)" opacity="0.85"/>
+      <line x1="${X(0)}" y1="${Y(0)}" x2="${X(-s.a)}" y2="${Y(0)}" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="${X(-s.a)}" cy="${Y(0)}" r="${Math.max(2, s.d_pin / 2 * sc)}" fill="var(--text)"/></svg>`;
+  }
+
+  function phiSvg(s) {                       // wheel angle over one driver turn (index, then dwell)
+    const W = 220, H = 70, l = 26, r = 6, t = 6, b = 16, th0 = s.curve[0][0];
+    const X = (th) => l + (th - th0) / 360 * (W - l - r), Y = (p) => t + (p / -s.step) * (H - t - b);
+    const line = s.curve.map(([th, p]) => `${X(th).toFixed(1)},${Y(p).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <line class="axis" x1="${X(th0)}" y1="${Y(0)}" x2="${X(th0 + 360)}" y2="${Y(0)}"/>
+      <text class="lbl" x="${l - 4}" y="${Y(-s.step) + 3}" text-anchor="end">${Math.round(s.step)}°</text>
+      <text class="lbl" x="${l - 4}" y="${Y(0) + 3}" text-anchor="end">0</text>
+      <text class="lbl" x="${X(th0 + s.index_deg / 2)}" y="${H - 4}" text-anchor="middle">index</text>
+      <text class="lbl" x="${X(th0 + s.index_deg + s.dwell_deg / 2)}" y="${H - 4}" text-anchor="middle">dwell</text>
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "geneva") return renderGenevaCard(d);
     if (d.mechanism_type === "straight_line") return renderStraightCard(d);
     if (d.mechanism_type === "reducer" && d.reducer2) return renderReducer2Card(d);
     if (d.mechanism_type === "slider_crank") return renderSliderCard(d);

@@ -233,7 +233,7 @@ def finish_design(result, fourbar):
 anim = {"running": False}
 STEP_DEG = 4          # input angle per step
 STEP_PAUSE = 0.02     # pause between steps (s)
-INPUT_JOINTS = ("Ground-Pinion", "Ground-Cam", "Ground-Shaft", "Ground-Input")   # + "Ground-Crank ..."
+INPUT_JOINTS = ("Ground-Pinion", "Ground-Cam", "Ground-Shaft", "Ground-Input", "Ground-Driver")   # + "Ground-Crank ..."
 
 
 def crank_motion():
@@ -258,6 +258,19 @@ def cam_follower():
     if not (table and sign and joint):
         return None
     return (adsk.fusion.SliderJointMotion.cast(joint[0].jointMotion), json.loads(table.value), float(sign.value))
+
+
+def geneva_wheel():
+    """For a Geneva design: (wheel joint, wheel angle table [deg per degree of driver turn], signs) or None."""
+    design = adsk.fusion.Design.cast(app.activeProduct)
+    if not design:
+        return None
+    table = design.attributes.itemByName(MARK_GROUP, "geneva_table")
+    signs = design.attributes.itemByName(MARK_GROUP, "geneva_signs")
+    joint = [j for j in design.rootComponent.asBuiltJoints if j.name == "Ground-Wheel"]
+    if not (table and signs and joint):
+        return None
+    return (adsk.fusion.RevoluteJointMotion.cast(joint[0].jointMotion), json.loads(table.value), json.loads(signs.value))
 
 
 def spring_frames():
@@ -317,6 +330,7 @@ def rotate(mode):
         send_to_palette("status", {"text": "Nothing to turn in the open document. Press 'Draw in Fusion' first."})
         return
     anim["running"] = True
+    anim["geneva_phi"] = None                  # re-read from the wheel joint at the first step
     send_to_palette("anim", {"running": True, "mode": mode})
 
     # Limited-angle mechanism (B9): with joint limits, oscillate between them instead of a full turn
@@ -367,6 +381,19 @@ def rotate(mode):
                         slider, table, sgn = cf
                         deg = int(round(math.degrees(motion.rotationValue))) % 360
                         slider.slideValue = sgn * table[deg * len(table) // 360] / 10.0
+                    gw = geneva_wheel()                # Geneva: the wheel follows its table, step by step
+                    if gw:
+                        wheel, table, sg = gw
+                        i0 = int(round(sg["driver"] * math.degrees(motion.rotationValue - delta))) % 360
+                        i1 = int(round(sg["driver"] * math.degrees(motion.rotationValue))) % 360
+                        dphi = table[i1] - table[i0]
+                        if abs(dphi) > sg["step"] / 2:      # the table restarts after a full turn
+                            dphi -= math.copysign(sg["step"], dphi)
+                        # Fusion rounds joint angles to 0.1°: keep the exact angle here, set it absolutely
+                        if anim.get("geneva_phi") is None:
+                            anim["geneva_phi"] = sg["wheel"] * math.degrees(wheel.rotationValue)
+                        anim["geneva_phi"] += dphi
+                        wheel.rotationValue = sg["wheel"] * math.radians(anim["geneva_phi"])
                 except Exception:
                     anim["running"] = False       # document closed etc.
                 finally:

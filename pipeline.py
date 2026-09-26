@@ -13,6 +13,7 @@ import cam_system
 import cams
 import coupler
 import function_gen
+import geneva
 import gears
 import interference
 import kinematics as kin
@@ -29,6 +30,20 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "geneva": {
+        "title": "Geneva (intermittent rotation)",
+        "params": [
+            {"key": "slots", "label": "Slots", "unit": "", "min": 3, "max": 12, "step": 1, "default": 6},
+            {"key": "center_distance_mm", "label": "Centre distance", "unit": "mm", "min": 30, "max": 300, "step": 5,
+             "default": 100},
+            {"key": "speed_rpm", "label": "Driver speed", "unit": "rpm", "min": 0, "max": 300, "step": 5, "default": 0,
+             "zero_label": "not given"},
+            {"key": "load_mass_kg", "label": "Table mass", "unit": "kg", "min": 0, "max": 20, "step": 0.1, "default": 0,
+             "zero_label": "none"},
+            {"key": "load_diameter_mm", "label": "Table diameter", "unit": "mm", "min": 0, "max": 500, "step": 10,
+             "default": 0, "zero_label": "none"},
+        ],
+    },
     "straight_line": {
         "title": "Straight-line linkage",
         "params": [
@@ -169,7 +184,7 @@ _INPUT_TURN = re.compile(
 
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
-_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line")
+_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva")
 
 
 def input_turn_backstop(text, spec):
@@ -290,10 +305,15 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None,
                        bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None,
                        span_mm=None, power_kW=None, stroke_mm=None, offset_mm=None, rod_length_mm=None,
-                       follower_mass_kg=None, follower_load_N=None):
+                       follower_mass_kg=None, follower_load_N=None, slots=None, center_distance_mm=None,
+                       load_mass_kg=None, load_diameter_mm=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "geneva":
+        return design_from_spec({"mechanism_type": "geneva", "slots": slots, "center_distance_mm": center_distance_mm,
+                                 "speed_rpm": speed_rpm or None, "load_mass_kg": load_mass_kg or None,
+                                 "load_diameter_mm": load_diameter_mm or None, "material": material})
     if kind == "straight_line":
         return design_from_spec({"mechanism_type": "straight_line", "stroke_mm": stroke_mm,
                                  "max_load_N": max_load_N or None, "speed_rpm": speed_rpm or None,
@@ -344,6 +364,8 @@ def design_from_spec(spec, on_status=None):
         return _slider_crank(result, spec, say)
     if mtype == "straight_line":
         return _straight_line(result, spec, say)
+    if mtype == "geneva":
+        return _geneva(result, spec, say)
     if mtype == "reducer":
         return _reducer(result, spec, say)
     if mtype == "spur_gear":
@@ -357,7 +379,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, slider-crank, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, slider-crank, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -624,6 +646,88 @@ def _straight_line(result, spec, say):
             msg += f" Mean speed on the line {d['v_mean_mm_s']:.0f} mm/s at {rpm:g} rpm."
         if F:
             msg += f" Max crank torque {d['T_max'] / 1000:.2f} N·m."
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _geneva(result, spec, say):
+    """F3: external Geneva (intermittent rotation). Required: number of slots (or the step angle) and the centre
+    distance. With the driver speed and a load (mass + diameter of a disk on the wheel shaft) the pin and the
+    wheel thickness are sized."""
+    result["mechanism_type"] = "geneva"
+    n, step, C = spec.get("slots"), spec.get("step_deg"), spec.get("center_distance_mm")
+    notes = []
+    if n is None and step:
+        k = 360.0 / float(step)
+        if abs(k - round(k)) > 1e-6:
+            return dict(result, status="missing",
+                        message=f"A {step:g}° step does not divide the turn; a Geneva wheel needs 360 / n.")
+        n = round(k)
+        notes.append(f"Step {step:g}°: n = 360 / {step:g} = {n} slots.")
+    missing = [name for v, name in ((n, "number of slots (or step angle)"), (C, "centre distance (mm)")) if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the Geneva mechanism: {', '.join(missing)}.")
+    n, C = int(n), float(C)
+    if not geneva.N_MIN <= n <= geneva.N_MAX:
+        return dict(result, status="failed",
+                    message=f"{n} slots: a Geneva wheel needs {geneva.N_MIN}..{geneva.N_MAX} slots.")
+    m_kg, D_mm, rpm = spec.get("load_mass_kg"), spec.get("load_diameter_mm"), spec.get("speed_rpm")
+    if m_kg and not D_mm:
+        return dict(result, status="missing",
+                    message="The load's inertia needs its diameter too (a disk of that mass and diameter).")
+    J = 0.5 * m_kg * (D_mm / 2000) ** 2 if m_kg else 0.0
+    mat_key = spec.get("material")
+    if mat_key not in strength.MATERIALS:
+        mat_key = "PLA"
+        notes.append("Material not given: PLA (3D print) assumed.")
+    mat = strength.MATERIALS[mat_key]
+    if not (J and rpm):
+        notes.append("No speed + load given, so no strength sizing: pin ~ crank / 5, 5 mm thick.")
+    say("Geneva: tangential entry geometry, index motion, pin and slot loads...")
+    d, s_checks = geneva.design(n, C, mat, rpm, J, geneva.DENSITY[mat_key])
+    g, ld = d["geometry"], d["loads"]
+    checks = [{"name": c["name"], "ok": c["util"] <= 1.0 + 1e-9,
+               "detail": c["detail"] + (f" · use {c['util'] * 100:.0f}%" if c["group"] in ("Pin", "Slot") else "")}
+              for c in s_checks]
+    checks.insert(1, {"name": "Index / dwell (driver turn)", "ok": True,
+                      "detail": f"{d['index_deg']:.0f}° moving, {d['dwell_deg']:.0f}° at rest"})
+    ok = all(c["ok"] for c in checks)
+    # table for Fusion: wheel rotation (deg, world, ccw +) for each degree of driver turn from the drawn pose
+    # (driver at 180°: mid-dwell, pin away from the wheel)
+    al, st = math.degrees(g["alpha"]), 360.0 / n
+    table = []
+    for k in range(360):
+        th = 180 + k - 360                                  # driver angle measured from the next index centre
+        if th < -al:
+            table.append(0.0)
+        elif th > al:
+            table.append(-st)
+        else:
+            table.append(round(math.degrees(geneva.wheel_angle(g, math.radians(th))), 4))
+    moving = [(round(th, 1), round(math.degrees(p), 3)) for th, p, _, _ in d["motion"][::4] if th <= al + 1e-9]
+    curve = moving + [(round(moving[0][0] + 360, 1), -st)]            # the index, then the dwell (flat)
+    om = ld["omega"]
+    info = {"n": n, "C": C, "a": g["a"], "R_o": g["R_o"], "d_pin": g["d_pin"], "t": d["t"], "r_lock": g["r_lock"],
+            "slot_w": g["slot_w"], "step": st, "index_deg": d["index_deg"], "dwell_deg": d["dwell_deg"],
+            "w_ratio_max": d["w_ratio_max"], "acc_max": d["acc_max"], "rpm": rpm, "J": d["J"],
+            "alpha_max": d["acc_max"] * om * om if rpm else None, "T_wheel": ld["T_wheel"], "F_pin": ld["F_pin"],
+            "T_driver": ld["T_driver"], "shaft_wheel": d["shaft_wheel"], "shaft_driver": d["shaft_driver"],
+            "curve": curve}
+    result.update(geneva=info, checks=checks, notes=notes, target={"slots": n, "center": C},
+                  fusion={"type": "geneva", "passed_checks": ok, "geometry": g, "t": d["t"], "gap": geneva.GAP,
+                          "shaft_wheel": d["shaft_wheel"], "shaft_driver": d["shaft_driver"], "table": table})
+    if not ok:
+        msg = "The design does not meet the checks above."
+        if n == 3:
+            msg += " Three slots give very high accelerations; 4 to 8 slots are usual."
+    else:
+        msg = (f"All checks passed. {n}-slot Geneva, centre distance {C:g} mm: crank {g['a']:.1f} mm with a "
+               f"Ø{g['d_pin']:g} pin, wheel Ø{2 * g['R_o']:.1f} mm, {d['t']:g} mm thick. The wheel turns {st:g}° while "
+               f"the driver turns {d['index_deg']:.0f}°, then rests for {d['dwell_deg']:.0f}°; the pin enters and "
+               f"leaves the slots tangentially (no impact). Peak wheel speed {d['w_ratio_max']:.2f}× the driver's.")
+        if rpm and J:
+            msg += (f" At {rpm:g} rpm: peak wheel acceleration {info['alpha_max']:.0f} rad/s², pin force "
+                    f"{ld['F_pin']:.0f} N, driver torque {ld['T_driver'] / 1000:.2f} N·m.")
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
     return result
 

@@ -157,7 +157,7 @@ def _clear(design):
 APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gray)", "Bearings": "Plastic - Matte (Gray)",
                "Housing": "Plastic - Matte (Gray)",
                "Crank": "Plastic - Matte (Red)", "Pinion": "Plastic - Matte (Red)", "Cam": "Plastic - Matte (Red)",
-               "Coupler": "Plastic - Matte (Blue)",
+               "Coupler": "Plastic - Matte (Blue)", "Driver": "Plastic - Matte (Red)", "Wheel": "Plastic - Matte (Green)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
                "Shaft": "Steel - Satin", "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin",
@@ -186,6 +186,8 @@ def paint(design):
                     body.appearance = _appearance(design, APPEARANCES["Key"])
                 elif body.name == "Top plate":
                     body.appearance = _appearance(design, APPEARANCES["Base"])
+                elif body.name.startswith(("Shaft", "Pin")) and name in ("Driver", "Wheel"):   # F3: steel parts
+                    body.appearance = _appearance(design, APPEARANCES["Shaft"])
     except Exception:
         pass
 
@@ -204,7 +206,8 @@ def build(mech, reuse=True):
         design.attributes.add(MARK_GROUP, MARK_NAME, "1")
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
-    for key, owner in (("cam_table", "cam"), ("cam_slide_sign", "cam"), ("spring_frames", "spring")):
+    for key, owner in (("cam_table", "cam"), ("cam_slide_sign", "cam"), ("spring_frames", "spring"),
+                       ("geneva_table", "geneva"), ("geneva_signs", "geneva")):
         old = design.attributes.itemByName(MARK_GROUP, key)
         if old and mech.get("type") != owner:
             old.deleteMe()                    # no animation data of the previous design may remain
@@ -215,7 +218,8 @@ def build(mech, reuse=True):
              "reducer": "reducer",            # E1: single-stage reducer (system)
              "slider_crank": "slider_crank",  # F1: slider-crank (piston)
              "reducer2": "reducer2",          # E2: two-stage reducer
-             "straight_line": "straight_line"}.get(mech.get("type"))   # F2: Hoeckens straight-line linkage
+             "straight_line": "straight_line",  # F2: Hoeckens straight-line linkage
+             "geneva": "geneva"}.get(mech.get("type"))   # F3: Geneva (wheel driven from a table by the add-in)
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)
