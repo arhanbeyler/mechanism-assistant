@@ -20,8 +20,8 @@ Sentences can be written in English or Turkish.
 | ![slider-crank](docs/img/slider_crank.png) | ![two-stage reducer](docs/img/reducer2.png) | ![straight-line](docs/img/straight_line.png) |
 | **Geneva (intermittent rotation)** | **Toggle clamp (over-centre)** | **Scotch yoke** |
 | ![geneva](docs/img/geneva.png) | ![toggle clamp](docs/img/toggle_clamp.png) | ![scotch yoke](docs/img/scotch_yoke.png) |
-| **Quick return (shaper)** | | |
-| ![quick return](docs/img/quick_return.png) | | |
+| **Quick return (shaper)** | **Ratchet and pawl** | |
+| ![quick return](docs/img/quick_return.png) | ![ratchet](docs/img/ratchet.png) | |
 
 ## Core rule: the LLM never produces a number
 
@@ -39,7 +39,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (57/57, incl. 12
+  catches input angles and speeds the model misses. The evaluation set is `tools/llm_eval.py` (59/59, incl. 12
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -60,6 +60,7 @@ flowchart LR
 | Toggle clamp | Arm opening, spindle distance (handle travel, handle length defaulted and reported); dead-centre synthesis (handle link and coupler in line at the clamped pose) swept and refined for the transmission angle, then 3° over centre onto a stop | Opening (simulation), arm back-off past the dead centre, transmission angle near the lock (40..140°) and over the stroke (≥ 20°); handle torque from statics equals virtual work and falls to 0 at the dead centre; locked-pose statics (coupler, arm pivot, stop torque), steel pins, arm bending at B; split base plates + post clear of the sweep; in Fusion zero overlap over the stroke, arm swing exactly as asked |
 | Scotch yoke | Stroke (or crank); crank r = S/2, pin in a slot square to the slide | Exactly harmonic x = r cos θ (a_max against a slider-crank's), crank torque F·r, slotted yoke bar in bending + slot bearing, pins, shaft; in Fusion the yoke follows r cos θ exactly over a turn, no overlap |
 | Quick return (shaper) | Stroke and time ratio Q: β = 180/(Q+1), r/d = cos β, lever L = S/(2 cos β), pin travel kept 15 % short of the lever tip | Simulated stroke and Q, slow-stroke direction, cutting / return speeds, crank torque from statics = virtual work, slotted lever bending, pins, shaft (up to Ø30); in Fusion two pin-slot joints, the ram follows L sin ψ exactly over a turn, no overlap |
+| Ratchet and pawl | Holding torque (teeth, diameter optional); saw teeth with an undercut locking face, pawl pivot on the tangent at the contact; smallest wheel that passes, face width ≤ one pitch | Self-engagement tan(hook) > μ (hook = friction angle + 5°), tooth bending / shear / face bearing, pawl buckling and compression, pivot pin and shaft (steel); the pawl's ride over the teeth found by collision search (least lift, 0.3° margin); in Fusion 0.2 mm clearance at rest and the pawl riding in contact, no overlap |
 | Link sizing | Per-link width/thickness for load and material (PLA, PETG, Al 6061, steel), local bosses D = 2.5d | Euler buckling, net section, bending, pin shear and bearing, Roark K_t, L/200 deflection incl. FEA-calibrated hub compliance, steel shaft torsion, layer interference ≥ 1 mm |
 | Spur gears | Lewis bending (Shigley Y table, Barth K_v), involute teeth | Contact ratio ≥ 1.2, undercut z ≥ 17, Hertz contact stress (info), shaft and hub |
 | Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)) |
@@ -70,7 +71,7 @@ flowchart LR
 | **Two-stage reducer (system)** | Ratios above 6: the ratio is split over two stages (lightest gear set near √i); three shafts, the intermediate one carries two gears (loads in two planes, reactions, M/EI deflection and Rayleigh speed with several masses); gear bores, key lengths, bearing seats and the common span iterated together | Per shaft: fatigue / yield at every seat, keys, bearing life, slopes and deflections at each gear; gear 2 clears the output shaft, gear 4 clears the input shaft, material between bearing seats; in Fusion, tooth overlap 0 in both stages at 5 angles, both ratios exact |
 
 In Fusion: **⟳ 1 turn** and **▶ continuous** buttons drive the input joint (gear motion link, cam follower from
-the s(θ) table, Geneva wheel from its φ(θ) table, rocker-rocker oscillation within limits). The spring is animated as pre-built compression frames.
+the s(θ) table, Geneva wheel from its φ(θ) table, ratchet pawl riding the teeth, rocker-rocker oscillation within limits). The spring is animated as pre-built compression frames.
 Sliders in the panel re-run the engine live and colour the swing slider by feasibility.
 
 ## Verification highlights
@@ -114,7 +115,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 228 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 233 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -129,7 +130,7 @@ function_gen.py      Freudenstein function generator (limited-input four-bar)
 strength.py          link, pin and shaft sizing; hub compliance; K_t; deflection
 interference.py      layer order and shaft-to-link clearance over the cycle
 fea_local.py         gmsh + scikit-fem link model (with hub) vs hand calculation
-gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py   module engines
+gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py   module engines
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)
 reducer.py reducer2.py cam_system.py   systems: modules sized together until their constraints agree
 fusion_lib/          Fusion builders (one per module) + shared document handling

@@ -366,7 +366,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -375,7 +375,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -849,7 +849,41 @@ Everything is computed on this computer, with a local AI.</div>
       </div>`;
   }
 
+  function renderRatchetCard(d) {            // F6: ratchet and pawl
+    const s = d.ratchet;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const rows = [["Wheel", `Ø${f(2 * s.R, 0)} × ${f(s.b, 0)} mm, ${s.z} teeth`], ["Tooth height / pitch", `${f(s.h, 1)} / ${f(s.pitch, 1)} mm`],
+                  ["Hook angle", `${f(s.hook, 1)}° (μ = ${s.mu})`], ["Holding torque", `${f(s.T, 1)} N·m → ${f(s.F, 0)} N on the tooth`],
+                  ["Pawl", `${f(s.lp, 0)} mm to the contact, ${f(s.w_pawl, 1)} mm wide`],
+                  ["Pins", `pawl Ø${f(s.d_pin, 0)}, shaft Ø${f(s.d_shaft, 0)} (steel)`],
+                  ["Slip back (max)", `${f(s.backlash, 1)}°`], ["Pawl lift per tooth", `${f(s.lift_max, 1)}°`]];
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Ratchet and pawl</h3><table>${rows.map(([k, v]) =>
+          `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+        <div class="col"><h3>Wheel and pawl</h3>${ratchetSvg(s)}</div>
+      </div>`;
+  }
+
+  function ratchetSvg(s) {                   // wheel outline, pawl head and bar to the pivot (to scale)
+    const W = 220, H = 170, pad = 8, pts = s.outline.concat(s.head, [s.pivot]);
+    const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+    const x0 = Math.min(...xs) - 6, x1 = Math.max(...xs) + 6, y0 = Math.min(...ys) - 6, y1 = Math.max(...ys) + 6;
+    const sc = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad) / (y1 - y0));
+    const X = (x) => (W - (x1 - x0) * sc) / 2 + (x - x0) * sc, Y = (y) => (H + (y1 - y0) * sc) / 2 - (y - y0) * sc;
+    const poly = (p) => p.map((q) => `${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <polygon points="${poly(s.outline)}" fill="var(--rocker)"/>
+      <line x1="${X(s.top[0])}" y1="${Y(s.top[1])}" x2="${X(s.pivot[0])}" y2="${Y(s.pivot[1])}" stroke="var(--crank)" stroke-width="${Math.max(2, s.w_pawl * sc)}" stroke-linecap="round"/>
+      <polygon points="${poly(s.head)}" fill="var(--crank)"/>
+      <circle cx="${X(s.pivot[0])}" cy="${Y(s.pivot[1])}" r="3" fill="var(--panel)" stroke="var(--text)"/>
+      <circle cx="${X(0)}" cy="${Y(0)}" r="3.5" fill="var(--panel)" stroke="var(--text)"/>
+      <text class="lbl" x="${X(0)}" y="${Y(0) + 16}" text-anchor="middle">free ↺</text></svg>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "ratchet") return renderRatchetCard(d);
     if (d.mechanism_type === "scotch_yoke" || d.mechanism_type === "quick_return") return renderSlottedCard(d);
     if (d.mechanism_type === "toggle_clamp") return renderClampCard(d);
     if (d.mechanism_type === "geneva") return renderGenevaCard(d);

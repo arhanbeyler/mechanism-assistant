@@ -23,6 +23,7 @@ import slider_crank
 import springs
 import toggle
 import llm_extract
+import ratchet
 import reducer
 import reducer2
 import strength
@@ -32,6 +33,15 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "ratchet": {
+        "title": "Ratchet and pawl",
+        "params": [
+            {"key": "torque_Nm", "label": "Holding torque", "unit": "N·m", "min": 0.5, "max": 200, "step": 0.5, "default": 5},
+            {"key": "teeth", "label": "Teeth", "unit": "", "min": 8, "max": 60, "step": 1, "default": 24},
+            {"key": "outer_diameter_max_mm", "label": "Wheel diameter", "unit": "mm", "min": 0, "max": 300, "step": 5,
+             "default": 0, "zero_label": "sized"},
+        ],
+    },
     "scotch_yoke": {
         "title": "Scotch yoke",
         "params": [
@@ -344,10 +354,13 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        span_mm=None, power_kW=None, stroke_mm=None, offset_mm=None, rod_length_mm=None,
                        follower_mass_kg=None, follower_load_N=None, slots=None, center_distance_mm=None,
                        load_mass_kg=None, load_diameter_mm=None, opening_deg=None, handle_travel_deg=None,
-                       arm_length_mm=None, clamp_force_N=None, handle_length_mm=None):
+                       arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "ratchet":
+        return design_from_spec({"mechanism_type": "ratchet", "torque_Nm": torque_Nm, "teeth": teeth,
+                                 "outer_diameter_max_mm": outer_diameter_max_mm or None, "material": material})
     if kind in ("scotch_yoke", "quick_return"):
         return design_from_spec({"mechanism_type": kind, "stroke_mm": stroke_mm,
                                  "time_ratio": time_ratio if time_ratio and time_ratio > 1 else None,
@@ -418,6 +431,8 @@ def design_from_spec(spec, on_status=None):
         return _toggle_clamp(result, spec, say)
     if mtype == "scotch_yoke":
         return _scotch_yoke(result, spec, say)
+    if mtype == "ratchet":
+        return _ratchet(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -433,7 +448,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1014,6 +1029,62 @@ def _quick_return(result, spec, say):
                f"with the crank turning counter-clockwise).")
         if F:
             msg += f" Max crank torque {d['T_max'] / 1000:.2f} N·m, max pin force on the lever {d['N_max']:.0f} N."
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _ratchet(result, spec, say):
+    """F6: ratchet and pawl. Required: the holding torque. Teeth default to 24; the diameter is sized unless given."""
+    result["mechanism_type"] = "ratchet"
+    T = spec.get("torque_Nm")
+    if not T:
+        return dict(result, status="missing", message="Missing for the ratchet: the torque it must hold (N·m).")
+    notes = []
+    z = spec.get("teeth")
+    if not z:
+        z = 24
+        notes.append("Number of teeth not given: 24 assumed (15° of backlash).")
+    z = int(z)
+    if not 8 <= z <= 60:
+        return dict(result, status="failed", message=f"{z} teeth: this module designs 8..60.")
+    mat_key = spec.get("material")
+    if mat_key not in strength.MATERIALS:
+        mat_key = "PLA"
+        notes.append("Material not given: PLA (3D print) assumed.")
+    mat = strength.MATERIALS[mat_key]
+    D = spec.get("outer_diameter_max_mm")
+    say("Ratchet: hook angle from friction, tooth / pawl / pin sizing, the pawl's ride over the teeth...")
+    d, s_checks = ratchet.design(float(T) * 1000, mat_key, z, float(D) if D else None)
+    g = d["geometry"]
+    worst = {}
+    for c in s_checks:
+        if c["group"] not in worst or c["util"] > worst[c["group"]]["util"]:
+            worst[c["group"]] = c
+    checks = [{"name": c["name"], "ok": c["util"] <= 1.0,
+               "detail": c["detail"] + (f" · use {c['util'] * 100:.0f}%" if k != "Motion" else "")}
+              for k, c in worst.items()]
+    ok = all(c["ok"] for c in checks)
+    pose = ratchet.pawl_pose(g, d["lp"])
+    head, top = ratchet.pawl_points(g, pose, d["w_pawl"])
+    table, lift_sign = ratchet.ride_table(g, pose, head)
+    r3 = lambda p: [round(p[0], 3), round(p[1], 3)]
+    info = {"z": z, "R": g["R"], "h": g["h"], "pitch": g["pitch"], "hook": g["alpha"], "b": d["b"], "lp": d["lp"],
+            "w_pawl": d["w_pawl"], "d_pin": d["d_pin"], "d_shaft": d["d_shaft"], "F": d["F"], "mu": d["mu"],
+            "backlash": d["backlash_deg"], "T": float(T), "lift_max": max(table),
+            "outline": [r3(p) for p in ratchet.outline(g)], "head": [r3(p) for p in head], "top": r3(top),
+            "pivot": r3(pose["pivot"])}
+    result.update(ratchet=info, checks=checks, notes=notes, target={"torque": float(T)},
+                  fusion={"type": "ratchet", "passed_checks": ok, "outline": info["outline"], "head": info["head"],
+                          "top": info["top"], "pivot": info["pivot"], "b": d["b"], "w_pawl": d["w_pawl"],
+                          "d_pin": d["d_pin"], "d_shaft": d["d_shaft"], "R": g["R"], "table": table,
+                          "lift_sign": lift_sign})
+    if not ok:
+        msg = "The design does not meet the checks above. Suggestion: fewer teeth, a larger diameter or a stronger material."
+    else:
+        msg = (f"All checks passed. Ratchet Ø{2 * g['R']:g} mm, {z} teeth {g['h']:.1f} mm high, {d['b']:g} mm thick, "
+               f"hook angle {g['alpha']:.1f}° (friction angle {math.degrees(math.atan(d['mu'])):.1f}°) so the pawl pulls "
+               f"itself in; the tooth takes {d['F']:.0f} N at {T:g} N·m. It turns freely counter-clockwise and "
+               f"may slip back up to {360 / z:.1f}° before a tooth catches; the pawl lifts {max(table):.1f}° over each tooth.")
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
     return result
 

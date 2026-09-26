@@ -233,7 +233,8 @@ def finish_design(result, fourbar):
 anim = {"running": False}
 STEP_DEG = 4          # input angle per step
 STEP_PAUSE = 0.02     # pause between steps (s)
-INPUT_JOINTS = ("Ground-Pinion", "Ground-Cam", "Ground-Shaft", "Ground-Input", "Ground-Driver")   # + "Ground-Crank ..."
+INPUT_JOINTS = ("Ground-Pinion", "Ground-Cam", "Ground-Shaft", "Ground-Input", "Ground-Driver",
+                "Ground-Ratchet")   # + "Ground-Crank ..."
 
 
 def crank_motion():
@@ -261,16 +262,21 @@ def cam_follower():
 
 
 def geneva_wheel():
-    """For a Geneva design: (wheel joint, wheel angle table [deg per degree of driver turn], signs) or None."""
+    """A joint driven from a table (Geneva wheel, ratchet pawl): (follower joint, its angle [deg] per degree of
+    input turn, signs) or None. signs: input / follower joint senses, "step" (the follower gains this much per
+    turn; 0 = it oscillates), "follower" (joint name), "forward" (the input's free direction)."""
     design = adsk.fusion.Design.cast(app.activeProduct)
     if not design:
         return None
     table = design.attributes.itemByName(MARK_GROUP, "geneva_table")
     signs = design.attributes.itemByName(MARK_GROUP, "geneva_signs")
-    joint = [j for j in design.rootComponent.asBuiltJoints if j.name == "Ground-Wheel"]
-    if not (table and signs and joint):
+    if not (table and signs):
         return None
-    return (adsk.fusion.RevoluteJointMotion.cast(joint[0].jointMotion), json.loads(table.value), json.loads(signs.value))
+    sg = json.loads(signs.value)
+    joint = [j for j in design.rootComponent.asBuiltJoints if j.name == sg.get("follower", "Ground-Wheel")]
+    if not joint:
+        return None
+    return (adsk.fusion.RevoluteJointMotion.cast(joint[0].jointMotion), json.loads(table.value), sg)
 
 
 def spring_frames():
@@ -375,19 +381,21 @@ def rotate(mode):
             def step(delta=delta):
                 try:
                     motion = crank_motion()
+                    gw = geneva_wheel()
+                    if gw:
+                        delta = delta * gw[2].get("forward", 1)   # a ratchet only turns its free way
                     motion.rotationValue = motion.rotationValue + delta
                     cf = cam_follower()                # cam: follower from the s(theta) table
                     if cf:
                         slider, table, sgn = cf
                         deg = int(round(math.degrees(motion.rotationValue))) % 360
                         slider.slideValue = sgn * table[deg * len(table) // 360] / 10.0
-                    gw = geneva_wheel()                # Geneva: the wheel follows its table, step by step
-                    if gw:
+                    if gw:                             # Geneva wheel / pawl: follows its table, step by step
                         wheel, table, sg = gw
                         i0 = int(round(sg["driver"] * math.degrees(motion.rotationValue - delta))) % 360
                         i1 = int(round(sg["driver"] * math.degrees(motion.rotationValue))) % 360
                         dphi = table[i1] - table[i0]
-                        if abs(dphi) > sg["step"] / 2:      # the table restarts after a full turn
+                        if sg["step"] and abs(dphi) > sg["step"] / 2:   # the table restarts after a full turn
                             dphi -= math.copysign(sg["step"], dphi)
                         # Fusion rounds joint angles to 0.1°: keep the exact angle here, set it absolutely
                         if anim.get("geneva_phi") is None:
