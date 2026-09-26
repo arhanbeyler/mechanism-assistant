@@ -80,7 +80,7 @@ In a system one module's output is another's input (forces, diameters and masses
 - [ ] **L3. Rename the add-in folder / id** to `MechanismAssistant` (needs re-registering the add-in in Fusion; the document tag group changes with it)
 
 ## K. Usability
-- [ ] **K1. Edits in the chat.** "Make it a bit longer", "use aluminium": changes the previous design
+- [x] **K1. Edits in the chat.** "Make the crank 40 mm", "use aluminium", "krankı 5 mm uzat", "devri iki katına çıkar": the LLM lists the changes (field, set / add / multiply, amount), the engine applies them to the design in the panel and redesigns. Every amount must appear in the message (unit conversions allowed); "a bit longer" gets a question, not a guess. llm_eval 36/36 (11 edit cases)
 - [ ] **K2. Torque curve and dynamic forces for the four-bar** (also needed for the flywheel)
 
 ## D. Outside world

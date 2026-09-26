@@ -152,6 +152,64 @@ for _schema_, _ in MODULE_EXTRACTORS.values():
 KIND_TO_TYPE = {"reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
+# ---------------------------------------------------------------- 3) edits of the current design (K1)
+KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "reducer": "reducer", "spur_gear": "spur_gear",
+                "spring": "spring", "cam": "cam", "shaft": "shaft"}
+DESCRIPTION = {"fourbar": "four-bar linkage", "reducer": "single-stage gear reducer (gearbox)",
+               "spur_gear": "spur gear pair", "spring": "compression spring", "cam": "disk cam with roller follower",
+               "shaft": "rotating shaft"}
+NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}
+
+
+def editable_fields(kind):
+    """Fields of a module that an edit may change: (numeric fields, {text field: allowed values})."""
+    props = MODULE_EXTRACTORS[kind][0]["properties"]
+    numeric, choice = [], {}
+    for k, v in props.items():
+        if k in NOT_EDITABLE:
+            continue
+        if "enum" in v:
+            choice[k] = [e for e in v["enum"] if e is not None]
+        else:
+            numeric.append(k)
+    return numeric, choice
+
+
+def _edit_schema(fields):
+    return _schema({
+        "is_edit": {"type": "boolean"},
+        "changes": {"type": "array", "items": _schema({
+            "field": {"type": "string", "enum": fields},
+            "op": {"type": "string", "enum": ["set", "add", "multiply"]},
+            "number": {"type": ["number", "null"]},
+            "choice": {"type": ["string", "null"]},
+        })},
+    })
+
+
+def extract_edit(user_text: str, prev_spec: dict) -> dict:
+    """Is the message an edit of the current design, and which changes? Returns {"is_edit", "changes"}.
+    The LLM only reports what the text says; pipeline.apply_edit checks the numbers and applies them."""
+    kind = KIND_OF_TYPE.get(prev_spec.get("mechanism_type"))
+    if kind is None:
+        return {"is_edit": False, "changes": []}
+    numeric, choice = editable_fields(kind)
+    current = {k: prev_spec.get(k) for k in numeric + list(choice)}
+    prompt = COMMON + (
+        f"The current design is a {DESCRIPTION[kind]} with these values: {json.dumps(current)}. "
+        "Decide whether the user's new message asks to CHANGE this design ('make the crank 40 mm', 'use aluminium', "
+        "'yükü 10 kg yap', 'krankı 5 mm uzat', 'devri iki katına çıkar', 'alüminyum olsun', 'salınımı 70 derece yap') "
+        "-> is_edit = true, or describes a NEW / different request (a new mechanism, a gear, a spring... with its own "
+        "values) -> is_edit = false and changes = []. "
+        "For each change: field from the list; op 'set' for a new absolute value, 'add' for 'X more / less' "
+        "(negative number for less / shorter), 'multiply' for 'twice' (2), 'half' (0.5), 'three times' (3). "
+        "number: ONLY an amount written in the message, converted to the field's unit (_mm: mm, _deg: degrees, "
+        "_N: newtons with 1 kg = 9.81 N, _Nm: N·m, _rpm: rpm, _kW: kW); if the message gives no amount "
+        "('biraz daha uzun', 'a bit longer') number = null. "
+        f"choice: for these text fields only, one of the allowed values: {json.dumps(choice)}; otherwise null.")
+    return _chat(prompt, user_text, _edit_schema(numeric + list(choice)), "edit")
+
+
 def _chat(system, user_text, schema, name):
     body = {
         "model": MODEL,

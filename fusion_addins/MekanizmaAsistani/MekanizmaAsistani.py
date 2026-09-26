@@ -47,6 +47,7 @@ handlers = []           # Fusion event handlers are kept referenced so they stay
 pending = {}            # job id -> function to run on the main thread
 pending_lock = threading.Lock()
 server = None
+session = {"spec": None}   # the design currently shown in the panel (K1: a sentence may edit it)
 
 
 # ---------------------------------------------------------------- helpers
@@ -120,6 +121,8 @@ def start_preview(params, req):
         except Exception as e:
             log("preview error:\n" + traceback.format_exc())
             result = {"status": "error", "message": f"Calculation error: {e}"}
+        if result.get("spec"):
+            session["spec"] = result["spec"]
         result["req"] = req
         run_on_main(lambda: send_to_palette("preview", result))
 
@@ -197,7 +200,7 @@ def start_design(text=None, params=None):
             if params is not None:
                 result = pipeline.design_from_params(**params)
             else:
-                result = pipeline.design_from_text(text, on_status=status)
+                result = pipeline.design_from_text(text, on_status=status, prev_spec=session["spec"])
         except urllib.error.URLError:
             result = {"status": "error",
                       "message": "Could not reach the local LLM (Ollama). Is Ollama running?"}
@@ -212,6 +215,8 @@ def start_design(text=None, params=None):
 
 
 def finish_design(result, fourbar):
+    if result.get("spec"):
+        session["spec"] = result["spec"]
     if result.get("status") == "ok":
         try:
             fourbar.build(result["fusion"])

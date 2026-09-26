@@ -16,6 +16,7 @@ import kinematics as kin
 import shafts
 import springs
 import reducer
+import llm_extract
 import strength
 from llm_extract import extract_spec
 
@@ -158,13 +159,89 @@ def input_turn_backstop(text, spec):
     return fixed, f"Read from the sentence: the input arm turns {angle:g}° (limited-angle mechanism)."
 
 
-def design_from_text(text, on_status=None):
+# ---------------------------------------------------------------- K1: edits of the current design
+_NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+# factors written as words ("twice", "iki katına", "yarısı") for 'multiply' edits
+_WORD_FACTORS = {2.0: ("twice", "double", "iki kat", "2 kat"), 3.0: ("three times", "triple", "üç kat", "3 kat"),
+                 0.5: ("half", "yarı", "yarısı", "yarıya")}
+_UNIT_FACTORS = (1.0, 10.0, 9.81, 1000.0, 0.1, 0.001)   # as written, cm -> mm, kg -> N, kN -> N / m -> mm, ...
+
+
+def _number_in_text(value, text, op):
+    """The LLM's number must come from the user's text (possibly unit-converted) - never invented."""
+    nums = [float(n.replace(",", ".")) for n in _NUMBER.findall(text)]
+    if any(abs(abs(value) - n * f) <= 1e-6 * max(1.0, n * f) for n in nums for f in _UNIT_FACTORS):
+        return True
+    low = text.lower()
+    return op == "multiply" and any(abs(value - k) < 1e-9 and any(w in low for w in words)
+                                    for k, words in _WORD_FACTORS.items())
+
+
+def _field_label(key):
+    for mod in MODULES.values():
+        for p in mod["params"]:
+            if p["key"] == key:
+                return p["label"].lower()
+    return {"crank_length_mm": "input arm / crank length", "input_swing_deg": "input angle",
+            "output_swing_deg": "output swing", "time_ratio": "time ratio Q", "max_load_N": "tip load",
+            "power_kW": "motor power", "radial_force_N": "radial force", "roller_radius_mm": "roller radius",
+            "material": "material"}.get(key, key.replace("_", " "))
+
+
+def apply_edit(prev_spec, edit, text):
+    """Applies the LLM's change list to the previous spec. Returns (new spec, note) or (None, question).
+    Every number is checked against the user's text; a change without an amount is asked about, not guessed."""
+    spec, done = dict(prev_spec), []
+    for c in edit.get("changes", []):
+        key, op, num, choice = c["field"], c["op"], c.get("number"), c.get("choice")
+        label = _field_label(key)
+        if choice is not None and num is None:
+            spec[key] = choice
+            done.append(f"{label} → {choice}")
+            continue
+        if num is None:
+            return None, f"How much should the {label} change? Please give a value, e.g. \"make the {label} 40\"."
+        if not _number_in_text(num, text, op):
+            return None, f"I could not find the value {num:g} for the {label} in your message; please write it out."
+        old = spec.get(key)
+        if op != "set" and old is None:
+            return None, f"The current design has no {label} to change; please give the new value."
+        new = num if op == "set" else old + num if op == "add" else old * num
+        spec[key] = round(new, 6)
+        done.append(f"{label} {'' if old is None else f'{old:g} → '}{new:g}")
+    if not done:
+        return None, "I understood this as a change, but not what to change. Which value should be different?"
+    if spec.get("mechanism_type") in ("crank_rocker", "rocker_rocker"):
+        if spec.get("input_swing_deg") is not None:          # the input angle decides the four-bar kind
+            full = spec["input_swing_deg"] >= 360
+            spec["mechanism_type"] = "crank_rocker" if full else "rocker_rocker"
+            if full:
+                spec["input_swing_deg"] = None
+        if spec.get("time_ratio") and spec["time_ratio"] > 1:
+            spec["quick_return"] = True
+    return spec, "Changed: " + "; ".join(done) + "."
+
+
+def design_from_text(text, on_status=None, prev_spec=None):
     """
     Design from a sentence. Returns dict(status, message, spec, ...)
       status: "ok" | "failed" (did not pass the checks) | "missing" | "unsupported"
     on_status(str): optional progress callback.
+    prev_spec: the current design's spec (panel); the sentence may be an edit of it (K1).
     """
     say = on_status or (lambda s: None)
+    if prev_spec and prev_spec.get("mechanism_type") in llm_extract.KIND_OF_TYPE:
+        say("Is this a change to the current design?")
+        edit = llm_extract.extract_edit(text, prev_spec)
+        if edit.get("is_edit"):
+            spec, note = apply_edit(prev_spec, edit, text)
+            if spec is None:
+                return {"status": "missing", "message": note, "spec": prev_spec, "text": text,
+                        "mechanism_type": prev_spec.get("mechanism_type")}
+            result = design_from_spec(spec, on_status)
+            result["message"] = note + " " + result.get("message", "")
+            result.update(text=text, edit=True)
+            return result
     say("The LLM is reading the sentence...")
     spec, note = input_turn_backstop(text, extract_spec(text))
     result = design_from_spec(spec, on_status)

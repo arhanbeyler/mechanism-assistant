@@ -60,6 +60,52 @@ CASES = [
 ]
 
 
+# K1 edits: (current design, message, expected) with expected = spec fields after the edit,
+# "ask" (no amount given: the engine must ask) or "new" (a new request, not an edit)
+FB = {"mechanism_type": "crank_rocker", "crank_length_mm": 30, "output_swing_deg": 60, "input_swing_deg": None,
+      "quick_return": False, "time_ratio": None, "max_load_N": None, "material": "PLA"}
+RED = {"mechanism_type": "reducer", "gear_ratio": 3, "torque_Nm": 20, "power_kW": None, "speed_rpm": 1450,
+       "material": "steel", "shaft_material": "1045"}
+EDIT_CASES = [
+    (FB, "krankı 40 mm yap", dict(crank_length_mm=40, output_swing_deg=60)),
+    (FB, "alüminyum olsun", dict(material="aluminum", crank_length_mm=30)),
+    (FB, "uçtaki yük 10 kg olsun", dict(max_load_N=98.1)),
+    (FB, "salınımı 70 dereceye çıkar", dict(output_swing_deg=70)),
+    (FB, "krankı 5 mm uzat", dict(crank_length_mm=35)),
+    (FB, "biraz daha uzun olsun", "ask"),
+    (FB, "make the crank 45 mm", dict(crank_length_mm=45)),
+    (FB, "1:3 dişli çifti, giriş torku 2 N·m", "new"),
+    (RED, "oranı 4 yap", dict(gear_ratio=4, torque_Nm=20)),
+    (RED, "devri iki katına çıkar", dict(speed_rpm=2900)),
+    (RED, "use 1020 steel for the shafts", dict(shaft_material="1020")),
+]
+
+
+def _same(a, b):
+    return a == b or (isinstance(b, (int, float)) and isinstance(a, (int, float)) and abs(a - b) < 1e-6)
+
+
+def run_edits():
+    import pipeline
+    fails = 0
+    for prev, text, want in EDIT_CASES:
+        t0 = time.time()
+        edit = pipeline.llm_extract.extract_edit(text, prev)
+        if want == "new":
+            bad = {"is_edit": (edit["is_edit"], False)} if edit["is_edit"] else {}
+        else:
+            spec, note = pipeline.apply_edit(prev, edit, text) if edit["is_edit"] else (None, "not an edit")
+            if want == "ask":
+                bad = {} if spec is None and edit["is_edit"] else {"expected a question": (edit, note)}
+            elif spec is None:
+                bad = {"edit": (edit, note)}
+            else:
+                bad = {k: (spec.get(k), v) for k, v in want.items() if not _same(spec.get(k), v)}
+        fails += bool(bad)
+        print(f"{'OK  ' if not bad else 'FAIL'} ({time.time() - t0:.1f} s) [edit] {text}" + (f"\n      {bad}" if bad else ""))
+    return fails
+
+
 def main():
     fails = 0
     for text, want in CASES:
@@ -70,8 +116,10 @@ def main():
                                              and abs(spec.get(k) - v) < 1e-6))}
         fails += bool(bad)
         print(f"{'OK  ' if not bad else 'FAIL'} ({time.time() - t0:.1f} s) {text}" + (f"\n      {bad}" if bad else ""))
-    print(f"\n{len(CASES) - fails}/{len(CASES)} correct")
-    return fails
+    edit_fails = run_edits()
+    total = len(CASES) + len(EDIT_CASES)
+    print(f"\n{total - fails - edit_fails}/{total} correct")
+    return fails + edit_fails
 
 
 if __name__ == "__main__":
