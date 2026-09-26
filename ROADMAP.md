@@ -89,7 +89,7 @@ In a system one module's output is another's input (forces, diameters and masses
 
 ## K. Usability
 - [x] **K1. Edits in the chat.** "Make the crank 40 mm", "use aluminium", "krankı 5 mm uzat", "devri iki katına çıkar": the LLM lists the changes (field, set / add / multiply, amount), the engine applies them to the design in the panel and redesigns. Every amount must appear in the message (unit conversions allowed); "a bit longer" gets a question, not a guess. llm_eval 36/36 (11 edit cases)
-- [ ] **K2. Torque curve and dynamic forces for the four-bar** (also needed for the flywheel)
+- [x] **K2. Torque curve and dynamic forces for the four-bar.** Norton's 9×9 matrix per crank angle (links as uniform bars of their section and material), velocities / accelerations by central differences at a constant crank speed; three independent checks (energy method, quasi-static = statics, mean torque = load work per turn); sections resized for the dynamic forces when larger; flywheel from the torque's energy fluctuation; 'Crank speed' slider and a torque plot in the panel
 
 ## D. Outside world
 - [ ] **D12. Physical print** (a friend's printer)

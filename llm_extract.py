@@ -108,6 +108,7 @@ FOURBAR = (_schema({
     "quick_return": {"type": "boolean"},
     "time_ratio": {"type": ["number", "null"]},
     "max_load_N": {"type": ["number", "null"]},
+    "speed_rpm": {"type": ["number", "null"]},
     "material": MATERIAL,
 }), COMMON + (
     "The user wants a four-bar linkage. "
@@ -122,7 +123,8 @@ FOURBAR = (_schema({
     "input_swing_deg: input rotation, only for rocker_rocker and only if given. "
     "max_load_N: load at the output tip ('uçta 5 kg' -> 49.05). "
     "quick_return: true only if asked ('hızlı dönüşlü', 'zaman oranı'). "
-    "time_ratio: Q only if a number is given ('zaman oranı 1.2', 'Q=1.3')."))
+    "time_ratio: Q only if a number is given ('zaman oranı 1.2', 'Q=1.3'). "
+    "speed_rpm: crank speed if given ('300 devirde dönen', '600 rpm')."))
 
 GEAR = (_schema({
     "gear_ratio": {"type": ["number", "null"]},

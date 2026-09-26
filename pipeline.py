@@ -13,6 +13,7 @@ import bevel
 import bolted
 import cam_system
 import cams
+import dynamics
 import clutch
 import chain
 import coupler
@@ -419,7 +420,7 @@ _INPUT_TURN = re.compile(
 
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
-_SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
+_SPEED_KINDS = ("crank_rocker", "reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
                 "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear", "bevel_gear")
 
 
@@ -679,7 +680,7 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
         "output_swing_deg": output_swing_deg, "quick_return": (not rr) and time_ratio > 1.0,
         "time_ratio": time_ratio if (not rr and time_ratio > 1.0) else None,
         "input_swing_deg": input_swing_deg if rr else None,
-        "max_load_N": max_load_N or None, "material": material})
+        "max_load_N": max_load_N or None, "material": material, "speed_rpm": speed_rpm or None})
 
 
 def design_from_spec(spec, on_status=None):
@@ -2307,14 +2308,31 @@ def _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi
     # ---- strength: with a load the sections are sized; without one nothing is invented
     section, strength_ok = strength.DEFAULT_SECTION, True
     F, mat_key = spec.get("max_load_N"), spec.get("material")
+    rpm = spec.get("speed_rpm") if not rr else None
+    if mat_key not in strength.MATERIALS:
+        mat_key = None
+    dyn = None
     if passed and F:
-        if mat_key not in strength.MATERIALS:
+        if mat_key is None:
             mat_key = "PLA"
             notes.append("Material not given: PLA (3D print) assumed.")
         mat = strength.MATERIALS[mat_key]
         say("Strength and section sizing...")
         forces = strength.analyze_forces(mech, frames, F)
         sec, s_checks = strength.size_links(forces, {k: mech[k] for k in "abcd"}, mat)
+        if sec and rpm:
+            # K2: at speed the pins also carry the links' inertia; if that exceeds the static forces the
+            # sections are sized again for the larger ones (the masses change, so the dynamics is redone)
+            say("Dynamics at speed (matrix method): pin forces and drive torque...")
+            dyn = dynamics.analyse(mech, frames, sec["links"], dynamics.DENSITY[mat_key], float(rpm), float(F))
+            if dyn["F_pin_max"] > forces["F_ab_max"] or abs(dyn["T_max"]) * 1000 > forces["M_crank_max"]:
+                forces = dict(forces, F_ab_max=max(forces["F_ab_max"], dyn["F_pin_max"]),
+                              M_crank_max=max(forces["M_crank_max"], abs(dyn["T_max"]) * 1000))
+                sec2, s_checks2 = strength.size_links(forces, {k: mech[k] for k in "abcd"}, mat)
+                if sec2:
+                    sec, s_checks = sec2, s_checks2
+                    dyn = dynamics.analyse(mech, frames, sec["links"], dynamics.DENSITY[mat_key], float(rpm), float(F))
+                    notes.append(f"Sections sized for the dynamic forces at {float(rpm):g} rpm (larger than the static ones).")
         strength_ok = sec is not None
         if sec:
             section = sec
@@ -2334,6 +2352,23 @@ def _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi
     elif passed:
         notes.append("No load given, so no strength calculation: "
                      "default section (10×4 mm, Ø4 pin) used.")
+    if passed and rpm and dyn is None:
+        say("Dynamics at speed (matrix method): pin forces and drive torque...")
+        dyn = dynamics.analyse(mech, frames, section["links"], dynamics.DENSITY[mat_key or "PLA"], float(rpm), 0.0)
+    if dyn:
+        I_fly = flywheel.inertia(dyn["dE"], float(rpm), 0.05) if dyn["dE"] > 1e-9 else 0.0
+        step = max(1, len(dyn["T"]) // 72)
+        th0 = dyn["theta"][0]
+        result["dynamics"] = {
+            "rpm": float(rpm), "T_max": dyn["T_max"], "T_mean": dyn["T_mean"], "dE": dyn["dE"],
+            "F_pin_max": dyn["F_pin_max"], "F_ground_max": dyn["F_ground_max"], "shake_max": dyn["shake_max"],
+            "masses_g": {k: 1000 * v for k, v in dyn["masses"].items()}, "I_flywheel": I_fly,
+            "curve": sorted(((round((t - th0) % 360, 1), round(T, 4)) for t, T in zip(dyn["theta"][::step], dyn["T"][::step]))),
+        }
+        checks.append({"name": f"Dynamics at {float(rpm):g} rpm", "ok": True,
+                       "detail": f"drive torque {dyn['T_max']:.2f} N·m peak / {dyn['T_mean']:.2f} mean, pin force "
+                                 f"{dyn['F_pin_max']:.0f} N, shaking force {dyn['shake_max']:.1f} N; a flywheel of "
+                                 f"{I_fly * 1e4:.1f} kg·cm² keeps the speed within ±2.5 %"})
     section = strength.section_with_bosses(section)
     result["section_mm"] = section
 

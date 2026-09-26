@@ -136,6 +136,8 @@ Everything is computed on this computer, with a local AI.</div>
         <div class="knob"><label>Tip load <b id="v-f"></b></label>
           <input type="range" id="k-f" min="0" max="500" step="1" value="0"></div>
       </div>
+      <div class="knob"><label title="Crank speed: the drive torque curve, pin forces with the links' inertia and a flywheel (K2)">Crank speed <b id="v-rpm"></b></label>
+        <input type="range" id="k-rpm" min="0" max="1500" step="10" value="0"></div>
     </div>
     <div id="gen-knobs" hidden></div>
     <div class="verdict" id="verdict"></div>
@@ -227,7 +229,8 @@ Everything is computed on this computer, with a local AI.</div>
     const F = +$("k-f").value;
     return { kind: "fourbar", crank_length_mm: +$("k-a").value, output_swing_deg: +$("k-psi").value,
              time_ratio: limited() ? 1 : +$("k-q").value, max_load_N: F > 0 ? F : null,
-             material: $("k-mat").value, input_swing_deg: +$("k-in").value };
+             material: $("k-mat").value, input_swing_deg: +$("k-in").value,
+             speed_rpm: limited() || +$("k-rpm").value === 0 ? null : +$("k-rpm").value };
   }
   function labels() {
     if (!isFourbar()) {
@@ -247,6 +250,8 @@ Everything is computed on this computer, with a local AI.</div>
     $("v-psi").textContent = p.output_swing_deg + "°";
     $("v-q").textContent = p.time_ratio > 1 ? p.time_ratio.toFixed(2) : "1 (none)";
     $("v-f").textContent = p.max_load_N ? p.max_load_N + " N (≈" + (p.max_load_N / 9.81).toFixed(1) + " kg)" : "none";
+    $("k-rpm").disabled = limited();
+    $("v-rpm").textContent = p.speed_rpm ? p.speed_rpm + " rpm" : "static";
   }
   let timer = null;
   function schedulePreview() {          // at most ~8 requests/s while dragging
@@ -267,7 +272,7 @@ Everything is computed on this computer, with a local AI.</div>
     const Q = +$("k-q").value;
     if (Q !== lastQ) { lastQ = Q; bandReq += 1; adsk.fusionSendData("band", JSON.stringify({ req: bandReq, Q })); }
   }
-  ["k-a", "k-in", "k-psi", "k-q", "k-f"].forEach((id) => $(id).addEventListener("input", schedulePreview));
+  ["k-a", "k-in", "k-psi", "k-q", "k-f", "k-rpm"].forEach((id) => $(id).addEventListener("input", schedulePreview));
   $("k-mat").addEventListener("change", schedulePreview);
   $("draw").addEventListener("click", () => {
     if (!ready() || !lastPreview || lastPreview.status !== "ok") return;
@@ -326,6 +331,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("k-q").value = (d.target && d.target.Q) || 1;
     $("k-in").value = (d.target && d.target.input_swing) || 360;
     $("k-f").value = Math.round(s.max_load_N || 0);
+    $("k-rpm").value = Math.round(s.speed_rpm || 0);
     if (s.material) $("k-mat").value = s.material;
     labels();
     requestPreview();
@@ -1217,7 +1223,23 @@ Everything is computed on this computer, with a local AI.</div>
           <h3 style="margin-top:8px">Checks</h3>${checks}</div>
         <div class="col"><h3>Mechanism</h3>${mechSvg(d.fusion.points_mm)}</div>
         <div class="col"><h3>Transmission angle μ</h3>${muSvg(d.mu_curve, d.mu_axis)}</div>
+        ${d.dynamics ? `<div class="col"><h3>Drive torque at ${f(d.dynamics.rpm, 0)} rpm</h3>${torqueSvg(d.dynamics)}</div>` : ""}
       </div>`;
+  }
+
+  function torqueSvg(dy) {                    // K2: drive torque over a turn (matrix method), mean dashed
+    const c = dy.curve, W = 220, H = 150, l = 34, r = 6, t = 8, b = 20;
+    const vals = c.map((p) => p[1]).concat([0]);
+    const lo = Math.min(...vals), hi = Math.max(...vals), span = (hi - lo) || 1;
+    const X = (th) => l + th / 360 * (W - l - r), Y = (T) => t + (hi - T) / span * (H - t - b);
+    const line = c.map(([th, T]) => `${X(th).toFixed(1)},${Y(T).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}">
+      <line class="axis" x1="${X(0)}" y1="${Y(0)}" x2="${X(360)}" y2="${Y(0)}"/>
+      <line x1="${X(0)}" y1="${Y(dy.T_mean)}" x2="${X(360)}" y2="${Y(dy.T_mean)}" stroke="var(--muted, #888)" stroke-dasharray="4 3"/>
+      ${[hi, lo].map((v) => `<text class="lbl" x="${l - 4}" y="${Y(v) + 3}" text-anchor="end">${f(v, 2)}</text>`).join("")}
+      ${[0, 180, 360].map((v) => `<text class="lbl" x="${X(v)}" y="${H - 6}" text-anchor="middle">${v}°</text>`).join("")}
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+      <text class="lbl" x="${W - r}" y="${t + 8}" text-anchor="end">N·m · flywheel ${f(dy.I_flywheel * 1e4, 1)} kg·cm²</text></svg>`;
   }
 
   function mechSvg(p) {
