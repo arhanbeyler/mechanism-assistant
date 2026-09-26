@@ -23,6 +23,7 @@ import slider_crank
 import springs
 import toggle
 import llm_extract
+import power_screw
 import ratchet
 import reducer
 import reducer2
@@ -33,6 +34,19 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "power_screw": {
+        "title": "Power screw (Tr)",
+        "params": [
+            {"key": "force_N", "label": "Axial load", "unit": "N", "min": 100, "max": 50000, "step": 100, "default": 5000},
+            {"key": "travel_mm", "label": "Travel", "unit": "mm", "min": 20, "max": 1000, "step": 10, "default": 200},
+            {"key": "screw_ends", "label": "Ends", "default": "supported",
+             "options": [["supported", "Both supported (C = 1)"], ["jack", "Jack, free top (C = 0.25)"]]},
+            {"key": "nut_material", "label": "Nut", "default": "bronze",
+             "options": [["bronze", "Bronze"], ["steel", "Steel"], ["PLA", "PLA (3D print)"]]},
+            {"key": "speed_rpm", "label": "Screw speed", "unit": "rpm", "min": 0, "max": 1500, "step": 10, "default": 0,
+             "zero_label": "not given"},
+        ],
+    },
     "ratchet": {
         "title": "Ratchet and pawl",
         "params": [
@@ -231,7 +245,7 @@ _INPUT_TURN = re.compile(
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
 _SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
-                "quick_return")
+                "quick_return", "power_screw")
 
 
 def input_turn_backstop(text, spec):
@@ -354,10 +368,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        span_mm=None, power_kW=None, stroke_mm=None, offset_mm=None, rod_length_mm=None,
                        follower_mass_kg=None, follower_load_N=None, slots=None, center_distance_mm=None,
                        load_mass_kg=None, load_diameter_mm=None, opening_deg=None, handle_travel_deg=None,
-                       arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None):
+                       arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None,
+                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "power_screw":
+        return design_from_spec({"mechanism_type": "power_screw", "force_N": force_N, "travel_mm": travel_mm,
+                                 "screw_ends": screw_ends, "nut_material": nut_material, "speed_rpm": speed_rpm or None})
     if kind == "ratchet":
         return design_from_spec({"mechanism_type": "ratchet", "torque_Nm": torque_Nm, "teeth": teeth,
                                  "outer_diameter_max_mm": outer_diameter_max_mm or None, "material": material})
@@ -433,6 +451,8 @@ def design_from_spec(spec, on_status=None):
         return _scotch_yoke(result, spec, say)
     if mtype == "ratchet":
         return _ratchet(result, spec, say)
+    if mtype == "power_screw":
+        return _power_screw(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -448,7 +468,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1086,6 +1106,60 @@ def _ratchet(result, spec, say):
                f"itself in; the tooth takes {d['F']:.0f} N at {T:g} N·m. It turns freely counter-clockwise and "
                f"may slip back up to {360 / z:.1f}° before a tooth catches; the pawl lifts {max(table):.1f}° over each tooth.")
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _power_screw(result, spec, say):
+    """G5: power screw (Tr). Required: the axial load. Travel sets the column length; ends: both supported or
+    a jack with a free top (C = 1 / 0.25)."""
+    result["mechanism_type"] = "power_screw"
+    F = spec.get("force_N")
+    if not F:
+        return dict(result, status="missing", message="Missing for the power screw: the axial load (N or kg).")
+    notes = []
+    F = float(F)
+    L = spec.get("travel_mm")
+    if not L:
+        L = 200.0
+        notes.append("Travel not given: 200 mm assumed (it sets the column length).")
+    L = float(L)
+    jack = (spec.get("screw_ends") or "supported") == "jack"
+    C = 0.25 if jack else 1.0
+    nut_key = spec.get("nut_material") or "bronze"
+    if nut_key not in power_screw.NUT:
+        nut_key = "bronze"
+    if not spec.get("nut_material"):
+        notes.append("Nut material not given: bronze assumed (steel screw on a bronze nut).")
+    say("Power screw: Tr size, self-locking, torques, column and thread checks...")
+    d, s_checks = power_screw.design(F, nut_key, 2.0, L, C, "ball")
+    if d is None:
+        worst = max(s_checks, key=lambda c: c["util"])
+        return dict(result, status="failed", checks=[{"name": c["name"], "ok": c["util"] <= 1, "detail": c["detail"]}
+                                                      for c in s_checks],
+                    message=f"No Tr size up to Tr80 carries {F:g} N here ({worst['name']}). Suggestion: a shorter "
+                            "travel or supported ends.")
+    th = d["thread"]
+    checks = [{"name": c["name"], "ok": c["util"] <= 1.0,
+               "detail": c["detail"] + (f" · use {c['util'] * 100:.0f}%" if not c["name"].startswith("Self") else "")}
+              for c in s_checks]
+    rpm = spec.get("speed_rpm")
+    motion = None
+    if rpm:
+        v = rpm * th["l"] / 60                                  # mm/s
+        motion = {"rpm": float(rpm), "v_mm_s": v, "P_W": (d["T_R"] + d["T_c"]) / 1000 * rpm * 2 * math.pi / 60}
+        checks.append({"name": "Speed and power", "ok": True,
+                       "detail": f"{v:.1f} mm/s at {rpm:g} rpm, {motion['P_W']:.0f} W to raise"})
+    info = {"d": th["d"], "P": th["P"], "l": th["l"], "dm": th["dm"], "dr": th["dr"], "n_t": d["n_t"],
+            "nut_len": d["nut_len"], "T_R": d["T_R"], "T_L": d["T_L"], "T_c": d["T_c"], "efficiency": d["efficiency"],
+            "F": F, "travel": L, "C": C, "nut": d["nut"]["name"], "motion": motion}
+    result.update(screw=info, checks=checks, notes=notes, target={"force": F},
+                  fusion={"type": "power_screw", "passed_checks": True, "d": th["d"], "P": th["P"], "l": th["l"],
+                          "nut_len": max(d["nut_len"], th["d"]), "travel": L,
+                          "designation": f"TR{th['d']:g}x{th['P']:g}"})
+    msg = (f"All checks passed. Tr{th['d']:g}×{th['P']:g} steel screw with a {d['nut_len']:g} mm {nut_key} "
+           f"nut ({d['n_t']} threads): raising {F:g} N takes {d['T_R'] / 1000:.2f} N·m (+{d['T_c'] / 1000:.2f} at a ball thrust "
+           f"bearing), efficiency {100 * d['efficiency']:.0f} %; it holds the load by itself (self-locking even lubricated).")
+    result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
 

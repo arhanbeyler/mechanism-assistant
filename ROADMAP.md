@@ -63,7 +63,7 @@ In a system one module's output is another's input (forces, diameters and masses
 - [ ] **G2. Planetary gear set**
 - [ ] **G3. Belt and pulley (V, timing), chain and sprocket**
 - [ ] **G4. Rack and pinion**
-- [ ] **G5. Power screw (trapezoidal).** Raising torque, self-locking, efficiency
+- [x] **G5. Power screw (trapezoidal).** ISO Tr sizes; torques checked against Shigley example 8-1; self-locking required (checked with lubricated friction, torques with dry); column, thread and nut checks. Fusion: modelled Tr threads from Fusion's library, motion link one turn = one lead. Findings: each modelled helix starts at its own start face, so the nut must start a whole number of pitches from the thread's start (off by a quarter pitch the threads overlap 780 mm³); the link's sense follows the joint axis, so it is chosen by a quarter-turn overlap test; moving an occurrence before its joints exist did not take effect
 
 ## H. Machine elements
 - [ ] **H1. Bolted joint.** Preload, separation, fatigue (Shigley ch. 8)

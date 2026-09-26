@@ -234,7 +234,7 @@ anim = {"running": False}
 STEP_DEG = 4          # input angle per step
 STEP_PAUSE = 0.02     # pause between steps (s)
 INPUT_JOINTS = ("Ground-Pinion", "Ground-Cam", "Ground-Shaft", "Ground-Input", "Ground-Driver",
-                "Ground-Ratchet")   # + "Ground-Crank ..."
+                "Ground-Ratchet", "Ground-Screw")   # + "Ground-Crank ..."
 
 
 def crank_motion():
