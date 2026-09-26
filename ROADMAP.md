@@ -79,7 +79,7 @@ In a system one module's output is another's input (forces, diameters and masses
 - [ ] **H5b. Couplings** (rigid flange, jaw); flywheel sized from the four-bar / slider-crank torque curve (needs K2)
 
 ## I. For 3D printing
-- [ ] **I1. Snap-fit**
+- [x] **I1. Snap-fit.** Printed cantilever (PLA 2 %, PETG 3 % strain, 60 % for repeated use), forces over the ramp and the retaining face, printable wall ≥ 3 perimeters. Fusion: snap and catch touching. Finding: a locked hook's pull-out force is infinite, which JSON cannot carry to the panel; it is sent as null with locked = true
 - [ ] **I2. Flexure / living hinge**
 - [ ] Print-ready pin clearances (B8c)
 

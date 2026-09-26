@@ -27,6 +27,7 @@ import kinematics as kin
 import shafts
 import slotted
 import slider_crank
+import snapfit
 import springs
 import toggle
 import torsion_spring
@@ -47,6 +48,16 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "snap_fit": {
+        "title": "Snap-fit (printed)",
+        "params": [
+            {"key": "undercut_mm", "label": "Undercut", "unit": "mm", "min": 0.3, "max": 5, "step": 0.1, "default": 1.0},
+            {"key": "material", "label": "Material", "default": "PLA", "options": [["PLA", "PLA"], ["PETG", "PETG"]]},
+            {"key": "hold_force_N", "label": "Hold", "unit": "N", "min": 0, "max": 200, "step": 1, "default": 0,
+             "zero_label": "any"},
+            {"key": "releasable", "label": "Type", "default": "no", "options": [["no", "Permanent"], ["yes", "Releasable"]]},
+        ],
+    },
     "flywheel": {
         "title": "Flywheel",
         "params": [
@@ -549,10 +560,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        self_locking=None, grip_mm=None, bolts=None, member_material=None, bolt_class=None,
                        fluctuating=None, arm_mm=None, bar_width_mm=None, bar_height_mm=None, weld_pattern=None,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
-                       arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None):
+                       arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
+                       undercut_mm=None, hold_force_N=None, releasable=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "snap_fit":
+        return design_from_spec({"mechanism_type": "snap_fit", "undercut_mm": undercut_mm, "material": material,
+                                 "hold_force_N": hold_force_N or None, "releasable": releasable in (True, "yes")})
     if kind == "flywheel":
         return design_from_spec({"mechanism_type": "flywheel", "energy_J": energy_J, "speed_rpm": speed_rpm,
                                  "speed_fluctuation": speed_fluctuation, "outer_diameter_max_mm": outer_diameter_max_mm or None})
@@ -697,6 +712,8 @@ def design_from_spec(spec, on_status=None):
         return _torsion_spring(result, spec, say)
     if mtype == "flywheel":
         return _flywheel(result, spec, say)
+    if mtype == "snap_fit":
+        return _snap_fit(result, spec, say)
     if mtype == "clutch":
         return _clutch(result, spec, say)
     if mtype == "quick_return":
@@ -714,7 +731,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, flywheels, disc clutches, printed snap-fits, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1912,6 +1929,38 @@ def _clutch(result, spec, say):
     msg = (f"All checks passed. {'Single' if c['N'] == 2 else str(c['N'] // 2)}-plate clutch, friction faces Ø{2 * c['ro']:.0f} / "
            f"Ø{2 * c['ri']:.0f} mm ({c['N']} faces, {c['lining']}): holds {c['T_cap'] / 1000:.0f} N·m with a clamp force of "
            f"{c['F'] / 1000:.2f} kN.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _snap_fit(result, spec, say):
+    """I1: cantilever snap-fit for printing. Required: the undercut (how far the hook must bend)."""
+    result["mechanism_type"] = "snap_fit"
+    y = spec.get("undercut_mm")
+    if not y:
+        return dict(result, status="missing", message="Missing for the snap-fit: the undercut (hook height, mm).")
+    notes = []
+    mat = spec.get("material") if spec.get("material") in snapfit.STRAIN else None
+    if mat is None:
+        mat = "PLA"
+        notes.append("Material not given: PLA assumed (print the beam flat, along the layers).")
+    releasable = bool(spec.get("releasable"))
+    a_out = 45.0 if releasable else 90.0
+    notes.append(f"Ramp 30°, retaining face {a_out:g}° ({'can be pulled apart' if releasable else 'permanent'}); friction μ {snapfit.MU:g}.")
+    say("Snap-fit: root strain, deflection and mating forces...")
+    d, s_checks = snapfit.design(float(y), mat, spec.get("hold_force_N") or None, spec.get("snap_width_mm") or None,
+                                 30.0, a_out, bool(spec.get("repeated")))
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if d is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "No printable beam up to 80 mm does it: a smaller undercut or a tougher material (PETG)."]))
+    result.update(snap_fit=d, checks=checks, notes=notes, target={"undercut": float(y)},
+                  fusion={"type": "snap_fit", "passed_checks": True, "l": d["l"], "h": d["h"], "w": d["w"], "y": d["y"],
+                          "alpha_in": d["alpha_in"], "alpha_out": d["alpha_out"]})
+    hold = "it cannot be pulled out (locked)" if d["locked"] else f"it pulls out at {d['W_out']:.1f} N"
+    msg = (f"All checks passed. Beam {d['l']:g} × {d['h']:g} × {d['w']:g} mm (length × thickness × width) with a {d['y']:g} mm hook: "
+           f"root strain {100 * d['eps']:.2f} % of {100 * d['eps_allow']:.1f} %; it snaps in with {d['W_in']:.1f} N and {hold}.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 

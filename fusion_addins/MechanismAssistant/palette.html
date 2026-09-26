@@ -366,7 +366,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion || d.flywheel || d.clutch) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion || d.flywheel || d.clutch || d.snap_fit) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -375,7 +375,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion || d.flywheel || d.clutch) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion || d.flywheel || d.clutch || d.snap_fit) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -1151,7 +1151,18 @@ Everything is computed on this computer, with a local AI.</div>
       ["Shafts", `Ø${f(s.bore || 0, 0)} steel`]], d);
   }
 
+  function renderSnapCard(d) {               // I1: printed snap-fit
+    const s = d.snap_fit;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    simpleCard("Snap-fit", [["Beam (l × h × w)", `${f(s.l, 0)} × ${f(s.h, 1)} × ${f(s.w, 0)} mm, ${s.material}`],
+      ["Undercut", `${f(s.y, 1)} mm, ramp ${f(s.alpha_in, 0)}°, retaining ${f(s.alpha_out, 0)}°`],
+      ["Root strain", `${f(100 * s.eps, 2)} % of ${f(100 * s.eps_allow, 1)} %${s.repeated ? " (repeated use)" : ""}`],
+      ["Deflection force", `${f(s.P, 1)} N`], ["Snap-in force", `${f(s.W_in, 1)} N`],
+      ["Pull-out", s.locked ? "locked" : `${f(s.W_out, 1)} N`]], d);
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "snap_fit") return renderSnapCard(d);
     if (d.mechanism_type === "flywheel") return renderFlywheelCard(d);
     if (d.mechanism_type === "clutch") return renderClutchCard(d);
     if (d.mechanism_type === "torsion_spring") return renderTorsionCard(d);
