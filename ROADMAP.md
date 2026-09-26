@@ -73,7 +73,8 @@ In a system one module's output is another's input (forces, diameters and masses
 - [x] **H2. Welded joint.** Cantilever bar welded to a wall: welds as lines (three patterns), throat shear from shear + bending, AISC allowables and minimum leg, bar bending; the bar is sized when not given. Fusion: wall, bar, triangular beads. Findings: the LLM swapped '40x20 lama' (height / width); a cantilever bar stands on its deep side, so the larger number is made the height after extraction (a rule, not a guess); setSymmetricExtent(d, True) means d in total
 - [x] **H3. Fits and press fits.** ISO 286 H7 with g6 … s6 (3–120 mm), Lamé press-fit pressure, torque at the smallest and hub stress at the largest interference, assembly temperature; C45 hub and shaft. Finding: on small shafts (Ø25, 50 N·m) no standard fit both carries the torque (H7/p6 leaves 1 µm minimum interference) and keeps the hub elastic (s6): the engine says so and points to a key or spline
 - [ ] **H3b. Splined shaft** (ISO 14 straight-sided / DIN 5480 involute)
-- [ ] **H4. Torsion, extension and disc (Belleville) springs; spring fatigue (Zimmerli)**
+- [x] **H4. Torsion spring; compression-spring fatigue.** Torsion spring (Shigley 10-12, example 10-8 reproduced), arbor clearance when wound; Zimmerli + Gerber fatigue when the force cycles (a new 'cycles down to' input). Fusion: helix sweep with legs. Finding: adding the new field's description at the START of the spring prompt made the model drop an old case's force ('30 N'da'); placed at the end it works
+- [ ] **H4b. Extension and disc (Belleville) springs**
 - [ ] **H5. Coupling, brake / clutch, flywheel**
 
 ## I. For 3D printing

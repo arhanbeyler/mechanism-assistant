@@ -11,6 +11,7 @@ Stress:      tau = K_B 8 F D / (pi d^3),  K_B = (4C + 2) / (4C - 3)  (Bergstrass
 Wire strength: S_ut = A / d^m,  S_sy = frac * S_ut  (Shigley Tables 10-4, 10-6: set not removed)
 Ends: squared and ground -> Nt = Na + 2, Ls = d Nt, L0 = Ls + (1 + xi) y (xi = 0.15), p = (L0 - 2d) / Na
 Checks: 4 <= C <= 12, 3 <= Na <= 15, working safety n >= 1.2, no yield when compressed SOLID (n_s >= 1),
+        fatigue when the force cycles F_min..F (Zimmerli S_sa 241 / S_sm 379 MPa unpeened, Gerber, n_f >= 1.5),
         buckling (cylindrical, both ends fixed, alpha = 0.5): L0 <= 2.63 D / alpha
 Choice: the LIGHTEST passing spring (mass ~ d^2 D_mean Nt).
 """
@@ -39,7 +40,25 @@ def rate(d, G, Na, D1, taper=1.0):
     return G * d ** 4 / (16 * Na * (R1 + R2) * (R1 ** 2 + R2 ** 2))
 
 
-def check(d, D1, Na, F, y, mat, taper=1.0, od_max=None):
+ZIMMERLI = {False: (241.0, 379.0), True: (398.0, 534.0)}     # S_sa, S_sm (MPa): unpeened / shot-peened
+N_FATIGUE = 1.5
+
+
+def fatigue(d, D1, F_min, F_max, mat, peened=False):
+    """Zimmerli endurance with the Gerber criterion (Shigley 10-9): returns (n_f, tau_a, tau_m, S_se, S_su)."""
+    KB = bergstrasser(D1 / d)
+    c = KB * 8 * D1 / (math.pi * d ** 3)
+    ta, tm = c * (F_max - F_min) / 2, c * (F_max + F_min) / 2
+    Ssu = 0.67 * mat["A"] / d ** mat["m"]
+    Ssa, Ssm = ZIMMERLI[peened]
+    Sse = Ssa / (1 - (Ssm / Ssu) ** 2)
+    if ta <= 0:
+        return math.inf, ta, tm, Sse, Ssu
+    nf = 0.5 * (Ssu / tm) ** 2 * (ta / Sse) * (-1 + math.sqrt(1 + (2 * tm * Sse / (Ssu * ta)) ** 2))
+    return nf, ta, tm, Sse, Ssu
+
+
+def check(d, D1, Na, F, y, mat, taper=1.0, od_max=None, F_min=None):
     """Checks and geometry of one spring. Returns (checks, geometry)."""
     G = mat["G"]
     C = D1 / d
@@ -70,6 +89,10 @@ def check(d, D1, Na, F, y, mat, taper=1.0, od_max=None):
         L_cr = 2.63 * D1 / ALPHA
         checks.append({"group": "Buckling", "name": "Buckling", "util": L0 / L_cr,
                        "detail": f"L0 = {L0:.1f} mm ≤ {L_cr:.1f} mm"})
+    if F_min is not None:
+        nf, ta, tm, Sse, Ssu = fatigue(d, D1 * max(1.0, taper), F_min, F, mat)
+        checks.append({"group": "Stress", "name": f"Fatigue {F_min:g}..{F:g} N (Zimmerli, Gerber)", "util": N_FATIGUE / nf,
+                       "detail": f"τ_a = {ta:.0f}, τ_m = {tm:.0f} MPa, S_se = {Sse:.0f} MPa, n_f = {nf:.2f} (at least {N_FATIGUE:g})"})
     if od_max:
         checks.append({"group": "Geometry", "name": "Outer diameter limit", "util": (D1 + d) / od_max,
                        "detail": f"Ø{D1 + d:.1f} ≤ Ø{od_max:g} mm"})
@@ -79,7 +102,7 @@ def check(d, D1, Na, F, y, mat, taper=1.0, od_max=None):
     return checks, geo
 
 
-def design(F, y, mat, taper=1.0, od_max=None):
+def design(F, y, mat, taper=1.0, od_max=None, F_min=None):
     """Lightest valid spring. Returns (geometry, checks) or (None, checks of the best candidate)."""
     k_target = F / y
     best = best_any = None
@@ -88,7 +111,7 @@ def design(F, y, mat, taper=1.0, od_max=None):
             D1 = C10 / 10 * d
             Na_exact = mat["G"] * d ** 4 / (16 * k_target * (D1 / 2) * (1 + taper) * (D1 / 2) ** 2 * (1 + taper ** 2))
             Na = max(0.25, round(Na_exact * 4) / 4)
-            checks, geo = check(d, D1, Na, F, y, mat, taper, od_max)
+            checks, geo = check(d, D1, Na, F, y, mat, taper, od_max, F_min)
             worst = max(c["util"] for c in checks)
             if worst <= 1.0:
                 if best is None or geo["mass_index"] < best[0]["mass_index"] - 1e-12:

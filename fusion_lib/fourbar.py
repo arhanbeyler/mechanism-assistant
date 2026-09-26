@@ -173,7 +173,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Driven": "Plastic - Matte (Green)", "Sun": "Plastic - Matte (Red)", "Planet": "Plastic - Matte (Green)",
                "Carrier": "Plastic - Matte (Blue)", "Ring": "Plastic - Matte (Gray)", "Worm": "Steel - Satin", "Bolt": "Steel - Satin", "Hex": "Steel - Satin",
                "Plate": "Plastic - Matte (Gray)",
-               "Wall": "Plastic - Matte (Gray)", "Bar": "Steel - Satin", "Weld": "Coating - Black Oxide", "Hub": "Plastic - Matte (Green)", "Chain": "Coating - Black Oxide", "Belt": "Rubber - Hard",
+               "Wall": "Plastic - Matte (Gray)", "Bar": "Steel - Satin", "Weld": "Coating - Black Oxide", "Hub": "Plastic - Matte (Green)", "Arbor": "Plastic - Matte (Gray)", "Chain": "Coating - Black Oxide", "Belt": "Rubber - Hard",
                "Yoke": "Plastic - Matte (Green)", "Ram": "Plastic - Matte (Green)", "Lever": "Plastic - Matte (Blue)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
@@ -250,7 +250,8 @@ def build(mech, reuse=True):
              "bevel_gear": "bevel",             # G1c: bevel gear pair
              "bolted_joint": "bolted",          # H1: bolted joint
              "welded_joint": "welded",          # H2: welded bracket
-             "press_fit": "press_fit"}.get(mech.get("type"))   # H3: press fit
+             "press_fit": "press_fit",          # H3: press fit
+             "torsion_spring": "torsion_spring"}.get(mech.get("type"))   # H4: torsion spring
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

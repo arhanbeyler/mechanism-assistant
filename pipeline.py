@@ -27,6 +27,7 @@ import slotted
 import slider_crank
 import springs
 import toggle
+import torsion_spring
 import welded
 import worm
 import llm_extract
@@ -44,6 +45,15 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "torsion_spring": {
+        "title": "Torsion spring",
+        "params": [
+            {"key": "torque_Nm", "label": "Moment", "unit": "N·m", "min": 0.05, "max": 20, "step": 0.05, "default": 0.5},
+            {"key": "spring_angle_deg", "label": "At angle", "unit": "°", "min": 10, "max": 720, "step": 5, "default": 90},
+            {"key": "arbor_mm", "label": "Arbor Ø", "unit": "mm", "min": 0, "max": 50, "step": 1, "default": 0,
+             "zero_label": "none"},
+        ],
+    },
     "press_fit": {
         "title": "Press fit (ISO fits)",
         "params": [
@@ -278,6 +288,8 @@ MODULES = {
              "default": 1.0, "one_label": "cylindrical"},
             {"key": "outer_diameter_max_mm", "label": "Max outer diameter", "unit": "mm", "min": 0, "max": 100, "step": 1,
              "default": 0, "zero_label": "free"},
+            {"key": "spring_force_min_N", "label": "Cycles down to", "unit": "N", "min": 0, "max": 500, "step": 1,
+             "default": 0, "zero_label": "static"},
             {"key": "show_plates", "label": "Fusion view", "default": "no",
              "options": [["no", "Spring only"], ["yes", "With plates (compression)"]]},
         ],
@@ -514,10 +526,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None, planets=None, helix_deg=None, output_torque_Nm=None,
                        self_locking=None, grip_mm=None, bolts=None, member_material=None, bolt_class=None,
                        fluctuating=None, arm_mm=None, bar_width_mm=None, bar_height_mm=None, weld_pattern=None,
-                       shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None):
+                       shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
+                       arbor_mm=None, spring_force_min_N=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "torsion_spring":
+        return design_from_spec({"mechanism_type": "torsion_spring", "torque_Nm": torque_Nm,
+                                 "spring_angle_deg": spring_angle_deg, "arbor_mm": arbor_mm or None})
     if kind == "press_fit":
         return design_from_spec({"mechanism_type": "press_fit", "torque_Nm": torque_Nm,
                                  "shaft_diameter_mm": shaft_diameter_mm or None, "hub_diameter_mm": hub_diameter_mm or None,
@@ -598,7 +614,7 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
         return design_from_spec({"mechanism_type": "spring", "spring_force_N": spring_force_N,
                                  "spring_deflection_mm": spring_deflection_mm, "spring_taper": spring_taper,
                                  "outer_diameter_max_mm": outer_diameter_max_mm or None, "material": material,
-                                 "show_plates": show_plates})
+                                 "show_plates": show_plates, "spring_force_min_N": spring_force_min_N or None})
     if kind == "spur_gear":
         return design_from_spec({"mechanism_type": "spur_gear", "gear_ratio": gear_ratio,
                                  "torque_Nm": torque_Nm, "speed_rpm": speed_rpm or None, "material": material})
@@ -649,6 +665,8 @@ def design_from_spec(spec, on_status=None):
         return _welded_joint(result, spec, say)
     if mtype == "press_fit":
         return _press_fit(result, spec, say)
+    if mtype == "torsion_spring":
+        return _torsion_spring(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -664,7 +682,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted and welded joints, press fits, torsion springs, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1767,6 +1785,35 @@ def _press_fit(result, spec, say):
     return result
 
 
+def _torsion_spring(result, spec, say):
+    """H4: helical torsion spring. Required: the moment and the angle it is reached at."""
+    result["mechanism_type"] = "torsion_spring"
+    M, th = spec.get("torque_Nm"), spec.get("spring_angle_deg")
+    missing = [n for v, n in ((M, "moment (N·m or N·mm)"), (th, "angle at that moment (°)")) if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the torsion spring: {', '.join(missing)}.")
+    M, th = float(M) * 1000.0, float(th)
+    if not 10 <= th <= 720:
+        return dict(result, status="missing", message=f"Working angles of 10–720° are covered (given: {th:g}°).")
+    notes = ["Music wire, straight legs (2 D long unless given), loaded to close the coils."]
+    arbor = spec.get("arbor_mm")
+    say("Torsion spring: wire, coil diameter, body turns, inner-fibre stress, arbor clearance...")
+    s, s_checks = torsion_spring.design(M, th, "music_wire", float(arbor) if arbor else None, spec.get("leg_mm") or None)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if s is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            f"No torsion spring found for {M / 1000:g} N·m at {th:g}°."]))
+    result.update(torsion=s, checks=checks, notes=notes, target={"M": M, "theta": th},
+                  fusion={"type": "torsion_spring", "passed_checks": True, "d": s["d"], "D": s["D"], "Nb": s["Nb"],
+                          "legs": s["legs"], "theta_deg": s["theta_deg"], "arbor": s["arbor"]})
+    msg = (f"All checks passed. Wire Ø{s['d']:g} mm, coil Ø{s['D']:.1f} mm (OD {s['OD']:.1f}), {s['Nb']:g} body turns, legs "
+           f"{s['legs']:.0f} mm: {s['k_deg'] * 1000 / 1000:.1f} N·mm/°, {M / 1000:g} N·m at {s['theta_deg']:.0f}° (asked {th:g}°); "
+           f"stress {s['sigma']:.0f} of {s['Sy']:.0f} MPa; the inside diameter closes from {s['D'] - s['d']:.1f} to {s['ID_wound']:.1f} mm.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
 def _reducer2(result, spec, say, T, rpm, ratio, mat_key, shaft_mat, n, notes):
     """E2: two-stage reducer (ratio above one stage's practical limit)."""
     notes.append(f"Ratio {ratio:g} > {reducer2.SINGLE_MAX:g}: two stages.")
@@ -1858,11 +1905,13 @@ def _spring(result, spec, say):
         mat = springs.SPRING_MATERIALS["music_wire"]
         notes.append("Springs are made of steel wire (plastic / aluminium springs are not suitable): music wire assumed.")
     say("Spring synthesis (Shigley: Bergsträsser, solid height, buckling)...")
-    geo, s_checks = springs.design(F, y, mat, taper, spec.get("outer_diameter_max_mm") or None)
+    F_min = spec.get("spring_force_min_N")
+    F_min = float(F_min) if F_min is not None and 0 <= float(F_min) < F else None
+    geo, s_checks = springs.design(F, y, mat, taper, spec.get("outer_diameter_max_mm") or None, F_min)
     checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
                "detail": c["detail"] + (f" · use {c['util'] * 100:.0f}%" if c["group"] in ("Stress", "Buckling") else "")}
               for c in s_checks]
-    result.update(checks=checks, notes=notes, target={"force_N": F, "deflection_mm": y, "taper": taper})
+    result.update(checks=checks, notes=notes, target={"force_N": F, "deflection_mm": y, "taper": taper, "F_min": F_min})
     if geo is None:
         return dict(result, status="failed", message=" ".join(notes + [
             f"No spring found for {F:g} N / {y:g} mm. Suggestion: allow more deflection, relax the outer "
