@@ -10,6 +10,7 @@ import math
 import re
 
 import bevel
+import bolted
 import cam_system
 import cams
 import chain
@@ -41,6 +42,19 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "bolted_joint": {
+        "title": "Bolted joint",
+        "params": [
+            {"key": "force_N", "label": "Separating load", "unit": "N", "min": 1000, "max": 500000, "step": 1000, "default": 50000},
+            {"key": "grip_mm", "label": "Clamped thickness", "unit": "mm", "min": 5, "max": 150, "step": 1, "default": 20},
+            {"key": "bolts", "label": "Bolts", "unit": "", "min": 0, "max": 20, "step": 1, "default": 0, "zero_label": "4 first"},
+            {"key": "member_material", "label": "Plates", "default": "steel",
+             "options": [["steel", "Steel"], ["aluminum", "Aluminium"], ["cast_iron", "Cast iron"]]},
+            {"key": "bolt_class", "label": "Class", "default": "8.8", "options": [["8.8", "8.8"], ["10.9", "10.9"], ["12.9", "12.9"]]},
+            {"key": "fluctuating", "label": "Load", "default": "no",
+             "options": [["no", "Static"], ["yes", "Fluctuating 0..P"]]},
+        ],
+    },
     "bevel_gear": {
         "title": "Bevel gear pair",
         "params": [
@@ -328,6 +342,25 @@ _SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straigh
                 "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear", "bevel_gear")
 
 
+_FORCE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(kN|N)(?![a-zçğıöşü·])", re.IGNORECASE)
+
+
+def force_backstop(text, spec):
+    """Safety net: a force written as 'X kN' / 'X N' is already a force. If the LLM treated it as a mass
+    (X * 9.81 or X * 9810), the value is read directly from the sentence. Returns (spec, note or None)."""
+    F = spec.get("force_N")
+    if not F:
+        return spec, None
+    for num, unit in _FORCE.findall(text):
+        v = float(num.replace(",", "."))
+        right = v * (1000.0 if unit.lower() == "kn" else 1.0)
+        if abs(F - right) < 1e-6 * right:
+            return spec, None
+        if any(abs(F - right * k) < 1e-3 * right * k for k in (9.81, 9.80665)):
+            return dict(spec, force_N=right), f"Read from the sentence: {num} {unit} is a force ({right:g} N)."
+    return spec, None
+
+
 def input_turn_backstop(text, spec):
     """Safety net: a Turkish "X° cevirince / dondurunce / itince" ("when turned / pushed by X degrees")
     pattern means the input arm turns through a limited angle. If the LLM misses it (e.g. written as
@@ -432,6 +465,8 @@ def design_from_text(text, on_status=None, prev_spec=None):
             return result
     say("The LLM is reading the sentence...")
     spec, note = input_turn_backstop(text, extract_spec(text))
+    spec, f_note = force_backstop(text, spec)
+    note = " ".join(n for n in (note, f_note) if n) or None
     result = design_from_spec(spec, on_status)
     if note and "message" in result:
         result["message"] = note + " " + result["message"]
@@ -450,10 +485,15 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        load_mass_kg=None, load_diameter_mm=None, opening_deg=None, handle_travel_deg=None,
                        arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None,
                        force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None, planets=None, helix_deg=None, output_torque_Nm=None,
-                       self_locking=None):
+                       self_locking=None, grip_mm=None, bolts=None, member_material=None, bolt_class=None,
+                       fluctuating=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "bolted_joint":
+        return design_from_spec({"mechanism_type": "bolted_joint", "force_N": force_N, "grip_mm": grip_mm,
+                                 "bolts": bolts or None, "member_material": member_material, "bolt_class": bolt_class,
+                                 "fluctuating": fluctuating in (True, "yes")})
     if kind == "bevel_gear":
         return design_from_spec({"mechanism_type": "bevel_gear", "gear_ratio": gear_ratio, "torque_Nm": torque_Nm,
                                  "speed_rpm": speed_rpm or None, "material": material})
@@ -567,6 +607,8 @@ def design_from_spec(spec, on_status=None):
         return _worm_gear(result, spec, say)
     if mtype == "bevel_gear":
         return _bevel_gear(result, spec, say)
+    if mtype == "bolted_joint":
+        return _bolted_joint(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -582,7 +624,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical, bevel and worm gears, bolted joints, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1563,6 +1605,50 @@ def _bevel_gear(result, spec, say):
                       f"{g['gamma1_deg']:.1f}° / {g['gamma2_deg']:.1f}°, face {g['face_width']:g} mm, cone distance "
                       f"{g['Ao']:.1f} mm, shafts Ø{g['bore1']:g}/Ø{g['bore2']:g} mm at 90°. Thrust on the pinion "
                       f"{g['Wa1']:.0f} N, on the gear {g['Wa2']:.0f} N; output {T1 * g['ratio'] / 1000:.2f} N·m."]))
+    return result
+
+
+def _bolted_joint(result, spec, say):
+    """H1: bolted tension joint. Required: the separating load; grip 20 mm, steel members, class 8.8 and 4 bolts
+    are defaults (reported)."""
+    result["mechanism_type"] = "bolted_joint"
+    P = spec.get("force_N")
+    if not P:
+        return dict(result, status="missing", message="Missing for the bolted joint: the load pulling the joint apart (N or kg).")
+    notes = []
+    grip = spec.get("grip_mm")
+    if not grip:
+        grip = 20.0
+        notes.append("Clamped thickness not given: 20 mm (two 10 mm plates) assumed.")
+    mem = spec.get("member_material") if spec.get("member_material") in bolted.MEMBERS else None
+    if mem is None:
+        mem = "steel"
+        notes.append("Plate material not given: steel assumed.")
+    cls = spec.get("bolt_class") if spec.get("bolt_class") in bolted.CLASSES else None
+    if cls is None:
+        cls = "8.8"
+        notes.append("Bolt class not given: 8.8 assumed.")
+    N = spec.get("bolts")
+    N = int(N) if N else None
+    if N is None:
+        notes.append(f"Number of bolts not given: {bolted.N_DEFAULT} tried first.")
+    fl = bool(spec.get("fluctuating"))
+    say("Bolted joint: stiffnesses, preload, load / separation / fatigue factors...")
+    a, s_checks = bolted.design(float(P), float(grip), N, mem, cls, fl)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if a is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            f"No M5–M36 class {cls} bolts pass (failing: {', '.join(c['name'] for c in checks if not c['ok'])})."]))
+    info = dict(a, P=float(P), grip=float(grip), fluctuating=fl)
+    result.update(bolted=info, checks=checks, notes=notes, target={"force_N": float(P)},
+                  fusion={"type": "bolted_joint", "passed_checks": True, "d": a["d"], "N": a["N"], "L": a["L"],
+                          "grip": float(grip), "nut_h": a["nut_h"], "af": a["af"], "bolt_circle": a["bolt_circle"],
+                          "pitch": a["pitch"]})
+    msg = (f"All checks passed. {a['N']} × M{a['d']}×{a['L']} class {cls} bolts with nuts on a Ø{a['bolt_circle']:.0f} mm "
+           f"bolt circle; tighten to {a['T'] / 1000:.1f} N·m (preload {a['Fi'] / 1000:.1f} kN each, K = {bolted.K_TORQUE:g}). "
+           f"Joint constant C = {a['C']:.3f}: each bolt feels only {100 * a['C']:.0f}% of its {a['P_bolt']:.0f} N share.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
 

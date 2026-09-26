@@ -366,7 +366,7 @@ Everything is computed on this computer, with a local AI.</div>
     if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel) { renderCard(d); if (d.spec) setKnobs(d); }
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted) { renderCard(d); if (d.spec) setKnobs(d); }
   }
 
   function showPreview(d) {
@@ -375,7 +375,7 @@ Everything is computed on this computer, with a local AI.</div>
     $("verdict").className = "verdict " + (d.status === "ok" ? "ok" : "bad");
     $("verdict").textContent = (d.status === "ok" ? "✓ " : "✗ ") + d.message;
     $("verdict").title = d.message;          // full text on hover
-    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel) renderCard(d);
+    if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted) renderCard(d);
   }
 
   // ------------------------------------------------------------ result card
@@ -1049,7 +1049,28 @@ Everything is computed on this computer, with a local AI.</div>
       </div>`;
   }
 
+  function renderBoltCard(d) {               // H1: bolted joint
+    const s = d.bolted;
+    if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    const rows = [["Bolts", `${s.N} × M${s.d}×${s.L}, class ${s.cls}`], ["Bolt circle", `Ø${f(s.bolt_circle, 0)} mm`],
+                  ["Load (total / per bolt)", `${f(s.P, 0)} / ${f(s.P_bolt, 0)} N${s.fluctuating ? ", fluctuating" : ""}`],
+                  ["Plates", `${s.member}, ${f(s.grip, 0)} mm clamped`],
+                  ["Stiffness bolt / members", `${f(s.kb / 1000, 0)} / ${f(s.km / 1000, 0)} kN/mm`],
+                  ["Joint constant C", f(s.C, 3)], ["Preload (0.75 F_p)", `${f(s.Fi / 1000, 1)} kN`],
+                  ["Tightening torque", `${f(s.T / 1000, 1)} N·m (K = 0.2)`],
+                  ["Bolt force peak", `${f(s.F_bolt_max / 1000, 2)} kN`], ["Clamp left at full load", `${f(s.F_member / 1000, 2)} kN`],
+                  ["Factors n_p / n_L / n_0", `${f(s.n_p, 2)} / ${f(s.n_L, 2)} / ${f(s.n_0, 2)}`]];
+    if (s.fluctuating) rows.push(["Fatigue n_f (Goodman)", f(s.n_f, 2)]);
+    $("result").innerHTML = `
+      <div class="grid">
+        <div class="col"><h3>Bolted joint</h3><table>${rows.map(([k, v]) =>
+          `<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</table></div>
+        <div class="col"><h3>Checks</h3>${checksHtml(d.checks)}</div>
+      </div>`;
+  }
+
   function renderCard(d) {
+    if (d.mechanism_type === "bolted_joint") return renderBoltCard(d);
     if (d.mechanism_type === "bevel_gear") return renderBevelCard(d);
     if (d.mechanism_type === "worm_gear") return renderWormCard(d);
     if (d.mechanism_type === "helical_gear") return renderHelicalCard(d);

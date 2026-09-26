@@ -4,7 +4,7 @@ LLM evaluation set: run it whenever a prompt changes, so that fixing one case do
 The sentences are mostly Turkish (the user's language) plus a few English ones (the panel examples).
 
 Usage (in the project folder, with Ollama running):  python -u tools/llm_eval.py
-The LLM output and the code safety net (pipeline.input_turn_backstop) are tested together.
+The LLM output and the code safety nets (pipeline.input_turn_backstop, force_backstop) are tested together.
 """
 
 import os
@@ -13,7 +13,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llm_extract import extract_spec  # noqa: E402
-from pipeline import input_turn_backstop  # noqa: E402
+from pipeline import force_backstop, input_turn_backstop  # noqa: E402
 
 # (sentence, expected fields)
 CASES = [
@@ -51,6 +51,10 @@ CASES = [
                                                                     travel_mm=300, screw_ends="jack")),
     ("lead screw moving a 2 kN load over 400 mm at 300 rpm, bronze nut",
      dict(mechanism_type="power_screw", force_N=2000, travel_mm=400, speed_rpm=300, nut_material="bronze")),
+    ("50 kN değişken yükü taşıyacak cıvatalı flanş, iki 20 mm çelik sac, 6 cıvata",
+     dict(mechanism_type="bolted_joint", force_N=50000, grip_mm=40, bolts=6, fluctuating=True)),
+    ("how many 10.9 bolts to hold a 2 ton cast iron cover", dict(mechanism_type="bolted_joint", force_N=19620,
+                                                                 bolt_class="10.9", member_material="cast_iron")),
     ("konik dişli çifti, oran 2, 10 Nm giriş torku", dict(mechanism_type="bevel_gear", gear_ratio=2, torque_Nm=10)),
     ("mitre gears transmitting 15 N·m at 600 rpm through a right angle",
      dict(mechanism_type="bevel_gear", gear_ratio=1, torque_Nm=15, speed_rpm=600)),
@@ -183,7 +187,7 @@ def main():
     fails = 0
     for text, want in CASES:
         t0 = time.time()
-        spec, _ = input_turn_backstop(text, extract_spec(text))
+        spec, _ = force_backstop(text, input_turn_backstop(text, extract_spec(text))[0])
         bad = {k: (spec.get(k), v) for k, v in want.items()
                if not (spec.get(k) == v or (isinstance(v, (int, float)) and isinstance(spec.get(k), (int, float))
                                              and abs(spec.get(k) - v) < 1e-6))}

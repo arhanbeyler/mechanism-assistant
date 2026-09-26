@@ -37,7 +37,7 @@ def _schema(props):
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
                                    "enum": ["fourbar", "slider_crank", "straight_line", "geneva", "toggle_clamp",
                                             "scotch_yoke", "quick_return", "ratchet", "power_screw", "rack_pinion",
-                                            "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear", "bevel_gear", "reducer", "spur_gear",
+                                            "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear", "bevel_gear", "bolted_joint", "reducer", "spur_gear",
                                             "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
@@ -46,6 +46,8 @@ ROUTER_PROMPT = (
     "'spring': a spring (yay, basma yayı, konik yay). "
     "'slider_crank': a piston or slider moved back and forth by a crank (piston, pistonlu, krank-biyel, strok, "
     "stroke, 'ileri geri giden', reciprocating slider, 'X mm strok'). "
+    "'bolted_joint': bolts / screws holding parts together against a load pulling them apart (cıvata, civata, "
+    "cıvatalı bağlantı, flanş cıvatası, 'kaç cıvata gerekir', bolted joint, bolt size, preload). "
     "'bevel_gear': a bevel gear pair turning the motion through an angle, usually 90 degrees (konik dişli, "
     "açılı dişli, 'dik açıyla aktarsın', bevel gear, mitre / miter gear, right-angle gear pair). "
     "'worm_gear': a worm and worm wheel (sonsuz vida, sonsuz vida-çark, salyangoz dişli, worm gear, worm drive, "
@@ -205,6 +207,22 @@ FLEX_DRIVE_TEXT = (
     "(düzgün, darbesiz, fan, uniform), 'moderate' (orta darbeli, konveyör), 'heavy' (ağır darbeli, kırıcı, "
     "crusher) only if described, else null. center_distance_mm: distance between the shafts (eksenler arası, "
     "mil mesafesi, 'aradaki mesafe 400 mm') only if given.")
+BOLTED = (_schema({
+    "force_N": {"type": ["number", "null"]},
+    "bolts": {"type": ["integer", "null"]},
+    "grip_mm": {"type": ["number", "null"]},
+    "member_material": {"type": ["string", "null"], "enum": ["steel", "aluminum", "cast_iron", None]},
+    "bolt_class": {"type": ["string", "null"], "enum": ["8.8", "10.9", "12.9", None]},
+    "fluctuating": {"type": "boolean"},
+}), COMMON + (
+    "The user wants a bolted joint. force_N: the total load pulling the joint apart in NEWTONS. N and kN are "
+    "already forces: '50 kN' -> 50000, '800 N' -> 800 (never multiply kN by 9.81). Only a MASS is converted: "
+    "'300 kg' -> 2943, '2 ton' -> 19620. bolts: number of bolts if given. grip_mm: total "
+    "clamped thickness if given ('iki 10 mm sac' / 'two 10 mm plates' -> 20). member_material: 'steel', "
+    "'aluminum' (alüminyum), 'cast_iron' (döküm, pik) only if named. bolt_class: '8.8', '10.9', '12.9' only if "
+    "named. fluctuating: true if the load varies / repeats / vibrates (değişken, titreşimli, tekrarlı, "
+    "fluctuating, cyclic, fatigue)."))
+
 BEVEL = (_schema({
     "gear_ratio": {"type": ["number", "null"]},
     "torque_Nm": {"type": ["number", "null"]},
@@ -352,7 +370,7 @@ SHAFT = (_schema({
     "factor if given ('emniyet katsayısı 2.5')."))
 
 MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "straight_line": STRAIGHT_LINE, "geneva": GENEVA, "toggle_clamp": TOGGLE_CLAMP, "scotch_yoke": SCOTCH_YOKE, "ratchet": RATCHET, "power_screw": POWER_SCREW, "rack_pinion": RACK_PINION,
-                     "chain_drive": CHAIN_DRIVE, "planetary": PLANETARY, "helical_gear": HELICAL, "worm_gear": WORM, "bevel_gear": BEVEL, "belt_drive": BELT_DRIVE,
+                     "chain_drive": CHAIN_DRIVE, "planetary": PLANETARY, "helical_gear": HELICAL, "worm_gear": WORM, "bevel_gear": BEVEL, "bolted_joint": BOLTED, "belt_drive": BELT_DRIVE,
                      "quick_return": QUICK_RETURN, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # All fields (the pipeline expects one dict; fields of other modules are None)
@@ -361,18 +379,18 @@ for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
 KIND_TO_TYPE = {"slider_crank": "slider_crank", "straight_line": "straight_line", "geneva": "geneva",
-                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "helical_gear": "helical_gear", "worm_gear": "worm_gear", "bevel_gear": "bevel_gear", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
+                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "helical_gear": "helical_gear", "worm_gear": "worm_gear", "bevel_gear": "bevel_gear", "bolted_joint": "bolted_joint", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
 # ---------------------------------------------------------------- 3) edits of the current design (K1)
 KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "slider_crank": "slider_crank",
                 "straight_line": "straight_line", "geneva": "geneva", "toggle_clamp": "toggle_clamp",
-                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "helical_gear": "helical_gear", "worm_gear": "worm_gear", "bevel_gear": "bevel_gear", "reducer": "reducer", "spur_gear": "spur_gear",
+                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "helical_gear": "helical_gear", "worm_gear": "worm_gear", "bevel_gear": "bevel_gear", "bolted_joint": "bolted_joint", "reducer": "reducer", "spur_gear": "spur_gear",
                 "spring": "spring", "cam": "cam", "shaft": "shaft"}
 DESCRIPTION = {"fourbar": "four-bar linkage", "slider_crank": "slider-crank (piston) mechanism",
                "straight_line": "straight-line linkage (Hoeckens)", "geneva": "Geneva mechanism (intermittent rotation)",
                "toggle_clamp": "toggle clamp", "scotch_yoke": "Scotch yoke",
-               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "chain_drive": "roller chain drive", "belt_drive": "V-belt drive", "planetary": "planetary gear set", "helical_gear": "helical gear pair", "worm_gear": "worm gear set", "bevel_gear": "bevel gear pair", "reducer": "single-stage gear reducer (gearbox)",
+               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "chain_drive": "roller chain drive", "belt_drive": "V-belt drive", "planetary": "planetary gear set", "helical_gear": "helical gear pair", "worm_gear": "worm gear set", "bevel_gear": "bevel gear pair", "bolted_joint": "bolted joint", "reducer": "single-stage gear reducer (gearbox)",
                "spur_gear": "spur gear pair", "spring": "compression spring", "cam": "disk cam with roller follower",
                "shaft": "rotating shaft"}
 NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}
