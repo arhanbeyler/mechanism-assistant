@@ -24,6 +24,7 @@ import slotted
 import slider_crank
 import springs
 import toggle
+import worm
 import llm_extract
 import planetary
 import power_screw
@@ -39,6 +40,16 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "worm_gear": {
+        "title": "Worm gear",
+        "params": [
+            {"key": "gear_ratio", "label": "Ratio", "unit": "", "min": 5, "max": 100, "step": 1, "default": 30},
+            {"key": "output_torque_Nm", "label": "Output torque", "unit": "N·m", "min": 1, "max": 2000, "step": 1, "default": 50},
+            {"key": "speed_rpm", "label": "Worm speed", "unit": "rpm", "min": 50, "max": 3000, "step": 50, "default": 1400},
+            {"key": "self_locking", "label": "Self-locking", "default": "no",
+             "options": [["no", "Not needed"], ["yes", "Required"]]},
+        ],
+    },
     "helical_gear": {
         "title": "Helical gear pair",
         "params": [
@@ -304,7 +315,7 @@ _INPUT_TURN = re.compile(
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
 _SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
-                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary", "helical_gear")
+                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary", "helical_gear", "worm_gear")
 
 
 def input_turn_backstop(text, spec):
@@ -428,10 +439,15 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        follower_mass_kg=None, follower_load_N=None, slots=None, center_distance_mm=None,
                        load_mass_kg=None, load_diameter_mm=None, opening_deg=None, handle_travel_deg=None,
                        arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None,
-                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None, planets=None, helix_deg=None):
+                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None, planets=None, helix_deg=None, output_torque_Nm=None,
+                       self_locking=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "worm_gear":
+        return design_from_spec({"mechanism_type": "worm_gear", "gear_ratio": gear_ratio, "speed_rpm": speed_rpm,
+                                 "output_torque_Nm": output_torque_Nm, "torque_Nm": torque_Nm, "power_kW": power_kW,
+                                 "self_locking": self_locking in (True, "yes")})
     if kind == "helical_gear":
         return design_from_spec({"mechanism_type": "helical_gear", "gear_ratio": gear_ratio, "torque_Nm": torque_Nm,
                                  "helix_deg": helix_deg, "speed_rpm": speed_rpm or None, "material": material})
@@ -534,6 +550,8 @@ def design_from_spec(spec, on_status=None):
         return _planetary(result, spec, say)
     if mtype == "helical_gear":
         return _helical_gear(result, spec, say)
+    if mtype == "worm_gear":
+        return _worm_gear(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -549,7 +567,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical gears, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, helical and worm gears, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1434,6 +1452,62 @@ def _helical_gear(result, spec, say):
                       f"z = {g['z1']}/{g['z2']}, face {g['face_width']:g} mm, centre distance {g['center_distance']:.2f} mm, "
                       f"shafts Ø{g['bore1']:g}/Ø{g['bore2']:g} mm. Axial thrust {g['Wa']:.0f} N on the bearings; output "
                       f"{T1 * g['ratio'] / 1000:.2f} N·m."]))
+    return result
+
+
+def _worm_gear(result, spec, say):
+    """G1b: worm gear set. Required: ratio, worm speed and a torque (output, or input / power: then the output
+    torque follows the efficiency, iterated because the efficiency depends on the design)."""
+    result["mechanism_type"] = "worm_gear"
+    ratio, rpm = spec.get("gear_ratio"), spec.get("speed_rpm")
+    T_out, T_in, P = spec.get("output_torque_Nm"), spec.get("torque_Nm"), spec.get("power_kW")
+    notes = []
+    if T_in is None and P is not None and rpm:
+        T_in = 9550.0 * P / rpm
+        notes.append(f"Worm torque from the power: {T_in:.2f} N·m.")
+    missing = [n for v, n in ((ratio, "ratio"), (rpm, "worm speed (rpm)"), (T_out or T_in, "a torque (output or input) or power"))
+               if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the worm gear: {', '.join(missing)}.")
+    ratio, rpm = float(ratio), float(rpm)
+    if ratio < 1:
+        ratio = 1 / ratio
+    if not 5 <= ratio <= 100:
+        return dict(result, status="missing", message=f"A worm set covers ratios of 5–100 (given: {ratio:g}).")
+    lock = bool(spec.get("self_locking"))
+    casting = spec.get("casting") if spec.get("casting") in worm.CASTING else "sand"
+    say("Worm gear: starts, module, diameter quotient, AGMA rating, efficiency...")
+    if T_out:
+        d, s_checks = worm.design(ratio, float(T_out) * 1000.0, rpm, lock, casting)
+    else:
+        eff = 0.7
+        for _ in range(4):                                  # the output torque depends on the efficiency
+            d, s_checks = worm.design(ratio, float(T_in) * 1000.0 * ratio * eff, rpm, lock, casting)
+            if d is None or abs(d["efficiency"] - eff) < 1e-3:
+                break
+            eff = d["efficiency"]
+        if d:
+            notes.append(f"Output torque = input × ratio × efficiency = {d['T_out'] / 1000:.1f} N·m.")
+    notes.append(f"Steel worm, {worm.CASTING[casting]} wheel, application factor K_a = {worm.KA:g} (assumed).")
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if d is None:
+        why = (" A self-locking worm needs one start and at least 21 wheel teeth, so the ratio must be at least 21."
+               if lock and ratio < worm.NG_MIN else "")
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            f"No worm set passes all checks.{why}"]))
+    info = dict(d, rpm_in=rpm, self_locking_asked=lock)
+    result.update(worm=info, checks=checks, notes=notes, target={"ratio": ratio},
+                  fusion={"type": "worm_gear", "passed_checks": True, "m": d["module"], "NW": d["NW"], "NG": d["NG"],
+                          "dW": d["dW"], "lead_deg": d["lead_deg"], "bore_worm": d["bore_worm"],
+                          "bore_wheel": d["bore_wheel"], "F_G": d["F_G"]})
+    lock_txt = ("self-locking (the load cannot turn the worm)" if d["self_locking"]
+                else "NOT self-locking (the load can drive the worm back)")
+    msg = (f"All checks passed. {d['NW']}-start worm Ø{d['dW']:g} mm (lead angle {d['lead_deg']:.2f}°), wheel {d['NG']} teeth "
+           f"(Ø{d['dG']:g} mm), module {d['module']:g}, centre distance {d['C']:.1f} mm; efficiency {100 * d['efficiency']:.0f}%, "
+           f"{lock_txt}. Output {d['T_out'] / 1000:.1f} N·m at {d['rpm_out']:.1f} rpm; input {d['P_in']:.0f} W, "
+           f"{d['P_loss']:.0f} W becomes heat.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
 

@@ -171,7 +171,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Ratchet": "Plastic - Matte (Green)", "Pawl": "Plastic - Matte (Red)",
                "Screw": "Steel - Satin", "Nut": "Brass - Matte", "Rack": "Plastic - Matte (Green)",
                "Driven": "Plastic - Matte (Green)", "Sun": "Plastic - Matte (Red)", "Planet": "Plastic - Matte (Green)",
-               "Carrier": "Plastic - Matte (Blue)", "Ring": "Plastic - Matte (Gray)", "Chain": "Coating - Black Oxide", "Belt": "Rubber - Hard",
+               "Carrier": "Plastic - Matte (Blue)", "Ring": "Plastic - Matte (Gray)", "Worm": "Steel - Satin", "Chain": "Coating - Black Oxide", "Belt": "Rubber - Hard",
                "Yoke": "Plastic - Matte (Green)", "Ram": "Plastic - Matte (Green)", "Lever": "Plastic - Matte (Blue)",
                "Rocker": "Plastic - Matte (Green)", "Gear": "Plastic - Matte (Green)", "Follower": "Plastic - Matte (Green)",
                "Piston": "Plastic - Matte (Green)",
@@ -243,7 +243,8 @@ def build(mech, reuse=True):
              "rack_pinion": "rack_pinion",      # G4: rack and pinion
              "chain_drive": "flex_drive", "belt_drive": "flex_drive",   # G3: chain / V-belt
              "planetary": "planetary",          # G2: planetary gear set
-             "helical_gear": "helical"}.get(mech.get("type"))   # G1a: helical gear pair
+             "helical_gear": "helical",         # G1a: helical gear pair
+             "worm_gear": "worm"}.get(mech.get("type"))   # G1b: worm gear set
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)
