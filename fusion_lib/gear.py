@@ -18,9 +18,9 @@ PLATE_T = 3.0     # mm, base plate
 GAP = 0.5         # mm, between the plate and the gears
 
 
-def _tooth_profile(sketch, m, z):
+def _tooth_profile(sketch, m, z, add=1.0):
     """One tooth (axis +x) as a closed profile sunk into the root disc. Returns the profile."""
-    right, left, rf, ra = gears.involute_tooth(m, z, n=10)
+    right, left, rf, ra = gears.involute_tooth(m, z, n=10, add=add)
     r_in = rf - 0.3 * m                                     # sunk into the disc (so they join)
     P = adsk.core.Point3D.create
     lines = sketch.sketchCurves.sketchLines

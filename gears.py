@@ -137,12 +137,13 @@ def hub_check(m, z, bore):
             "detail": f"shaft Ø{bore:g}, root Ø{2 * rf:.1f} mm"}
 
 
-def involute_tooth(m, z, n=12, phi=PHI):
-    """Flank profiles of one tooth (gear centre at the origin, tooth axis on +x).
-    Returns (right flank, left flank) point lists, from the base circle (or the root) to the tip."""
+def involute_tooth(m, z, n=12, phi=PHI, add=1.0):
+    """Flank profiles of one tooth (gear centre at the origin, tooth axis on +x), addendum add * m.
+    Returns (right flank, left flank) point lists, from the base circle (or the root) to the tip.
+    (An internal gear's tooth space is this shape with add = 1.25: its root clears the mate's tip.)"""
     r = m * z / 2
     rb = r * math.cos(phi)
-    ra = r + m
+    ra = r + add * m
     rf = r - 1.25 * m
     inv = lambda a: math.tan(a) - a
     half = math.pi / (2 * z) + inv(phi)            # half angle at the base circle, from the tooth axis

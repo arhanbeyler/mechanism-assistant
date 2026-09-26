@@ -24,6 +24,8 @@ Sentences can be written in English or Turkish.
 | ![quick return](docs/img/quick_return.png) | ![ratchet](docs/img/ratchet.png) | ![power screw](docs/img/power_screw.png) |
 | **Rack and pinion** | **Roller chain drive** | **V-belt drive** |
 | ![rack and pinion](docs/img/rack_pinion.png) | ![chain drive](docs/img/chain_drive.png) | ![V-belt drive](docs/img/belt_drive.png) |
+| **Planetary gear set** | | |
+| ![planetary](docs/img/planetary.png) | | |
 
 ## Core rule: the LLM never produces a number
 
@@ -67,6 +69,7 @@ flowchart LR
 | Rack and pinion | Force on the rack, travel (default 200 mm, reported), speed optional; the lightest pinion (z 18..40, standard module, face 8..12 m) + rack that passes | Pinion torque F·d/2, travel π·d per turn, Lewis bending of pinion (Y(z)) and rack (Y = 0.485), Barth K_v, contact ratio with a rack ≥ 1.2, no undercut, steel shaft and hub web; in Fusion a motion-linked pinion and rack, zero tooth overlap over 10 teeth and rack travel exactly π·d·θ/360 |
 | Roller chain drive | Power (or torque), input speed, speed ratio, load type (service factor, default moderate shock, reported), centre distance optional; ANSI / ISO 606 chains no. 25–160, 1–3 strands, small sprocket 17–25 teeth; the smallest sprocket pair that passes | Rating per strand from Shigley's link-plate and roller-bushing formulas (reproduce Table 17-20), multi-strand factor, chain pull vs breaking load (≥ 7), whole even number of links and the exact centre distance, wrap ≥ 120°, chordal speed variation, steel shafts and hub web; in Fusion the plates clear the teeth and the driven sprocket turns at exactly N1/N2 |
 | V-belt drive | Same inputs; classical A / B / C sections, standard belt lengths; the smallest sheave pair (with the real sheave width) that passes, at most 5 belts | Shigley 17-4: tabulated rating, angle-of-contact K1 and length K2 factors, number of belts and n_fs, belt tensions and the initial tension to set, belt life (Table 17-17), belt speed ≤ 25 m/s, centre distance, steel shafts; Shigley example 17-4 reproduced (F1 = 64.4 lbf, F_i = 32.2 lbf); in Fusion each belt sits 0.2 mm off both groove walls |
+| Planetary gear set | Ratio (3–12, sun in, carrier out, ring fixed), input torque or power, planets 3–5 (or the lightest); tooth numbers that give the ratio within 2 % AND assemble ((Z_s + Z_r)/n whole) AND clear their neighbours; the smallest ring that passes | Willis ratio (tested against pitch-point velocities), ring reaction from statics, load sharing K_γ (assumed, reported), Lewis bending of sun, planet as an idler (×0.7) and ring, both contact ratios (internal formula tends to the rack's), steel planet pins as cantilevers, sun and carrier shafts; mesh phases computed for every planet; in Fusion the carrier turns at exactly 1/i and each planet by the Willis relation, contact only (< 0.001 mm³) |
 | Link sizing | Per-link width/thickness for load and material (PLA, PETG, Al 6061, steel), local bosses D = 2.5d | Euler buckling, net section, bending, pin shear and bearing, Roark K_t, L/200 deflection incl. FEA-calibrated hub compliance, steel shaft torsion, layer interference ≥ 1 mm |
 | Spur gears | Lewis bending (Shigley Y table, Barth K_v), involute teeth | Contact ratio ≥ 1.2, undercut z ≥ 17, Hertz contact stress (info), shaft and hub |
 | Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)) |
@@ -121,7 +124,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 252 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 258 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
@@ -136,7 +139,7 @@ function_gen.py      Freudenstein function generator (limited-input four-bar)
 strength.py          link, pin and shaft sizing; hub compliance; K_t; deflection
 interference.py      layer order and shaft-to-link clearance over the cycle
 fea_local.py         gmsh + scikit-fem link model (with hub) vs hand calculation
-gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py   module engines
+gears.py springs.py cams.py shafts.py slider_crank.py coupler.py geneva.py toggle.py slotted.py ratchet.py power_screw.py rack_pinion.py chain.py vbelt.py planetary.py   module engines
 shaft_multi.py       shaft with several gear loads (two planes, deflection, critical speed)
 reducer.py reducer2.py cam_system.py   systems: modules sized together until their constraints agree
 fusion_lib/          Fusion builders (one per module) + shared document handling

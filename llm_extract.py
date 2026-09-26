@@ -37,7 +37,7 @@ def _schema(props):
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
                                    "enum": ["fourbar", "slider_crank", "straight_line", "geneva", "toggle_clamp",
                                             "scotch_yoke", "quick_return", "ratchet", "power_screw", "rack_pinion",
-                                            "chain_drive", "belt_drive", "reducer", "spur_gear",
+                                            "chain_drive", "belt_drive", "planetary", "reducer", "spur_gear",
                                             "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
@@ -46,6 +46,8 @@ ROUTER_PROMPT = (
     "'spring': a spring (yay, basma yayı, konik yay). "
     "'slider_crank': a piston or slider moved back and forth by a crank (piston, pistonlu, krank-biyel, strok, "
     "stroke, 'ileri geri giden', reciprocating slider, 'X mm strok'). "
+    "'planetary': a planetary / epicyclic gear set with sun, planets and a ring gear (planet dişli, gezegen "
+    "dişli, planet redüktör, planeter, epicyclic, sun and planet); it is never 'reducer' or 'spur_gear'. "
     "'chain_drive': a roller chain and sprockets transmitting rotation (zincir, zincir dişli, zincirli aktarma, "
     "zincir-dişli, bisiklet zinciri, roller chain, sprocket). "
     "'belt_drive': a V-belt and pulleys transmitting rotation (kayış, V kayış, kayış-kasnak, kasnak, "
@@ -197,6 +199,19 @@ FLEX_DRIVE_TEXT = (
     "(düzgün, darbesiz, fan, uniform), 'moderate' (orta darbeli, konveyör), 'heavy' (ağır darbeli, kırıcı, "
     "crusher) only if described, else null. center_distance_mm: distance between the shafts (eksenler arası, "
     "mil mesafesi, 'aradaki mesafe 400 mm') only if given.")
+PLANETARY = (_schema({
+    "gear_ratio": {"type": ["number", "null"]},
+    "torque_Nm": {"type": ["number", "null"]},
+    "power_kW": {"type": ["number", "null"]},
+    "speed_rpm": {"type": ["number", "null"]},
+    "planets": {"type": ["integer", "null"]},
+    "material": MATERIAL,
+}), COMMON + (
+    "The user wants a planetary gear set. gear_ratio: speed reduction ('1:5', '5 kat', 'oran 5' -> 5). "
+    "torque_Nm: input torque in N·m if given. power_kW: power in kW if given ('750 W' -> 0.75). speed_rpm: input "
+    "speed if given. planets: number of planet gears only if given ('3 planetli', 'four planets' -> 4). "
+    "material only if named."))
+
 CHAIN_DRIVE = (_schema(FLEX_DRIVE_FIELDS), COMMON + "The user wants a roller chain drive. " + FLEX_DRIVE_TEXT)
 BELT_DRIVE = (_schema(FLEX_DRIVE_FIELDS), COMMON + "The user wants a V-belt drive. " + FLEX_DRIVE_TEXT)
 
@@ -298,7 +313,7 @@ SHAFT = (_schema({
     "factor if given ('emniyet katsayısı 2.5')."))
 
 MODULE_EXTRACTORS = {"fourbar": FOURBAR, "slider_crank": SLIDER_CRANK, "straight_line": STRAIGHT_LINE, "geneva": GENEVA, "toggle_clamp": TOGGLE_CLAMP, "scotch_yoke": SCOTCH_YOKE, "ratchet": RATCHET, "power_screw": POWER_SCREW, "rack_pinion": RACK_PINION,
-                     "chain_drive": CHAIN_DRIVE, "belt_drive": BELT_DRIVE,
+                     "chain_drive": CHAIN_DRIVE, "planetary": PLANETARY, "belt_drive": BELT_DRIVE,
                      "quick_return": QUICK_RETURN, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # All fields (the pipeline expects one dict; fields of other modules are None)
@@ -307,18 +322,18 @@ for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
 KIND_TO_TYPE = {"slider_crank": "slider_crank", "straight_line": "straight_line", "geneva": "geneva",
-                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
+                "toggle_clamp": "toggle_clamp", "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: the extractor decides
 
 
 # ---------------------------------------------------------------- 3) edits of the current design (K1)
 KIND_OF_TYPE = {"crank_rocker": "fourbar", "rocker_rocker": "fourbar", "slider_crank": "slider_crank",
                 "straight_line": "straight_line", "geneva": "geneva", "toggle_clamp": "toggle_clamp",
-                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "reducer": "reducer", "spur_gear": "spur_gear",
+                "scotch_yoke": "scotch_yoke", "quick_return": "quick_return", "ratchet": "ratchet", "power_screw": "power_screw", "rack_pinion": "rack_pinion", "chain_drive": "chain_drive", "belt_drive": "belt_drive", "planetary": "planetary", "reducer": "reducer", "spur_gear": "spur_gear",
                 "spring": "spring", "cam": "cam", "shaft": "shaft"}
 DESCRIPTION = {"fourbar": "four-bar linkage", "slider_crank": "slider-crank (piston) mechanism",
                "straight_line": "straight-line linkage (Hoeckens)", "geneva": "Geneva mechanism (intermittent rotation)",
                "toggle_clamp": "toggle clamp", "scotch_yoke": "Scotch yoke",
-               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "chain_drive": "roller chain drive", "belt_drive": "V-belt drive", "reducer": "single-stage gear reducer (gearbox)",
+               "quick_return": "quick-return (shaper) mechanism", "ratchet": "ratchet and pawl", "power_screw": "power screw", "rack_pinion": "rack and pinion", "chain_drive": "roller chain drive", "belt_drive": "V-belt drive", "planetary": "planetary gear set", "reducer": "single-stage gear reducer (gearbox)",
                "spur_gear": "spur gear pair", "spring": "compression spring", "cam": "disk cam with roller follower",
                "shaft": "rotating shaft"}
 NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}

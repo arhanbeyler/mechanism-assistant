@@ -24,6 +24,7 @@ import slider_crank
 import springs
 import toggle
 import llm_extract
+import planetary
 import power_screw
 import rack_pinion
 import ratchet
@@ -37,6 +38,17 @@ from llm_extract import extract_spec
 # C0: each module defines its own sliders; the panel builds them from here.
 # (The four-bar has its own sliders in the panel: coloured swing band, input motion, etc.)
 MODULES = {
+    "planetary": {
+        "title": "Planetary gear set",
+        "params": [
+            {"key": "gear_ratio", "label": "Ratio", "unit": "", "min": 3, "max": 12, "step": 0.1, "default": 5},
+            {"key": "torque_Nm", "label": "Input torque", "unit": "N·m", "min": 0.5, "max": 500, "step": 0.5, "default": 10},
+            {"key": "speed_rpm", "label": "Input speed", "unit": "rpm", "min": 0, "max": 3000, "step": 50, "default": 0,
+             "zero_label": "not given"},
+            {"key": "planets", "label": "Planets", "default": "auto",
+             "options": [["auto", "Lightest"], [3, "3"], [4, "4"], [5, "5"]]},
+        ],
+    },
     "chain_drive": {
         "title": "Roller chain drive",
         "params": [
@@ -281,7 +293,7 @@ _INPUT_TURN = re.compile(
 # Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
 _SPEED_KINDS = ("reducer", "spur_gear", "shaft", "slider_crank", "cam", "straight_line", "geneva", "scotch_yoke",
-                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive")
+                "quick_return", "power_screw", "rack_pinion", "chain_drive", "belt_drive", "planetary")
 
 
 def input_turn_backstop(text, spec):
@@ -405,10 +417,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        follower_mass_kg=None, follower_load_N=None, slots=None, center_distance_mm=None,
                        load_mass_kg=None, load_diameter_mm=None, opening_deg=None, handle_travel_deg=None,
                        arm_length_mm=None, clamp_force_N=None, handle_length_mm=None, teeth=None,
-                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None):
+                       force_N=None, travel_mm=None, screw_ends=None, nut_material=None, shock=None, planets=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
+    if kind == "planetary":
+        return design_from_spec({"mechanism_type": "planetary", "gear_ratio": gear_ratio, "torque_Nm": torque_Nm,
+                                 "power_kW": power_kW, "speed_rpm": speed_rpm or None, "material": material,
+                                 "planets": int(planets) if str(planets) in ("3", "4", "5") else None})
     if kind in ("chain_drive", "belt_drive"):
         return design_from_spec({"mechanism_type": kind, "power_kW": power_kW, "torque_Nm": torque_Nm,
                                  "speed_rpm": speed_rpm, "gear_ratio": gear_ratio, "shock": shock,
@@ -500,6 +516,8 @@ def design_from_spec(spec, on_status=None):
         return _rack_pinion(result, spec, say)
     if mtype in ("chain_drive", "belt_drive"):
         return _flex_drive(result, spec, say)
+    if mtype == "planetary":
+        return _planetary(result, spec, say)
     if mtype == "quick_return":
         return _quick_return(result, spec, say)
     if mtype == "reducer":
@@ -515,7 +533,7 @@ def design_from_spec(spec, on_status=None):
     if mtype not in ("crank_rocker", "rocker_rocker"):
         return dict(result, status="unsupported",
                     message="Supported: four-bar linkages (crank-rocker or limited-angle input), straight-line "
-                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, reducers (one or two stages), spur gears, compression springs, "
+                            "linkage, Geneva, toggle clamp, slider-crank, Scotch yoke, quick return, ratchet, power screw, rack and pinion, chain and V-belt drives, planetary gear sets, reducers (one or two stages), spur gears, compression springs, "
                             "cams and shafts. This request is not one of them.")
     rr = mtype == "rocker_rocker"
     required = ((("crank_length_mm", "input arm length"), ("input_swing_deg", "input arm turning angle"),
@@ -1308,6 +1326,53 @@ def _flex_drive(result, spec, say):
                f"speed {d['V']:.1f} m/s, safety {d['n_fs']:.2f}; set the initial tension to {d['Fi']:.0f} N per belt.")
     result.update(drive=info, checks=checks, notes=notes, fusion=fusion, target={"power_W": P_W, "rpm": rpm},
                   status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _planetary(result, spec, say):
+    """G2: planetary gear set (sun in, carrier out, ring fixed). Required: ratio and input torque (or power + speed)."""
+    result["mechanism_type"] = "planetary"
+    T, P, rpm, ratio = spec.get("torque_Nm"), spec.get("power_kW"), spec.get("speed_rpm"), spec.get("gear_ratio")
+    notes = []
+    if T is None and P is not None and rpm:
+        T = 9550.0 * P / rpm
+        notes.append(f"Input torque from the power: T = 9550 P / n = {T:.1f} N·m.")
+    missing = [n for v, n in ((ratio, "ratio"), (T, "input torque (or power and speed)")) if not v]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the planetary set: {', '.join(missing)}.")
+    ratio = float(ratio)
+    if ratio < 1:
+        ratio = 1 / ratio
+    if not 3 <= ratio <= 12:
+        return dict(result, status="missing",
+                    message=f"A planetary stage with a fixed ring covers ratios 3–12 (given: {ratio:g}).")
+    mat_key = spec.get("material")
+    if mat_key not in strength.MATERIALS:
+        mat_key = "steel"
+        notes.append("Gear material not given: steel assumed.")
+    mat = strength.MATERIALS[mat_key]
+    n_pl = spec.get("planets")
+    n_pl = int(n_pl) if n_pl in planetary.N_PLANETS else None
+    say("Planetary set: teeth for the ratio, assembly and neighbour conditions, module, face width...")
+    d, s_checks = planetary.design(ratio, float(T) * 1000.0, mat, rpm, n_pl)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if d is None:
+        bad = [c["name"] for c in checks if not c["ok"]]
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            f"No planetary set passes all checks (failing: {', '.join(bad) or 'no tooth combination'})."]))
+    notes.append(f"Load sharing between the {d['n']} planets taken as K_γ = {d['K_gamma']:g}; losses neglected.")
+    info = dict(d, material=mat["name"], rpm=rpm)
+    result.update(planetary=info, checks=checks, notes=notes, target={"ratio": ratio, "torque_Nm": float(T)},
+                  fusion={"type": "planetary", "passed_checks": True, "m": d["module"], "Zs": d["Zs"], "Zp": d["Zp"],
+                          "Zr": d["Zr"], "n": d["n"], "b": d["face_width"], "pin": d["pin"],
+                          "bore_sun": d["bore_sun"], "bore_carrier": d["bore_carrier"], "R_out": d["R_out"]})
+    at_rpm = f" at {rpm / d['ratio']:.0f} rpm" if rpm else ""
+    msg = (f"All checks passed. Sun {d['Zs']}, {d['n']} planets of {d['Zp']}, ring {d['Zr']} teeth, module {d['module']:g}, "
+           f"face {d['face_width']:g} mm: i = {d['ratio']:.3f} (ring Ø{2 * d['R_out']:.0f} mm). Output "
+           f"{d['T_out'] / 1000:.1f} N·m{at_rpm}; "
+           f"planet pins Ø{d['pin']:g}, carrier shaft Ø{d['bore_carrier']:g}.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
 
