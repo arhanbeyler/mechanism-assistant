@@ -186,7 +186,7 @@ def _set_radius(segs, x0, x1, r):
     return out
 
 
-def layout(d, feature, span=None, bearing=None, key_len=None):
+def layout(d, feature, span=None, bearing=None, key_len=None, hub_len=None):
     """Iki yatakli, sol ucu tahrikli mil: sol uc (tork girisi) | rulman 1 | gobek oturmasi (aciklik
     ortasi, en buyuk M) | rulman 2. Cizilen gerilme yigilmalari = hesaplananlar (gobekteki ozellik +
     rulman omuzlari). bearing: BEARINGS satiri (yoksa gorsel yatak, delik = d).
@@ -196,7 +196,7 @@ def layout(d, feature, span=None, bearing=None, key_len=None):
         bname, bore, OD, B = bearing[0], float(bearing[1]), float(bearing[2]), float(bearing[3])
     else:
         bname, bore, OD, B = None, float(d), float(round(1.8 * d)), max(6.0, round(0.5 * d))
-    Lh = max(1.5 * d, (key_len or 0) + 0.2 * d)   # gobek kamadan uzun
+    Lh = max(1.5 * d, (key_len or 0) + 0.2 * d, hub_len or 0)   # gobek kamadan (ve takilan parcadan) uzun
     Lc = max(3.0, round(0.25 * d))
     L = float(span) if span else round(5 * d)
     L = max(L, Lh + 2 * Lc + B + 0.5 * d)         # gobek + omuz rulmanlara carpmasin
@@ -304,15 +304,19 @@ def _hub_checks(d, M, T, mat, feature, n, ny):
     ]
 
 
-def design(M_Nmm, T_Nmm, material="1045", feature="keyseat", n=2.0, ny=1.5, span=None, rpm=None, masses=()):
+def design(M_Nmm, T_Nmm, material="1045", feature="keyseat", n=2.0, ny=1.5, span=None, rpm=None,
+           F_N=None, hub_len=None, hub_mass=0.0):
     """Dondurur: (tasarim, kontroller). Once gobek kesiti (DE-Goodman, kb <-> d iterasyonu) -> en kucuk
     standart cap; sonra bu capla rulman, kama, sehim ve kritik hiz. Biri gecmezse bir ust standart cap
-    (Shigley'in yinelemeli mil tasarimi). Hicbiri olmazsa (None, son capin kontrolleri)."""
+    (Shigley'in yinelemeli mil tasarimi). Hicbiri olmazsa (None, son capin kontrolleri).
+    Sistemden (E1): M yerine gobekteki radyal kuvvet F_N (M = F L / 4, L milin aciklik uzunlugu),
+    gobege takilan parcanin boyu hub_len ve kutlesi hub_mass (kg, kritik hiz)."""
     mat = SHAFT_MATERIALS[material]
     _, Kf, Kfs = FEATURES[feature]
     d = 20.0
-    for _ in range(50):                          # kb(d) <-> d yakinsamasi
-        d_new = de_goodman_d(M_Nmm, T_Nmm, mat["Sut"], endurance(mat["Sut"], d), Kf, Kfs, n)
+    for _ in range(50):                          # kb(d) <-> d (ve F verildiyse aciklik) yakinsamasi
+        M_it = F_N * layout(d, feature, span, hub_len=hub_len)["span"] / 4 if F_N is not None else M_Nmm
+        d_new = de_goodman_d(M_it, T_Nmm, mat["Sut"], endurance(mat["Sut"], d), Kf, Kfs, n)
         if abs(d_new - d) < 1e-6:
             break
         d = d_new
@@ -321,7 +325,7 @@ def design(M_Nmm, T_Nmm, material="1045", feature="keyseat", n=2.0, ny=1.5, span
              "detail": f"gereken Ø{d_min:.1f} mm > Ø{STANDARD_D[-1]} mm"}]
     raised_by = None                              # ilk denenen capta gecmeyen kontroller (neden buyutuldu)
     for d_std in (x for x in STANDARD_D if x >= d_min - 1e-9):
-        g, checks = _evaluate(float(d_std), M_Nmm, T_Nmm, mat, feature, n, ny, span, rpm, masses)
+        g, checks = _evaluate(float(d_std), M_Nmm, T_Nmm, mat, feature, n, ny, span, rpm, F_N, hub_len, hub_mass)
         last = checks
         if g is not None and all(c["util"] <= 1.0 for c in checks):
             g.update(d_min=d_min, raised=raised_by is not None, raised_by=raised_by or [])
@@ -331,16 +335,16 @@ def design(M_Nmm, T_Nmm, material="1045", feature="keyseat", n=2.0, ny=1.5, span
     return None, last
 
 
-def _evaluate(d, M, T, mat, feature, n, ny, span, rpm, masses):
-    Se, nf, sv, checks = _hub_checks(d, M, T, mat, feature, n, ny)
-    key = None
+def _evaluate(d, M, T, mat, feature, n, ny, span, rpm, F_N=None, hub_len=None, hub_mass=0.0):
+    checks, key = [], None
     if feature == "keyseat":
         key, kc = key_design(T, d, ny)
         checks += kc
         if key is None:
             return None, checks
-    L0 = layout(d, feature, span, key_len=key and key["length"])["span"]   # rulman oncesi aciklik
-    F = 4 * M / L0                                # ortadaki kuvvet: M = F L / 4
+    klen = key and key["length"]
+    L0 = layout(d, feature, span, key_len=klen, hub_len=hub_len)["span"]   # rulman oncesi aciklik
+    F = F_N if F_N is not None else 4 * M / L0    # ortadaki kuvvet: M = F L / 4
     R = F / 2
     brg, jc = None, []
     for cand in bearing_candidates(d):
@@ -348,14 +352,20 @@ def _evaluate(d, M, T, mat, feature, n, ny, span, rpm, masses):
         if all(c["util"] <= 1.0 for c in jc):
             brg = cand
             break
+    lay = layout(d, feature, span, bearing=brg, key_len=klen, hub_len=hub_len)
+    if F_N is not None:
+        M = F_N * lay["span"] / 4
+    else:
+        F = 4 * M / lay["span"]
+    Se, nf, sv, hub = _hub_checks(d, M, T, mat, feature, n, ny)
+    checks = hub + checks
     if brg is None:
         checks += jc or [{"group": "Rulman", "name": "Rulman seçimi", "util": 99.0,
                           "detail": f"Ø{d:g} mile uygun rulman yok (katalog Ø10–Ø80)"}]
         return None, checks
     checks += jc
-    lay = layout(d, feature, span, bearing=brg, key_len=key and key["length"])
-    F = 4 * M / lay["span"]
-    bm = beam(lay, F, masses)
+    xm = sum(b[0] for b in lay["bearings"]) / 2
+    bm = beam(lay, F, [(xm, hub_mass)] if hub_mass else ())
     checks += [
         {"group": "Sehim", "name": "Rulmanda eğim", "util": max(bm["slope1"], bm["slope2"]) / SLOPE_MAX,
          "detail": f"{max(bm['slope1'], bm['slope2']) * 1000:.2f} mrad (sabit bilyalı sınır {SLOPE_MAX * 1000:g} mrad)"},
@@ -363,10 +373,11 @@ def _evaluate(d, M, T, mat, feature, n, ny, span, rpm, masses):
          "detail": f"{bm['y_hub'] * 1000:.1f} µm (düz dişli sınırı {DEFL_MAX * 1000:.0f} µm)"},
     ]
     if rpm:
+        extra = f", göbekte {hub_mass:.2f} kg dahil" if hub_mass else ""
         checks.append({"group": "Titreşim", "name": "Kritik hız", "util": CRIT_RATIO * rpm / bm["n_crit"],
-                       "detail": f"{bm['n_crit']:,.0f} rpm (çalışma {rpm:g} rpm'in en az {CRIT_RATIO:g} katı)"})
+                       "detail": f"{bm['n_crit']:,.0f} rpm (çalışma {rpm:g} rpm'in en az {CRIT_RATIO:g} katı{extra})"})
     return {"d": d, "Se": Se, "nf": nf, "ny": mat["Sy"] / sv, "Kf": FEATURES[feature][1], "Kfs": FEATURES[feature][2],
-            "feature": feature, "material": mat["name"], "M": M, "T": T, "F": F, "rpm": rpm,
+            "feature": feature, "material": mat["name"], "M": M, "T": T, "F": F, "rpm": rpm, "hub_mass": hub_mass,
             "bearing": {"name": brg[0], "bore": brg[1], "OD": brg[2], "B": brg[3], "C": brg[4],
                         "life_h": l10_hours(brg[4], F / 2, rpm) if rpm else None},
             "key": key, "beam": bm, "layout": lay}, checks

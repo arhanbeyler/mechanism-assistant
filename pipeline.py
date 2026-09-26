@@ -15,6 +15,7 @@ import interference
 import kinematics as kin
 import shafts
 import springs
+import reducer
 import strength
 from llm_extract import extract_spec
 
@@ -22,6 +23,18 @@ from llm_extract import extract_spec
 # C0: moduller kendi kaydiricilarini tanimlar; panel bunlardan otomatik kurar.
 # (Dort cubuk panelde ozel kaydiricilarla gelir: renkli salinim bolgesi, giris hareketi vb.)
 MODULES = {
+    "reducer": {
+        "title": "Reducer (system)",
+        "params": [
+            {"key": "torque_Nm", "label": "Input torque", "unit": "N·m", "min": 1, "max": 400, "step": 1, "default": 20},
+            {"key": "speed_rpm", "label": "Input speed", "unit": "rpm", "min": 100, "max": 3000, "step": 10, "default": 1450},
+            {"key": "gear_ratio", "label": "Ratio", "unit": "", "min": 1.2, "max": 6, "step": 0.1, "default": 3},
+            {"key": "shaft_material", "label": "Shaft steel", "default": "1045",
+             "options": [["1045", "AISI 1045 CD"], ["1020", "AISI 1020 CD"]]},
+            {"key": "feature", "label": "Gear on shaft", "default": "keyseat",
+             "options": [["keyseat", "Key"], ["ring_groove", "Retaining ring"], ["round_shoulder", "Rounded shoulder"]]},
+        ],
+    },
     "spur_gear": {
         "title": "Düz dişli",
         "params": [
@@ -121,10 +134,18 @@ _INPUT_TURN = re.compile(
     r"(?:çevir|döndür|dönün|döndüğ|itin|it(?:ti)?ğ|hareket ettir|oynat)", re.IGNORECASE)
 
 
+# Speed backstop: "1500 rpm", "1450 devirli", "960 d/d" -> speed_rpm when the LLM leaves it empty
+_SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:rpm|d/d|dev/dak|devir(?:de|li)?)(?![a-zçğıöşü])", re.IGNORECASE)
+_SPEED_KINDS = ("reducer", "spur_gear", "shaft")
+
+
 def input_turn_backstop(text, spec):
     """Guvenlik agi: "X° cevirince/dondurunce/itince" kalibi varsa giris kolu sinirli acida doner.
     LLM bunu kacirirsa (ornegin '45°' yaziminda) sayi DOGRUDAN kullanicinin cumlesinden okunur
-    (uydurma degil). Dondurur: (spec, not ya da None)."""
+    (uydurma degil). Ayni sekilde devir (rpm) de cumleden okunur. Dondurur: (spec, not ya da None)."""
+    sp = _SPEED.search(text)
+    if sp and spec.get("speed_rpm") is None and spec.get("mechanism_type") in _SPEED_KINDS:
+        spec = dict(spec, speed_rpm=float(sp.group(1).replace(",", ".")))
     m = _INPUT_TURN.search(text)
     if not m or spec.get("input_swing_deg") is not None:
         return spec, None
@@ -158,10 +179,14 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        spring_force_N=None, spring_deflection_mm=None, spring_taper=None, outer_diameter_max_mm=None,
                        cam_rise_mm=None, rise_deg=None, dwell_top_deg=None, return_deg=None, motion_law=None,
                        bending_moment_Nm=None, feature=None, shaft_material=None, safety_n=None, show_plates=None,
-                       span_mm=None):
+                       span_mm=None, power_kW=None):
     """Kaydiricilar icin: LLM'siz, dogrudan sayilardan tasarim.
     kind: "fourbar", "spur_gear", "spring" ya da "cam" (C0: modul secimi).
     input_swing_deg >= 360: giris tam tur (krank-kol); daha az: sinirli acida giris kolu (B9)."""
+    if kind == "reducer":
+        return design_from_spec({"mechanism_type": "reducer", "torque_Nm": torque_Nm, "power_kW": power_kW,
+                                 "speed_rpm": speed_rpm, "gear_ratio": gear_ratio, "material": material,
+                                 "shaft_material": shaft_material, "feature": feature, "safety_n": safety_n})
     if kind == "shaft":
         return design_from_spec({"mechanism_type": "shaft", "torque_Nm": torque_Nm,
                                  "bending_moment_Nm": bending_moment_Nm, "feature": feature,
@@ -194,6 +219,8 @@ def design_from_spec(spec, on_status=None):
     result = {"spec": spec}
 
     mtype = spec["mechanism_type"]
+    if mtype == "reducer":
+        return _reducer(result, spec, say)
     if mtype == "spur_gear":
         return _spur_gear(result, spec, say)
     if mtype == "spring":
@@ -255,6 +282,54 @@ def design_from_spec(spec, on_status=None):
         ]
     return _finish(result, spec, notes, say, mech, frames, meas, checks, passed, a, psi,
                    Q if rr else None, rr) if rr else _crank_rocker(result, spec, notes, say, a, psi)
+
+
+def _reducer(result, spec, say):
+    """E1: single-stage reducer (gear pair + two shafts + bearings + keys + housing), all coupled.
+    Required: ratio, input speed, and input torque or motor power (nothing is invented)."""
+    result["mechanism_type"] = "reducer"
+    T, P, rpm, ratio = spec.get("torque_Nm"), spec.get("power_kW"), spec.get("speed_rpm"), spec.get("gear_ratio")
+    notes = []
+    if T is None and P is not None and rpm:
+        T = 9550.0 * P / rpm
+        notes.append(f"Input torque from motor power: T = 9550 P / n = {T:.1f} N·m.")
+    missing = [n for v, n in ((ratio, "ratio"), (rpm, "input speed (rpm)"), (T, "input torque or motor power"))
+               if v is None]
+    if missing:
+        return dict(result, status="missing", message=f"Missing for the reducer: {', '.join(missing)}.")
+    ratio = float(ratio)
+    if ratio < 1:
+        ratio = 1 / ratio
+    if not 1 < ratio <= 8:
+        return dict(result, status="missing", message=f"A single spur stage needs a ratio of 1–8 (given: {ratio:g}).")
+    mat_key = spec.get("material") if spec.get("material") in strength.MATERIALS else None
+    if mat_key is None:
+        mat_key = "steel"
+        notes.append("Gear material not given: steel assumed.")
+    feature = spec.get("feature") or "keyseat"
+    shaft_mat = spec.get("shaft_material") or "1045"
+    n = float(spec.get("safety_n") or 2.0)
+    say("Reducer: gear pair -> shafts -> bearings -> keys -> housing (iterating until they fit)...")
+    r, r_checks = reducer.design(float(T) * 1000.0, float(rpm), ratio, mat_key, shaft_mat, feature, n)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0, "detail": c["detail"]}
+              for c in r_checks]
+    result.update(checks=checks, notes=notes, target={"torque_Nm": float(T), "speed_rpm": float(rpm), "ratio": ratio})
+    if r is None:
+        bad = [c["name"] for c in checks if not c["ok"]]
+        return dict(result, status="failed", message=" ".join(notes + [
+            f"No reducer passes all checks (failing: {', '.join(bad)}). Try a stronger material, a smaller "
+            f"torque or a different ratio."]))
+    g, s1, s2 = r["gear"], r["shaft_in"], r["shaft_out"]
+    notes.append("Losses neglected (output torque = ratio × input torque): conservative for the output side.")
+    result.update(
+        reducer=r, fusion={"type": "reducer", "passed_checks": True, **r},
+        status="ok",
+        message=" ".join(notes + [
+            f"All checks passed. Gears m {g['module']:g}, z {g['z1']}/{g['z2']} (i = {g['ratio']:.3f}), "
+            f"face {g['face_width']:g} mm, centre distance {g['center_distance']:g} mm. Shafts Ø{s1['d']:g} / "
+            f"Ø{s2['d']:g} mm on bearings {s1['bearing']['name']} / {s2['bearing']['name']}. Output "
+            f"{r['T2'] / 1000:.1f} N·m at {r['rpm2']:.0f} rpm ({r['power_W'] / 1000:.2f} kW)."]))
+    return result
 
 
 def _spur_gear(result, spec, say):

@@ -35,13 +35,15 @@ def _schema(props):
 
 # ---------------------------------------------------------------- 1) yonlendirici
 ROUTER_SCHEMA = _schema({"kind": {"type": "string",
-                                   "enum": ["fourbar", "spur_gear", "spring", "cam", "shaft", "unknown"]}})
+                                   "enum": ["fourbar", "reducer", "spur_gear", "spring", "cam", "shaft", "unknown"]}})
 ROUTER_PROMPT = (
     "Classify what the user wants to design. Answer only the kind. "
     "'shaft': sizing a rotating shaft / axle (mil, şaft, aks, 'mil çapı', torque and bending on a shaft, yorulma). "
     "'cam': a cam and follower (kam, eksantrik, itici, 'X mm kaldırsın', yükselme/bekleme/dönüş açıları). "
     "'spring': a spring (yay, basma yayı, konik yay). "
-    "'spur_gear': gears or a speed reducer (dişli, dişli çifti, redüktör, çevrim oranı, 'X kat yavaşlatsın'). "
+    "'reducer': a complete gearbox with shafts, bearings and housing (redüktör, dişli kutusu, şanzıman, "
+    "'motora bağlı', motor power in kW). "
+    "'spur_gear': only a gear pair (dişli, dişli çifti, çevrim oranı, 'X kat yavaşlatsın' without a gearbox). "
     "'fourbar': a linkage / mechanism with links, crank, lever or swinging arm (krank, kol, biyel, dört çubuk, "
     "salınım, 'kolu X derece çevirince'). 'unknown': anything else.")
 
@@ -79,6 +81,20 @@ GEAR = (_schema({
     "The user wants a spur gear pair. gear_ratio: speed reduction ratio ('1:3', '3 kat yavaş', 'oran 3', "
     "'devri 3 kat düşüren' -> 3). torque_Nm: input torque in N·m ('5 Nm' -> 5; 1 kg·cm = 0.0981 N·m; "
     "N·mm / 1000). speed_rpm: input speed if given."))
+
+REDUCER = (_schema({
+    "gear_ratio": {"type": ["number", "null"]},
+    "torque_Nm": {"type": ["number", "null"]},
+    "power_kW": {"type": ["number", "null"]},
+    "speed_rpm": {"type": ["number", "null"]},
+    "material": MATERIAL,
+    "shaft_material": {"type": ["string", "null"], "enum": ["1020", "1045", None]},
+}), COMMON + (
+    "The user wants a single-stage gear reducer (gearbox). gear_ratio: speed reduction ('1:4', '4 kat', "
+    "'oran 4' -> 4). torque_Nm: input torque in N·m if given. power_kW: motor power in kW ('1.5 kW' -> 1.5; "
+    "'750 W' -> 0.75; 1 HP = 0.746 kW). speed_rpm: input (motor) speed ('1450 devir', '1450 d/d', '1450 rpm'); a number followed by rpm, devir or "
+    "d/d is ALWAYS speed_rpm, even when the ratio is also described with 'devri X kat düşüren'. "
+    "material: gear material only if named. shaft_material: '1020' or '1045' only if named."))
 
 SPRING = (_schema({
     "spring_force_N": {"type": ["number", "null"]},
@@ -126,14 +142,14 @@ SHAFT = (_schema({
     "'plain' (düz) only if named. shaft_material: '1020' or '1045' only if named. safety_n: required safety "
     "factor if given ('emniyet katsayısı 2.5')."))
 
-MODULE_EXTRACTORS = {"fourbar": FOURBAR, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
+MODULE_EXTRACTORS = {"fourbar": FOURBAR, "reducer": REDUCER, "spur_gear": GEAR, "spring": SPRING, "cam": CAM, "shaft": SHAFT}
 
 # Tum alanlar (pipeline tek bir sozluk bekler; modulde olmayanlar None)
 ALL_FIELDS = {"mechanism_type": "unknown", "quick_return": False}
 for _schema_, _ in MODULE_EXTRACTORS.values():
     for _k in _schema_["properties"]:
         ALL_FIELDS.setdefault(_k, None)
-KIND_TO_TYPE = {"spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: cikarici secer
+KIND_TO_TYPE = {"reducer": "reducer", "spur_gear": "spur_gear", "spring": "spring", "cam": "cam", "shaft": "shaft"}   # fourbar: cikarici secer
 
 
 def _chat(system, user_text, schema, name):

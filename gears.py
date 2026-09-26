@@ -76,10 +76,12 @@ def check_pair(m, z1, z2, b, T1, mat, rpm=None):
     return checks
 
 
-def design(ratio, T1_Nmm, mat, rpm=None):
-    """En hafif uygun cift. Dondurur: (tasarim dict, kontroller) ya da (None, en iyi adayin kontrolleri)."""
+def design(ratio, T1_Nmm, mat, rpm=None, bores=None, min_face=0.0, min_center=0.0):
+    """En hafif uygun cift. Dondurur: (tasarim dict, kontroller) ya da (None, en iyi adayin kontrolleri).
+    Sistem (E1 redüktör) kisitlari: bores = (mil capi 1, mil capi 2) mil tasarimindan (yoksa burulmadan),
+    min_face: disli en az bu genislikte (kama sigsin), min_center: eksen mesafesi en az (rulmanlar yan yana)."""
     best = best_any = None
-    bore1, bore2 = shaft_bore(T1_Nmm), shaft_bore(T1_Nmm * ratio)
+    bore1, bore2 = bores or (shaft_bore(T1_Nmm), shaft_bore(T1_Nmm * ratio))
     if bore1 is None or bore2 is None:
         return None, [{"group": "Mil", "name": "Mil burulması", "util": 99.0,
                        "detail": f"{T1_Nmm * ratio / 1000:.0f} N·m için Ø{BORES[-1]} mm çelik mil yetmiyor"}]
@@ -91,8 +93,10 @@ def design(ratio, T1_Nmm, mat, rpm=None):
         if err > 0.02:
             continue
         for m in MODULES:
+            if m * (z1 + z2) / 2 < min_center - 1e-9:
+                continue
             for k in FACE_K:
-                b = k * m
+                b = max(k * m, float(math.ceil(min_face)))
                 checks = check_pair(m, z1, z2, b, T1_Nmm, mat, rpm)
                 checks += [hub_check(m, z1, bore1), hub_check(m, z2, bore2)]
                 worst = max(c["util"] for c in checks)
