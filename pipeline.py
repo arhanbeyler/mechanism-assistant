@@ -39,6 +39,7 @@ import springs
 import toggle
 import torsion_spring
 import welded
+import whitworth
 import worm
 import llm_extract
 import planetary
@@ -300,6 +301,8 @@ MODULES = {
              "zero_label": "none"},
             {"key": "speed_rpm", "label": "Crank speed", "unit": "rpm", "min": 0, "max": 200, "step": 5, "default": 0,
              "zero_label": "not given"},
+            {"key": "whitworth", "label": "Arrangement", "default": "no",
+             "options": [["no", "Crank + slotted lever"], ["yes", "Whitworth (lever turns fully)"]]},
         ],
     },
     "toggle_clamp": {
@@ -622,7 +625,7 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
                        arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
                        undercut_mm=None, hold_force_N=None, releasable=None, repeated=None,
-                       working_stroke_mm=None, path_points=None, spline_use=None):
+                       working_stroke_mm=None, path_points=None, spline_use=None, whitworth=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
     input_swing_deg >= 360: full-turn input (crank-rocker); less: limited-angle input arm (B9)."""
@@ -700,7 +703,7 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
         return design_from_spec({"mechanism_type": kind, "stroke_mm": stroke_mm,
                                  "time_ratio": time_ratio if time_ratio and time_ratio > 1 else None,
                                  "max_load_N": max_load_N or None, "speed_rpm": speed_rpm or None,
-                                 "material": material})
+                                 "material": material, "whitworth": whitworth in (True, "yes")})
     if kind == "toggle_clamp":
         return design_from_spec({"mechanism_type": "toggle_clamp", "opening_deg": opening_deg,
                                  "handle_travel_deg": handle_travel_deg, "arm_length_mm": arm_length_mm,
@@ -1370,6 +1373,8 @@ def _quick_return(result, spec, say):
     if not 1.05 <= Q <= 3.0:
         return dict(result, status="failed", message=f"Time ratio {Q:g}: this linkage gives 1.05..3.")
     mat = _slot_material(spec, F, notes)
+    if spec.get("whitworth") in (True, "yes"):
+        return _whitworth(result, spec, say, S, Q, F, rpm, mat, notes)
     say("Crank and slotted lever: geometry from the stroke and the time ratio, forces...")
     d, s_checks = slotted.lever_design(S, Q, mat, F)
     m = d["measure"]
@@ -1411,6 +1416,45 @@ def _quick_return(result, spec, say):
                f"with the crank turning counter-clockwise).")
         if F:
             msg += f" Max crank torque {d['T_max'] / 1000:.2f} N·m, max pin force on the lever {d['N_max']:.0f} N."
+    result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
+    return result
+
+
+def _whitworth(result, spec, say, S, Q, F, rpm, mat, notes):
+    """F4c: Whitworth quick return (the crank longer than the pivot distance: the lever turns full circles)."""
+    result["mechanism_type"] = "whitworth"
+    notes.append(f"Whitworth proportions: rod arm R = S/2, rod {whitworth.ROD:g} R, crank {whitworth.CRANK:g} R (reported).")
+    say("Whitworth: crank, full-turn slotted lever, rod and ram; simulated...")
+    d, s_checks = whitworth.design(S, Q, mat, F)
+    m = d["measure"]
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": c["detail"] + (f" · use {c['util'] * 100:.0f}%" if c["group"] != "Motion" else "")} for c in s_checks]
+    ok = all(c["ok"] for c in checks) and (not F or d["section"] is not None)
+    section = d["section"] or {"hole": 5.0, "shaft": 8.0, "links": {"Crank": {"width": 12.0, "thickness": 5.0},
+                                                                   "Lever": {"width": 16.0, "thickness": 5.0}}}
+    speeds = None
+    if rpm:
+        t_turn = 60.0 / rpm
+        slow = max(m["to_minus"], 360 - m["to_minus"])
+        speeds = {"rpm": float(rpm), "v_cut": S / (t_turn * slow / 360) / 1000, "v_return": S / (t_turn * (360 - slow) / 360) / 1000}
+        checks.append({"name": "Mean speeds", "ok": True,
+                       "detail": f"cutting {speeds['v_cut']:.2f} m/s, return {speeds['v_return']:.2f} m/s at {rpm:g} rpm"})
+    x0 = min(f["x"] for f in d["frames"])
+    curve = [(round(f["theta"], 1), round(f["x"] - x0, 3)) for f in d["frames"][::8]]
+    result.update(whitworth={k: d[k] for k in ("r", "d", "R", "l", "alpha", "Q", "stroke", "slow_direction")} |
+                  {"Q_meas": m["Q"], "stroke_meas": m["stroke"], "rod_angle_max": m["rod_angle_max"], "speeds": speeds,
+                   "T_max": d.get("T_max"), "rho_min": m["rho_min"], "rho_max": m["rho_max"]},
+                  checks=checks, notes=notes, section_mm=section, x_curve=curve, target={"stroke": S, "Q": Q},
+                  fusion={"type": "whitworth", "passed_checks": ok, "r": d["r"], "d": d["d"], "R": d["R"], "l": d["l"],
+                          "section_mm": section})
+    if not ok:
+        msg = "The design does not meet the checks above."
+    else:
+        msg = (f"All checks passed. Whitworth: crank {d['r']:.1f} mm turning about a point {d['d']:.1f} mm from the lever "
+               f"pivot, so the slotted lever turns full circles; its {d['R']:.1f} mm arm drives the ram through a "
+               f"{d['l']:.0f} mm rod: stroke {m['stroke']:.1f} mm, time ratio {m['Q']:.2f}.")
+        if F:
+            msg += f" Max crank torque {d['T_max'] / 1000:.2f} N·m."
     result.update(status="ok" if ok else "failed", message=" ".join(notes + [msg]))
     return result
 

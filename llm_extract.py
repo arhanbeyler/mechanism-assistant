@@ -213,10 +213,12 @@ SCOTCH_YOKE = (_schema(dict(SLOTTED, crank_length_mm={"type": ["number", "null"]
     "The user wants a Scotch yoke. stroke_mm: stroke of the yoke ('60 mm strok'). crank_length_mm: crank radius "
     "only if given. max_load_N: force on the sliding yoke ('200 N', '10 kg' -> 98.1) if given. speed_rpm: crank "
     "speed if given. material only if named."))
-QUICK_RETURN = (_schema(dict(SLOTTED, time_ratio={"type": ["number", "null"]})), COMMON + (
+QUICK_RETURN = (_schema(dict(SLOTTED, time_ratio={"type": ["number", "null"]}, whitworth={"type": "boolean"})), COMMON + (
     "The user wants a quick-return (shaper, slotted lever) mechanism. stroke_mm: ram stroke ('150 mm strok'). "
     "time_ratio: slow stroke time / fast stroke time ('dönüş 1.5 kat hızlı' -> 1.5, 'Q = 1.6') if given. "
-    "max_load_N: cutting force on the ram if given. speed_rpm: crank speed if given. material only if named."))
+    "max_load_N: cutting force on the ram if given. speed_rpm: crank speed if given. material only if named. "
+    "whitworth: true only if Whitworth is named (the crank longer than the pivot distance, the lever turning "
+    "full circles)."))
 
 FLEX_DRIVE_FIELDS = {
     "power_kW": {"type": ["number", "null"]},
