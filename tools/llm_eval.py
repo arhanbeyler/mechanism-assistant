@@ -4,7 +4,7 @@ LLM evaluation set: run it whenever a prompt changes, so that fixing one case do
 The sentences are mostly Turkish (the user's language) plus a few English ones (the panel examples).
 
 Usage (in the project folder, with Ollama running):  python -u tools/llm_eval.py
-The LLM output and the code safety nets (pipeline.input_turn_backstop, force_backstop) are tested together.
+The LLM output and the code safety nets (pipeline.input_turn_backstop, force_backstop, output_torque_backstop) are tested together.
 """
 
 import os
@@ -13,7 +13,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llm_extract import extract_spec  # noqa: E402
-from pipeline import force_backstop, input_turn_backstop  # noqa: E402
+from pipeline import force_backstop, input_turn_backstop, output_torque_backstop  # noqa: E402
 
 # (sentence, expected fields)
 CASES = [
@@ -63,6 +63,7 @@ CASES = [
     ("snap-fit clip with a 1 mm undercut that holds 20 N", dict(mechanism_type="snap_fit", undercut_mm=1, hold_force_N=20)),
     ("100 Nm iletecek kamalı mil, göbek yük altında kayacak", dict(mechanism_type="spline", torque_Nm=100,
                                                                   spline_use="sliding_loaded")),
+    ("DIN 5480 evolvent kamalı mil, 400 Nm", dict(mechanism_type="spline", torque_Nm=400, spline_profile="involute")),
     ("20 mm uzayınca 50 N çeken bir çekme yayı", dict(mechanism_type="extension_spring", spring_force_N=50,
                                                      spring_deflection_mm=20)),
     ("5 kN'da 2 mm çökecek tabak yay paketi", dict(mechanism_type="disc_spring", spring_force_N=5000,
@@ -105,6 +106,8 @@ CASES = [
      dict(mechanism_type="bevel_gear", gear_ratio=1, torque_Nm=15, speed_rpm=600)),
     ("1:30 sonsuz vida, çıkışta 50 Nm, 1400 devir, kendini kilitlesin",
      dict(mechanism_type="worm_gear", gear_ratio=30, output_torque_Nm=50, speed_rpm=1400, self_locking=True)),
+    ("worm gear 1:30, 50 N·m output at 1400 rpm, self-locking", dict(mechanism_type="worm_gear", gear_ratio=30,
+                                                                    output_torque_Nm=50, speed_rpm=1400, self_locking=True)),
     ("worm drive, ratio 40, 0.37 kW motor at 1400 rpm", dict(mechanism_type="worm_gear", gear_ratio=40, power_kW=0.37,
                                                             speed_rpm=1400, self_locking=False)),
     ("helis dişli çifti, oran 3, 10 Nm, 25 derece helis açısı", dict(mechanism_type="helical_gear", gear_ratio=3,
@@ -237,6 +240,7 @@ def main():
     for text, want in CASES:
         t0 = time.time()
         spec, _ = force_backstop(text, input_turn_backstop(text, extract_spec(text))[0])
+        spec, _ = output_torque_backstop(text, spec)
         bad = {k: (spec.get(k), v) for k, v in want.items()
                if not (spec.get(k) == v or (isinstance(v, (int, float)) and isinstance(spec.get(k), (int, float))
                                              and abs(spec.get(k) - v) < 1e-6))}

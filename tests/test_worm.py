@@ -48,3 +48,15 @@ def test_self_locking_design_has_a_small_lead_angle():
 def test_short_ratio_cannot_self_lock():
     d, _ = worm.design(15, 30000, 1400, self_locking=True)         # N_G >= 21 needs 2 starts: lead too big
     assert d is None
+
+
+def test_output_torque_backstop():
+    from pipeline import output_torque_backstop
+    for t in ("worm gear 1:30, 50 N·m output at 1400 rpm", "sonsuz vida 1:30, çıkış torku 50 Nm", "çıkışta 50 Nm"):
+        s, note = output_torque_backstop(t, {"mechanism_type": "worm_gear"})
+        assert s["output_torque_Nm"] == 50 and note
+    # filled by the LLM, or another module: untouched
+    s, note = output_torque_backstop("50 N·m output", {"mechanism_type": "worm_gear", "output_torque_Nm": 40})
+    assert s["output_torque_Nm"] == 40 and note is None
+    s, note = output_torque_backstop("50 N·m output", {"mechanism_type": "helical_gear"})
+    assert "output_torque_Nm" not in s and note is None

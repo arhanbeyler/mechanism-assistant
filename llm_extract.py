@@ -54,7 +54,8 @@ ROUTER_PROMPT = (
     "presi with stroke and strokes per minute, punch press, crank press); a flywheel alone is 'flywheel'. "
     "'flywheel': a flywheel that evens out the speed (volan, volant, 'devir dalgalanması', pres / zımba volanı, "
     "flywheel, energy storage wheel). "
-    "'spline': a splined shaft / spline connection (kamalı mil, spline, 'kaydırmalı göbek', ISO 14). "
+    "'spline': a splined shaft / spline connection (kamalı mil, spline, 'kaydırmalı göbek', ISO 14, "
+    "evolvent / involute spline, DIN 5480). "
     "'extension_spring': a spring that is PULLED / stretched (çekme yayı, uzama yayı, 'çekince uzasın', "
     "extension spring, tension spring). "
     "'disc_spring': disc / Belleville / cup springs (tabak yay, çanak yay, Belleville, disc spring), "
@@ -274,10 +275,12 @@ DWELL = (_schema({
 SPLINE = (_schema({
     "torque_Nm": {"type": ["number", "null"]},
     "spline_use": {"type": ["string", "null"], "enum": ["fixed", "sliding", "sliding_loaded", None]},
+    "spline_profile": {"type": ["string", "null"], "enum": ["straight", "involute", None]},
 }), COMMON + (
     "The user wants a splined shaft. torque_Nm: the torque in N·m. spline_use: 'fixed' (sabit göbek), 'sliding' "
     "(the hub slides along the shaft when unloaded, kayar göbek), 'sliding_loaded' (it slides while carrying "
-    "torque, 'yük altında kayar') only if said."))
+    "torque, 'yük altında kayar') only if said. spline_profile: 'involute' for an involute spline ('evolvent', "
+    "'involute', 'DIN 5480'), 'straight' for a straight-sided one ('düz yanaklı', 'ISO 14'), else null."))
 
 EXTENSION = (_schema({
     "spring_force_N": {"type": ["number", "null"]},
@@ -417,7 +420,8 @@ WORM = (_schema({
     "self_locking": {"type": "boolean"},
 }), COMMON + (
     "The user wants a worm gear set. gear_ratio: reduction ('1:30', '30 kat', 'oran 30' -> 30). output_torque_Nm: "
-    "torque at the wheel / output if given ('çıkışta 50 Nm', 'output 50 N·m'). torque_Nm: torque at the worm / motor "
+    "torque at the wheel / output if given, in any word order ('çıkışta 50 Nm', 'output 50 N·m', '50 N·m output', "
+    "'50 Nm on the wheel'). torque_Nm: torque at the worm / motor "
     "(input) if given. power_kW: motor power ('0.37 kW', '370 W' -> 0.37). speed_rpm: worm / motor speed. "
     "self_locking: true only if asked ('kendini kilitlesin', 'geri dönmesin', 'yük geri çevirmesin', 'self-locking')."))
 

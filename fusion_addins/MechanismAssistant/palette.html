@@ -101,6 +101,9 @@ Everything is computed on this computer, with a local AI.</div>
       <button class="chip">1.5 kW 1450 rpm motor, 1:4 gearbox</button>
       <button class="chip">turn a 4 cm arm 45° and the other arm turns 120°</button>
       <button class="chip">a crank-driven point that moves 100 mm in a straight line</button>
+      <button class="chip">worm gear 1:30, 50 N·m output at 1400 rpm, self-locking</button>
+      <button class="chip">20 kN crank press, 60 mm stroke, the last 6 mm cutting, 40 strokes a minute</button>
+      <button class="chip">a linkage whose point passes through (0,0), (40,10), (80,0)</button>
     </div>
     <div class="input">
       <textarea id="text" placeholder="Describe the mechanism... (Enter: send)"></textarea>
@@ -1260,9 +1263,17 @@ Everything is computed on this computer, with a local AI.</div>
       ["Stresses body / A / B", `${f(s.tau_body, 0)} / ${f(s.sigma_A, 0)} / ${f(s.tau_B, 0)} MPa`], ["Material", s.material]], d);
   }
 
-  function renderSplineCard(d) {             // H3b: straight-sided spline
+  function renderSplineCard(d) {             // H3b: straight-sided spline, H3c: involute (DIN 5480)
     const s = d.spline;
     if (!s) { $("result").innerHTML = `<h3>Checks</h3>${checksHtml(d.checks)}`; return; }
+    if (s.profile === "involute") {
+      simpleCard("Involute spline", [["DIN 5480", `${s.name}, 30°, x = ${f(s.x, 2)}`],
+        ["Diameters", `tip Ø${f(s.da1, 2)} / root Ø${f(s.df1, 1)} (shaft), Ø${f(s.da2, 1)} (hub tip)`],
+        ["Hub", `Ø${f(s.hub_od, 0)} × ${f(s.L, 0)} mm, ${s.use.replace("_", " ")}`],
+        ["Flank pressure", `${f(s.p, 0)} MPa allowed`], ["Torque", `${f(s.cap / 1000, 0)} N·m capacity for ${f(s.Td / 1000, 0)} N·m`],
+        ["Shaft torsion", `${f(s.tau, 0)} MPa on Ø${f(s.df1, 1)}`]], d);
+      return;
+    }
     simpleCard("Splined shaft", [["ISO 14", `${s.series} series ${s.N} × ${s.d} × ${s.D}, teeth ${f(s.B, 1)} mm`],
       ["Hub", `Ø${f(s.hub_od, 0)} × ${f(s.L, 0)} mm, ${s.use.replace("_", " ")}`],
       ["Flank pressure", `${f(s.p, 0)} MPa allowed`], ["Torque", `${f(s.cap / 1000, 0)} N·m capacity for ${f(s.Td / 1000, 0)} N·m`],

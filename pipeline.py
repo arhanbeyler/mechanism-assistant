@@ -35,6 +35,7 @@ import sixbar
 import slotted
 import slider_crank
 import spline
+import din5480
 import snapfit
 import springs
 import toggle
@@ -68,9 +69,11 @@ MODULES = {
         ],
     },
     "spline": {
-        "title": "Splined shaft (ISO 14)",
+        "title": "Splined shaft (ISO 14 / DIN 5480)",
         "params": [
             {"key": "torque_Nm", "label": "Torque", "unit": "N·m", "min": 5, "max": 3000, "step": 5, "default": 100},
+            {"key": "spline_profile", "label": "Profile", "default": "straight",
+             "options": [["straight", "Straight-sided (ISO 14)"], ["involute", "Involute (DIN 5480)"]]},
             {"key": "spline_use", "label": "Hub", "default": "fixed",
              "options": [["fixed", "Fixed"], ["sliding", "Slides when unloaded"], ["sliding_loaded", "Slides under load"]]},
         ],
@@ -505,6 +508,22 @@ def force_backstop(text, spec):
     return spec, None
 
 
+_OUT_TORQUE = re.compile(r"(\d+(?:[.,]\d+)?)\s*N\s*[·.*]?\s*m\s+(?:output|çıkış)|(?:output|çıkış\w*)\s+(?:torque\s+|torku\s+)?"
+                         r"(\d+(?:[.,]\d+)?)\s*N\s*[·.*]?\s*m", re.IGNORECASE)
+
+
+def output_torque_backstop(text, spec):
+    """Safety net for the worm gear: a torque written right next to 'output' / 'çıkış' that the LLM dropped is read
+    directly from the sentence (it never fills a missing number itself)."""
+    if spec.get("mechanism_type") != "worm_gear" or spec.get("output_torque_Nm") or spec.get("torque_Nm"):
+        return spec, None
+    m = _OUT_TORQUE.search(text)
+    if not m:
+        return spec, None
+    v = float((m.group(1) or m.group(2)).replace(",", "."))
+    return dict(spec, output_torque_Nm=v), f"Read from the sentence: {v:g} N·m output torque."
+
+
 def input_turn_backstop(text, spec):
     """Safety net: a Turkish "X° cevirince / dondurunce / itince" ("when turned / pushed by X degrees")
     pattern means the input arm turns through a limited angle. If the LLM misses it (e.g. written as
@@ -610,7 +629,8 @@ def design_from_text(text, on_status=None, prev_spec=None):
     say("The LLM is reading the sentence...")
     spec, note = input_turn_backstop(text, extract_spec(text))
     spec, f_note = force_backstop(text, spec)
-    note = " ".join(n for n in (note, f_note) if n) or None
+    spec, t_note = output_torque_backstop(text, spec)
+    note = " ".join(n for n in (note, f_note, t_note) if n) or None
     result = design_from_spec(spec, on_status)
     if note and "message" in result:
         result["message"] = note + " " + result["message"]
@@ -634,7 +654,7 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
                        shaft_diameter_mm=None, hub_diameter_mm=None, hub_length_mm=None, spring_angle_deg=None,
                        arbor_mm=None, spring_force_min_N=None, energy_J=None, speed_fluctuation=None, lining=None,
                        undercut_mm=None, hold_force_N=None, releasable=None, repeated=None,
-                       working_stroke_mm=None, path_points=None, spline_use=None, whitworth=None, preview=False,
+                       working_stroke_mm=None, path_points=None, spline_use=None, spline_profile=None, whitworth=None, preview=False,
                        dwell_deg=None):
     """For the sliders: design straight from numbers, no LLM.
     kind: "fourbar", "reducer", "spur_gear", "spring", "cam" or "shaft" (C0: module choice).
@@ -643,7 +663,8 @@ def design_from_params(crank_length_mm=30, output_swing_deg=60, time_ratio=1.0,
         return design_from_spec({"mechanism_type": "dwell", "crank_length_mm": crank_length_mm, "dwell_deg": dwell_deg,
                                  "output_swing_deg": output_swing_deg, "_preview": bool(preview)})
     if kind == "spline":
-        return design_from_spec({"mechanism_type": "spline", "torque_Nm": torque_Nm, "spline_use": spline_use})
+        return design_from_spec({"mechanism_type": "spline", "torque_Nm": torque_Nm, "spline_use": spline_use,
+                                 "spline_profile": spline_profile})
     if kind == "extension_spring":
         return design_from_spec({"mechanism_type": "extension_spring", "spring_force_N": spring_force_N,
                                  "spring_deflection_mm": spring_deflection_mm})
@@ -2435,7 +2456,8 @@ def _extension_spring(result, spec, say):
 
 
 def _spline(result, spec, say):
-    """H3b: straight-sided spline (ISO 14). Required: the torque; the use (fixed / sliding) defaults to fixed."""
+    """H3b / H3c: straight-sided (ISO 14) or involute (DIN 5480) spline. Required: the torque; the use (fixed /
+    sliding) defaults to fixed, the profile to straight-sided."""
     result["mechanism_type"] = "spline"
     T = spec.get("torque_Nm")
     if not T:
@@ -2445,6 +2467,8 @@ def _spline(result, spec, say):
     if use is None:
         use = "fixed"
         notes.append("Use not given: a fixed hub (100 MPa on the flanks).")
+    if spec.get("spline_profile") == "involute":
+        return _spline_involute(result, spec, say, T, use, notes)
     say("Spline: ISO 14 sizes, flank pressure, hub length...")
     s, s_checks = spline.design(float(T) * 1000.0, use)
     checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
@@ -2453,9 +2477,29 @@ def _spline(result, spec, say):
         return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
             "No ISO 14 spline in the table carries it: a larger shaft or a fixed hub."]))
     result.update(spline=s, checks=checks, notes=notes, target={"torque_Nm": float(T)},
-                  fusion={"type": "spline", "passed_checks": True, **{k: s[k] for k in ("N", "d", "D", "B", "L", "hub_od")}})
+                  fusion={"type": "spline", "passed_checks": True, "profile": "straight",
+                          **{k: s[k] for k in ("N", "d", "D", "B", "L", "hub_od")}})
     msg = (f"All checks passed. ISO 14 {s['series']} series {s['N']} × {s['d']} × {s['D']} (teeth {s['B']:g} mm wide), hub "
            f"{s['L']:g} mm long: the flanks carry {s['cap'] / 1000:.0f} N·m for {s['Td'] / 1000:.0f} N·m.")
+    result.update(status="ok", message=" ".join(notes + [msg]))
+    return result
+
+
+def _spline_involute(result, spec, say, T, use, notes):
+    """H3c: involute spline (DIN 5480), the same flank-pressure rule as ISO 14."""
+    say("Spline: DIN 5480 sizes, flank pressure, hub length...")
+    notes = notes + ["Module by the diameter as in the common DIN 5480 sizes; roots approximate (they follow the tool)."]
+    s, s_checks = din5480.design(float(T) * 1000.0, use)
+    checks = [{"name": f"{c['group']}: {c['name']}", "ok": c["util"] <= 1.0,
+               "detail": f"{c['detail']} · use {c['util'] * 100:.0f}%"} for c in s_checks]
+    if s is None:
+        return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
+            "No DIN 5480 spline up to W 200 carries it: a fixed hub or a coupling."]))
+    result.update(spline=s, checks=checks, notes=notes, target={"torque_Nm": float(T)},
+                  fusion={"type": "spline", "passed_checks": True, "profile": "involute",
+                          **{k: s[k] for k in ("dB", "m", "z", "d", "db", "s", "da1", "df1", "da2", "df2", "L", "hub_od")}})
+    msg = (f"All checks passed. DIN 5480 {s['name']} (profile shift x = {s['x']:+.2f}), hub {s['L']:g} mm long: "
+           f"the flanks carry {s['cap'] / 1000:.0f} N·m for {s['Td'] / 1000:.0f} N·m.")
     result.update(status="ok", message=" ".join(notes + [msg]))
     return result
 
