@@ -103,7 +103,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, a force written in N / kN that the model took for a mass, and a worm's output torque the model dropped. The evaluation set is `tools/llm_eval.py` (106/106, incl. 15
+  catches input angles and speeds the model misses, a force written in N / kN that the model took for a mass, and a worm's output torque the model dropped. The evaluation set is `tools/llm_eval.py` (122/122, incl. 15
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.

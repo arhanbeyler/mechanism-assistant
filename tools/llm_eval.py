@@ -184,6 +184,23 @@ CASES = [
      dict(mechanism_type="shaft", radial_force_N=2000, span_mm=200, torque_Nm=50, shaft_material="1020")),
     ("1450 devirde dönen, 30 Nm tork ve 40 Nm eğilme taşıyan segmanlı mil",
      dict(mechanism_type="shaft", speed_rpm=1450, torque_Nm=30, bending_moment_Nm=40, feature="ring_groove")),
+    # more phrasings of the newer modules
+    ("a Belleville spring stack that compresses 3 mm under 8000 N", dict(mechanism_type="disc_spring", spring_force_N=8000, spring_deflection_mm=3)),
+    ("çekme yayı: 100 N kuvvette 30 mm uzasın", dict(mechanism_type="extension_spring", spring_force_N=100, spring_deflection_mm=30)),
+    ("burulma yayı 60 derecede 1.2 Nm versin", dict(mechanism_type="torsion_spring", torque_Nm=1.2, spring_angle_deg=60)),
+    ("flange coupling for 40 mm shafts carrying 300 N·m", dict(mechanism_type="coupling", torque_Nm=300, shaft_diameter_mm=40)),
+    ("1450 devirde 3 kW iletecek bir disk kavrama tasarla", dict(mechanism_type="clutch", power_kW=3, speed_rpm=1450)),
+    ("PLA'dan 120 derece katlanan menteşe, çok kez açılıp kapanacak", dict(mechanism_type="flexure", spring_angle_deg=120, repeated=True, material="PLA")),
+    ("snap-fit hook with a 2 mm undercut in PETG, it must come apart again", dict(mechanism_type="snap_fit", undercut_mm=2, releasable=True, material="PETG")),
+    ("krank 90 derece dönerken çıkış dursun, 30 mm krank, çıkış 45 derece sallansın", dict(mechanism_type="dwell", crank_length_mm=30, dwell_deg=90, output_swing_deg=45)),
+    ("20 kN statik ayırma yükü taşıyacak cıvatalı bağlantı, 30 mm sıkıştırma kalınlığı", dict(mechanism_type="bolted_joint", force_N=20000, grip_mm=30)),
+    ("a 3:1 bevel gear pair transmitting 5 N·m", dict(mechanism_type="bevel_gear", gear_ratio=3, torque_Nm=5)),
+    ("60 Nm aktaracak evolvent kamalı mil, göbek sabit", dict(mechanism_type="spline", torque_Nm=60, spline_profile="involute", spline_use="fixed")),
+    ("volan: 2 kJ enerji dalgalanması, 600 devir, hız dalgalanması yüzde 3", dict(mechanism_type="flywheel", energy_J=2000, speed_rpm=600, speed_fluctuation=0.03)),
+    ("planetary reducer 1:8 with 5 N·m input torque", dict(mechanism_type="planetary", gear_ratio=8, torque_Nm=5)),
+    ("Whitworth quick return, 200 mm stroke, time ratio 1.8", dict(mechanism_type="quick_return", whitworth=True, stroke_mm=200, time_ratio=1.8)),
+    ("worm drive 1:40 that must not back-drive, 20 Nm at the output", dict(mechanism_type="worm_gear", gear_ratio=40, self_locking=True, output_torque_Nm=20)),
+    ("helis dişli, 1:2.5, 30 Nm giriş, 1500 devir", dict(mechanism_type="helical_gear", gear_ratio=2.5, torque_Nm=30, speed_rpm=1500)),
 ]
 
 

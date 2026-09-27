@@ -79,7 +79,8 @@ ROUTER_PROMPT = (
     "'helical_gear': a helical gear pair on parallel shafts (helis dişli, helisel dişli, eğik dişli, helical "
     "gear); only a gear pair, not a gearbox. "
     "'planetary': a planetary / epicyclic gear set with sun, planets and a ring gear (planet dişli, gezegen "
-    "dişli, planet redüktör, planeter, epicyclic, sun and planet); it is never 'reducer' or 'spur_gear'. "
+    "dişli, planet redüktör, planeter, epicyclic, sun and planet, 'planetary reducer', 'planetary gearbox'); it is "
+    "never 'reducer' or 'spur_gear': the word planetary / planet decides. "
     "'chain_drive': a roller chain and sprockets transmitting rotation (zincir, zincir dişli, zincirli aktarma, "
     "zincir-dişli, bisiklet zinciri, roller chain, sprocket). "
     "'belt_drive': a V-belt and pulleys transmitting rotation (kayış, V kayış, kayış-kasnak, kasnak, "
@@ -109,7 +110,7 @@ ROUTER_PROMPT = (
     "yol çizen mekanizma, 'bir nokta düz bir çizgide gitsin', straight-line linkage, Hoeckens, Chebyshev, Watt, "
     "yürüme mekanizması / walking linkage, coupler point path). "
     "'reducer': a complete gearbox with shafts, bearings and housing (redüktör, dişli kutusu, şanzıman, "
-    "'motora bağlı', motor power in kW). "
+    "'motora bağlı', motor power in kW); not when planetary / planet / epicyclic is said. "
     "'spur_gear': only a gear pair (dişli, dişli çifti, çevrim oranı, 'X kat yavaşlatsın' without a gearbox). "
     "'fourbar': a linkage / mechanism with links, crank, lever or swinging arm (krank, kol, biyel, dört çubuk, "
     "altı çubuk / six-bar / Watt for a large swing, salınım, 'kolu X derece çevirince'). 'unknown': anything else.")
