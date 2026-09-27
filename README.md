@@ -38,6 +38,8 @@ Sentences can be written in English or Turkish.
 | ![flange coupling](docs/img/coupling.png) | ![disc springs](docs/img/disc_spring.png) | ![extension spring](docs/img/extension_spring.png) |
 | **Splined shaft (ISO 14)** | **Whitworth quick return** | **Dwell six-bar** |
 | ![spline](docs/img/spline.png) | ![Whitworth](docs/img/whitworth.png) | ![dwell](docs/img/dwell.png) |
+| **Involute spline (DIN 5480)** | | |
+| ![involute spline](docs/img/spline_din5480.png) | | |
 
 ## Core rule: the LLM never produces a number
 
@@ -55,7 +57,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, and a force written in N / kN that the model took for a mass. The evaluation set is `tools/llm_eval.py` (101/101, incl. 12
+  catches input angles and speeds the model misses, a force written in N / kN that the model took for a mass, and a worm's output torque the model dropped. The evaluation set is `tools/llm_eval.py` (103/103, incl. 12
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -95,6 +97,7 @@ flowchart LR
 | Welded bracket | Load and its arm, bar section (sized in bending when not given), weld all around / top and bottom / sides; the smallest fillet leg that passes | Shigley ch. 9: welds as lines (unit area and second moment, tested by integrating along the lines), primary and bending shear on the throat combined, AISC 0.30 S_ut (E70), AISC minimum leg for the thickness, bar bending 0.6 S_y; in Fusion the wall, the bar and triangular fillet beads touching both |
 | Press fit | Torque, shaft diameter (sized in torsion when not given), hub size optional; the loosest H7 fit (k6 … s6) and the shortest, slimmest hub that pass | ISO 286 limits (Shigley's H7/s6 48 mm example reproduced), Lamé pressure (same-material closed form tested), torque at the SMALLEST interference ×2, hub von Mises at the LARGEST, assembly temperature; says honestly when no standard fit works (small shafts: use a key or spline) |
 | Splined shaft | Torque, fixed or sliding hub (flank pressure 100 / 40 / 10 MPa); the smallest ISO 14 straight-sided spline (light / medium series) with a hub ≤ 1.5 D | Flank bearing with 75 % of the teeth carrying (formula tested), shaft torsion on the minor diameter, hub length; in Fusion the splined shaft and a hub with a 0.1 mm clearance spline hole (measured) |
+| Involute spline (DIN 5480) | Torque, use as above, 'involute' / 'DIN 5480' in the sentence or the panel's Profile choice; the smallest W d_B × m × z with a hub ≤ 1.5 d_B | Sizes by the standard's rules (profile shift −0.05 … 0.45 fixes z: W 25×1.25×18, W 30×2×14, W 100×3×32 reproduced), tip / root diameters, 30° involute; the same flank-pressure rule, shaft torsion on the root, tip not pointed. Fusion: involute shaft and hub, zero overlap, 0.05 mm flank gap, cross-section equal to the integrated involute outline (839.4 mm²) |
 | Torsion spring | Moment at a working angle, arbor optional; the lightest music-wire spring in whole quarter body turns | Shigley 10-12: inner-fibre stress with K_i, S_y = 0.78 S_ut, rate d⁴E/(10.8 D N_a) with the legs' share, winding-down of the coil onto the arbor; Shigley example 10-8 reproduced (M 7.55 lbf·in, k' 29.2 lbf·in/turn, 93°); in Fusion a close-wound helix sweep with straight legs |
 | Disc spring stack | Force and the deflection at it, guide rod optional; the lightest stack of DIN 2093-proportioned discs (series A / B / C), nested and in series | DIN 2092 force and σ_OM (the 40 mm catalogue discs reproduced: 6.5 / 2.6 / 1.0 kN), working deflection ≤ 0.75 h0, stress ≤ 1400 MPa (51CrV4), stack deflection within 10 %, free and loaded length; in Fusion the discs revolved as cones, alternating, on a guide rod |
 | Extension spring | Force and the extension to reach it; the lightest music-wire spring with full-loop hooks | Shigley 10-10: initial tension from the preferred stress range, N_a = N_b + G/E, force = F_i + k y (tested), body torsion and the hooks' bending (A) and torsion (B), which govern; in Fusion a close-wound helix with loop hooks |
@@ -166,7 +169,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 372 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 383 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 * **Fusion smoke test:** `python tools/fusion_smoke.py` builds every module's default design in Fusion through the add-in's bridge (36/36 build).
 
@@ -186,7 +189,7 @@ module engines (one per element), for example:
   gears.py helical.py bevel.py worm.py planetary.py rack_pinion.py        gears
   chain.py vbelt.py power_screw.py coupling.py clutch.py flywheel.py       power transmission
   springs.py torsion_spring.py extension_spring.py disc_spring.py         springs
-  bolted.py welded.py fits.py spline.py shafts.py                          joints and shafts
+  bolted.py welded.py fits.py spline.py din5480.py shafts.py                          joints and shafts
   coupler.py pathsynth.py sixbar.py dwell.py geneva.py toggle.py slotted.py whitworth.py ratchet.py slider_crank.py cams.py
                                                                            linkages and mechanisms
   dynamics.py press.py snapfit.py flexure.py                               dynamics, systems, printing

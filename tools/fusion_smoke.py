@@ -4,7 +4,7 @@ through the add-in's local bridge, one request per module, and reports ok / desi
 
 Usage (Fusion running with the MechanismAssistant add-in, from the repository root):
     python tools/fusion_smoke.py              every module
-    python tools/fusion_smoke.py geneva cam   only these
+    python tools/fusion_smoke.py geneva cam   only these (spline_involute: the DIN 5480 variant)
 Each build replaces the drawing in the add-in's document.
 """
 
@@ -18,17 +18,19 @@ sys.path.insert(0, ROOT)
 import pipeline  # noqa: E402
 
 URL = "http://127.0.0.1:8765/exec"
+VARIANTS = {"spline_involute": ("spline", {"spline_profile": "involute"})}     # a non-default choice worth building
 
 CODE = '''
 import time
 pipeline, fourbar = reload_modules()
-kind = {kind!r}
+kind, extra = {kind!r}, {extra!r}
 try:
     if kind == "fourbar":
         r = pipeline.design_from_params(crank_length_mm=30, output_swing_deg=60)
     else:
         kw = {{p["key"]: p["default"] for p in pipeline.MODULES[kind]["params"]}}
         kw = {{a: (None if v == 0 else v) for a, v in kw.items()}}
+        kw.update(extra)
         r = pipeline.design_from_params(kind=kind, **kw)
     if r["status"] != "ok":
         print(kind, "design", r["status"])
@@ -42,7 +44,8 @@ except Exception as e:
 
 
 def run(kind, token):
-    req = urllib.request.Request(URL, data=CODE.format(kind=kind).encode(), headers={"X-Token": token}, method="POST")
+    kind, extra = VARIANTS.get(kind, (kind, {}))
+    req = urllib.request.Request(URL, data=CODE.format(kind=kind, extra=extra).encode(), headers={"X-Token": token}, method="POST")
     with urllib.request.urlopen(req, timeout=300) as resp:
         d = json.loads(resp.read())
     return (d.get("value") or d.get("error", "")).strip()
@@ -50,7 +53,7 @@ def run(kind, token):
 
 def main():
     token = open(os.path.join(ROOT, ".bridge_token")).read().strip()
-    kinds = sys.argv[1:] or ["fourbar"] + list(pipeline.MODULES)
+    kinds = sys.argv[1:] or ["fourbar"] + list(pipeline.MODULES) + list(VARIANTS)
     bad = 0
     for k in kinds:
         line = run(k, token)
