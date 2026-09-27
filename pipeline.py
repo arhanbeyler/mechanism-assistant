@@ -2493,7 +2493,7 @@ def _spline(result, spec, say):
         return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
             "No ISO 14 spline in the table carries it: a larger shaft or a fixed hub."]))
     result.update(spline=s, checks=checks, notes=notes, target={"torque_Nm": float(T)},
-                  fusion={"type": "spline", "passed_checks": True, "profile": "straight",
+                  fusion={"type": "spline", "passed_checks": True, "profile": "straight", "use": use,
                           **{k: s[k] for k in ("N", "d", "D", "B", "L", "hub_od")}})
     msg = (f"All checks passed. ISO 14 {s['series']} series {s['N']} × {s['d']} × {s['D']} (teeth {s['B']:g} mm wide), hub "
            f"{s['L']:g} mm long: the flanks carry {s['cap'] / 1000:.0f} N·m for {s['Td'] / 1000:.0f} N·m.")
@@ -2512,7 +2512,7 @@ def _spline_involute(result, spec, say, T, use, notes):
         return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
             "No DIN 5480 spline up to W 200 carries it: a fixed hub or a coupling."]))
     result.update(spline=s, checks=checks, notes=notes, target={"torque_Nm": float(T)},
-                  fusion={"type": "spline", "passed_checks": True, "profile": "involute",
+                  fusion={"type": "spline", "passed_checks": True, "profile": "involute", "use": use,
                           **{k: s[k] for k in ("dB", "m", "z", "d", "db", "s", "da1", "df1", "da2", "df2", "L", "hub_od")}})
     msg = (f"All checks passed. DIN 5480 {s['name']} (profile shift x = {s['x']:+.2f}), hub {s['L']:g} mm long: "
            f"the flanks carry {s['cap'] / 1000:.0f} N·m for {s['Td'] / 1000:.0f} N·m.")

@@ -227,7 +227,7 @@ def build(mech, reuse=True):
         design.attributes.add(MARK_GROUP, MARK_NAME, "1")
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
-    springs_ = ("spring", "extension_spring", "torsion_spring", "disc_spring", "snap_fit", "flexure")
+    springs_ = ("spring", "extension_spring", "torsion_spring", "disc_spring", "snap_fit", "flexure", "spline")
     for key, owners in (("cam_table", ("cam",)), ("cam_slide_sign", ("cam",)), ("spring_frames", springs_),
                         ("geneva_table", ("geneva",)), ("geneva_signs", ("geneva",))):
         old = design.attributes.itemByName(MARK_GROUP, key)

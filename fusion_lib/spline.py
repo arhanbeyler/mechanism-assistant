@@ -2,7 +2,9 @@
 H3b / H3c: Draws a spline in Fusion 360 (runs inside Fusion only): the shaft and a translucent hub.
 Straight-sided (ISO 14): minor-diameter core with N teeth B wide up to the major diameter, the hub's hole 0.1 mm
 larger all round.  Involute (DIN 5480): 30° involute flanks, the hub's tooth spaces wider by a small flank
-clearance, its tips and roots at the standard's diameters (0.1 m / 0.2 m radial clearance).  Nothing moves.
+clearance, its tips and roots at the standard's diameters (0.1 m / 0.2 m radial clearance).
+A fixed hub stays; a sliding hub (use 'sliding' / 'sliding_loaded') is drawn as FRAMES frames along a shaft one hub
+length longer, shown in turn by the add-in.
 """
 
 import math
@@ -11,8 +13,10 @@ import adsk.core
 import adsk.fusion
 
 from fusion_lib.fourbar import mm
+from fusion_lib.spring import frame_occurrences
 
 CLEAR = 0.1
+FRAMES = 6
 FLANK_CLEAR = 0.06          # involute: added to each flank along the arc (about 0.05 mm normal to it)
 
 
@@ -47,8 +51,8 @@ def _involute_outline(sk, z, r_lo, r_hi, theta, n=6):
     return sk
 
 
-def _build_involute(g, root):
-    z, dB, L, Dh = g["z"], g["dB"], g["L"], g["hub_od"]
+def _build_involute(g, root, design):
+    z, dB, L = g["z"], g["dB"], g["L"]
     inv = lambda a: math.tan(a) - a
     a0 = math.radians(30.0)
 
@@ -65,24 +69,13 @@ def _build_involute(g, root):
     _involute_outline(sk, z, g["df1"] / 2, g["da1"] / 2, theta)
     prof = max(sk.profiles, key=lambda p: p.areaProperties().area)
     name = f"W {dB:g} x {g['m']:g} x {z}"
-    sc.features.extrudeFeatures.addSimple(prof, adsk.core.ValueInput.createByReal(mm(L + 40)),
+    sc.features.extrudeFeatures.addSimple(prof, adsk.core.ValueInput.createByReal(mm(L + 40 + _travel(g))),
                                           adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0).name = f"Spline shaft {name}"
     shaft.isGrounded = True
-    hub = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-    hc = hub.component
-    hc.name = "Hub"
-    sk = hc.sketches.add(hc.xYConstructionPlane)
-    sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0, 0, 0), mm(Dh / 2))
     r_hi = g["df2"] / 2
     while theta(r_hi, FLANK_CLEAR) * r_hi < 0.1:            # the hub's space must not close into a point
         r_hi -= 0.05
-    _involute_outline(sk, z, g["da2"] / 2, r_hi, lambda r: theta(r, FLANK_CLEAR))
-    ring = max((p for p in sk.profiles if p.profileLoops.count == 2), key=lambda p: p.areaProperties().area)
-    body = hc.features.extrudeFeatures.addSimple(ring, adsk.core.ValueInput.createByReal(mm(L)),
-                                                 adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
-    body.name = f"Hub Ø{Dh:g} x {L:g}"
-    body.opacity = 0.5
-    hub.isGrounded = True
+    _hubs(root, design, g, lambda sk: _involute_outline(sk, z, g["da2"] / 2, r_hi, lambda r: theta(r, FLANK_CLEAR)))
     return shaft
 
 
@@ -119,10 +112,41 @@ def _spline_profile(sk, N, r_minor, r_major, B, rot=0.0):
     return sk
 
 
+def _travel(g):
+    return g["L"] if g.get("use") in ("sliding", "sliding_loaded") else 0.0
+
+
+def _hubs(root, design, g, hole):
+    """The hub (translucent) with its spline hole drawn by hole(sketch); a sliding hub as frames along the shaft."""
+    L, Dh = g["L"], g["hub_od"]
+
+    def make(comp, z0):
+        pin = comp.constructionPlanes.createInput()
+        pin.setByOffset(comp.xYConstructionPlane, adsk.core.ValueInput.createByReal(mm(z0)))
+        sk = comp.sketches.add(comp.constructionPlanes.add(pin))
+        sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0, 0, 0), mm(Dh / 2))
+        hole(sk)
+        ring = max((p for p in sk.profiles if p.profileLoops.count == 2), key=lambda p: p.areaProperties().area)
+        body = comp.features.extrudeFeatures.addSimple(ring, adsk.core.ValueInput.createByReal(mm(L)),
+                                                       adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
+        body.name = f"Hub Ø{Dh:g} x {L:g}"
+        body.opacity = 0.5
+        return f"{z0:.0f} mm"
+
+    travel = _travel(g)
+    if travel:
+        return frame_occurrences(root, design, FRAMES, lambda c, f: make(c, travel * f), "Hub")
+    hub = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+    hub.component.name = "Hub"
+    make(hub.component, 0.0)
+    hub.isGrounded = True
+    return [hub]
+
+
 def build(g, root, design=None):
     if g.get("profile") == "involute":
-        return _build_involute(g, root)
-    N, d, D, B, L, Dh = g["N"], g["d"], g["D"], g["B"], g["L"], g["hub_od"]
+        return _build_involute(g, root, design)
+    N, d, D, B, L = g["N"], g["d"], g["D"], g["B"], g["L"]
     shaft = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
     sc = shaft.component
     sc.name = "Shaft"
@@ -131,19 +155,8 @@ def build(g, root, design=None):
     sk = sc.sketches.add(sc.constructionPlanes.add(pin))
     _spline_profile(sk, N, d / 2, D / 2, B)
     prof = min(sk.profiles, key=lambda p: -p.areaProperties().area)
-    sc.features.extrudeFeatures.addSimple(prof, adsk.core.ValueInput.createByReal(mm(L + 40)),
+    sc.features.extrudeFeatures.addSimple(prof, adsk.core.ValueInput.createByReal(mm(L + 40 + _travel(g))),
                                           adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0).name = f"Spline shaft {N}x{d}x{D}"
     shaft.isGrounded = True
-    hub = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-    hc = hub.component
-    hc.name = "Hub"
-    sk = hc.sketches.add(hc.xYConstructionPlane)
-    sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0, 0, 0), mm(Dh / 2))
-    _spline_profile(sk, N, d / 2 + CLEAR, D / 2 + CLEAR, B + 2 * CLEAR)
-    ring = max((p for p in sk.profiles if p.profileLoops.count == 2), key=lambda p: p.areaProperties().area)
-    body = hc.features.extrudeFeatures.addSimple(ring, adsk.core.ValueInput.createByReal(mm(L)),
-                                                 adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
-    body.name = f"Hub Ø{Dh:g} x {L:g}"
-    body.opacity = 0.5
-    hub.isGrounded = True
+    _hubs(root, design, g, lambda sk: _spline_profile(sk, N, d / 2 + CLEAR, D / 2 + CLEAR, B + 2 * CLEAR))
     return shaft
