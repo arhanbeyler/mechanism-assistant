@@ -3,7 +3,8 @@ H5b: Draws a rigid flange coupling in Fusion 360 (runs inside Fusion only).
 
 Two flanged hubs (hub 2d x 1.5d with a flange 4d x 0.5d) meeting at z = 0 on two shafts, joined by N bolts
 with nuts on the 3d bolt circle (clearance holes); the bolt and the nut are one component each, placed N
-times (as in fusion_lib.bolted). Static (the joint is the coupling).
+times (as in fusion_lib.bolted). Two bearing blocks (ground) carry the shafts' ends; the hubs, bolts and nuts
+are one rigid group turning on the joint Ground-Driver, so the add-in turns the coupled shafts.
 """
 
 import math
@@ -12,7 +13,10 @@ import adsk.core
 import adsk.fusion
 
 from fusion_lib.bolted import HEAD, _hexagon, _sketch_at, _thread
+from fusion_lib.flywheel import revolute
 from fusion_lib.fourbar import mm
+
+BLOCK = 15.0        # bearing block thickness along the shafts
 
 
 def _half(root, name, g, sign):
@@ -53,13 +57,31 @@ def _half(root, name, g, sign):
     shaft = c.features.extrudeFeatures.addSimple(sh.profiles.item(0), adsk.core.ValueInput.createByReal(mm(L + 30)),
                                                  adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0)
     shaft.name = "Shaft"
+    return occ
+
+
+def _bearings(root, g):
+    """Ground: a block with a clearance hole round each shaft, near its free end."""
+    d, L, Df = g["d"], g["L_hub"], g["D_flange"]
+    occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+    c = occ.component
+    c.name = "Bearings"
+    s = max(2.2 * d, 0.6 * Df)
+    for z0 in (-L - 25, L + 10):
+        sk, to = _sketch_at(c, z0, "Bearing block")
+        sk.sketchCurves.sketchLines.addTwoPointRectangle(to(-s / 2, -s / 2), to(s / 2, s / 2))
+        sk.sketchCurves.sketchCircles.addByCenterRadius(to(0, 0), mm(d / 2 + 0.5))
+        prof = next(p for p in sk.profiles if p.profileLoops.count == 2)
+        c.features.extrudeFeatures.addSimple(prof, adsk.core.ValueInput.createByReal(mm(BLOCK)),
+                                             adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0).name = "Bearing"
     occ.isGrounded = True
     return occ
 
 
 def build(g, root, design=None):
-    _half(root, "Hub A", g, -1)
-    _half(root, "Hub B", g, 1)
+    ground = _bearings(root, g)
+    hub_a = _half(root, "Hub A", g, -1)
+    hub_b = _half(root, "Hub B", g, 1)
     b, t, Db, N = g["bolt"], g["t"], g["D_bolt"], g["N"]
     d, L = b["d"], b["L"]
 
@@ -103,8 +125,13 @@ def build(g, root, design=None):
     prof = next(p for p in sk.profiles if p.profileLoops.count == 2)
     nc.features.extrudeFeatures.addSimple(prof, adsk.core.ValueInput.createByReal(mm(b["nut_h"])),
                                           adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0).name = f"Nut M{d}"
-    bolt.isGrounded = nut.isGrounded = True
+    group = adsk.core.ObjectCollection.create()
+    for o in (hub_a, hub_b, bolt, nut):
+        group.add(o)
     for i in range(1, N):
-        root.occurrences.addExistingComponent(bc, at_bolt(i)).isGrounded = True
-        root.occurrences.addExistingComponent(nc, at(i, t + b["nut_h"])).isGrounded = True
+        group.add(root.occurrences.addExistingComponent(bc, at_bolt(i)))
+        group.add(root.occurrences.addExistingComponent(nc, at(i, t + b["nut_h"])))
+    root.rigidGroups.add(group, False)
+    shaft = next(x for x in hub_a.component.bRepBodies if x.name == "Shaft")
+    revolute(root, hub_a, ground, shaft, g["d"] / 2, "Ground-Driver")
     return bolt
