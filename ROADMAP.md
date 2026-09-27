@@ -28,7 +28,7 @@ Sentence → LLM (Ollama, local) → engines + checks → Fusion 360
 - [x] **B7h. Separate shaft and pin diameters.** O2/O4 steel shafts (torsion + shear), A/B pins; Fusion draws the right hole at each end. PETG 5 kg: coupler 25 → 13 mm, volume −12 %
 - [x] **B8a. Local bosses.** Every hole in its own boss (D = 2.5·d), the web only as thick as the checks need; boss and web sections checked separately; solid extrude + hole cut in Fusion. PETG volume −29 %, Al −59 %
 - [x] **B8b. Layer interference.** A shaft through a middle layer must stay at least 1 mm from the moving links (web + boss) over the cycle; the layer order changes if needed, otherwise the design is rejected
-- [ ] **B8c. Pins and clearances (print-in-place).** Pin / head geometry, radial and axial clearance (at print time, with D12)
+- [ ] **B8c. Pins and clearances (print-in-place).** Pin / head geometry, radial and axial clearance (at print time, with D12). Prepared: a clearance coupon (printfit.py, tools/print_coupon.py -> STL): seven pin + ring spinners, 0.15 ... 0.5 mm, printed standing with 45° cones and no supports, the clearance engraved on each ring's tab; Fusion measures the gap equal to the clearance on every spinner. The smallest ring that turns sets the pins' clearance
 - [x] **B9. Four-bars without a full-turn input.** Freudenstein function generator (3 Chebyshev precision points, θ₀/φ₀ sweep, structural error ≤ 1°); first candidate passing strength + interference; LLM "rocker_rocker"; "Input motion" in the panel; joint limits and back-and-forth motion in Fusion
 
 ## C. New modules
