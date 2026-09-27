@@ -77,3 +77,15 @@ def test_new_request_is_not_an_edit(monkeypatch):
     monkeypatch.setattr(pipeline, "extract_spec", lambda t: dict(FOURBAR, crank_length_mm=25))
     r = pipeline.design_from_text("25 mm krank, 60° salınım", prev_spec=FOURBAR)
     assert not r.get("edit") and r["lengths"]["a"] == pytest.approx(25)
+
+
+def test_yes_no_fields_are_edited_as_choices():
+    import llm_extract
+    numeric, choice = llm_extract.editable_fields("quick_return")
+    assert choice["whitworth"] == ["yes", "no"] and "whitworth" not in numeric
+    prev = {"mechanism_type": "quick_return", "stroke_mm": 150, "time_ratio": 1.5, "whitworth": False}
+    edit = {"is_edit": True, "changes": [{"field": "whitworth", "op": "set", "number": None, "choice": "yes"}]}
+    spec, note = pipeline.apply_edit(prev, edit, "Whitworth olsun")
+    assert spec["whitworth"] is True and spec["stroke_mm"] == 150
+    r = pipeline.design_from_spec(spec)
+    assert r["status"] == "ok" and r.get("whitworth")

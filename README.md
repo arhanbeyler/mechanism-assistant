@@ -103,7 +103,7 @@ flowchart LR
 
 * **LLM:** It only fills a JSON schema (strict output, two stages: a router picks the module, then a short
   module-specific extractor fills its fields). Missing values are reported, never guessed. A regex backstop
-  catches input angles and speeds the model misses, a force written in N / kN that the model took for a mass, and a worm's output torque the model dropped. The evaluation set is `tools/llm_eval.py` (103/103, incl. 12
+  catches input angles and speeds the model misses, a force written in N / kN that the model took for a mass, and a worm's output torque the model dropped. The evaluation set is `tools/llm_eval.py` (106/106, incl. 15
   edits of an existing design).
 * **Edits:** once a design is on screen, "make the crank 40 mm", "use aluminium" or "krankı 5 mm uzat" change it.
   The LLM lists the changes; every amount must appear in the message, so "a bit longer" gets a question, not a guess.
@@ -252,7 +252,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 397 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 398 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 * **Fusion smoke test:** `python tools/fusion_smoke.py` builds every module's default design in Fusion through the add-in's bridge (36/36 build).
 

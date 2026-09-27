@@ -328,11 +328,16 @@ Everything is computed on this computer, with a local AI.</div>
   function setKnobs(d) {                 // fill the sliders from a design that came from a sentence
     const s = d.spec || {};
     if (s.material) $("k-mat").value = s.material;
-    if (MODULES[d.mechanism_type]) {     // module (C0): its defined parameters
-      $("k-kind").value = d.mechanism_type;
+    // the module is the spec's type (a Whitworth result comes from quick_return, a two-stage one from reducer)
+    const mod = MODULES[s.mechanism_type] ? s.mechanism_type : d.mechanism_type;
+    if (MODULES[mod]) {                  // module (C0): its defined parameters
+      $("k-kind").value = mod;
       applyKind();
-      for (const p of MODULES[d.mechanism_type].params)
-        if (s[p.key] != null) $("k-" + p.key).value = s[p.key];
+      for (const p of MODULES[mod].params) {
+        let v = s[p.key];
+        if (p.options && typeof v === "boolean") v = v ? "yes" : "no";      // yes / no fields are selects
+        if (v != null) $("k-" + p.key).value = v;
+      }
       if (d.target && d.target.taper != null && $("k-spring_taper")) $("k-spring_taper").value = d.target.taper;
       labels();
       requestPreview();

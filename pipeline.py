@@ -590,9 +590,15 @@ def apply_edit(prev_spec, edit, text):
     """Applies the LLM's change list to the previous spec. Returns (new spec, note) or (None, question).
     Every number is checked against the user's text; a change without an amount is asked about, not guessed."""
     spec, done = dict(prev_spec), []
+    kind = llm_extract.KIND_OF_TYPE.get(prev_spec.get("mechanism_type"))
+    yes_no = llm_extract.boolean_fields(kind) if kind in llm_extract.MODULE_EXTRACTORS else set()
     for c in edit.get("changes", []):
         key, op, num, choice = c["field"], c["op"], c.get("number"), c.get("choice")
         label = _field_label(key)
+        if key in yes_no and choice in ("yes", "no"):
+            spec[key] = choice == "yes"
+            done.append(f"{label} → {choice}")
+            continue
         if choice is not None and num is None:
             spec[key] = choice
             done.append(f"{label} → {choice}")

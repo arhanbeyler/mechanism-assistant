@@ -194,6 +194,9 @@ FB = {"mechanism_type": "crank_rocker", "crank_length_mm": 30, "output_swing_deg
 RED = {"mechanism_type": "reducer", "gear_ratio": 3, "torque_Nm": 20, "power_kW": None, "speed_rpm": 1450,
        "material": "steel", "shaft_material": "1045"}
 SL = {"mechanism_type": "straight_line", "stroke_mm": 100, "max_load_N": None, "speed_rpm": None, "material": None}
+QR = {"mechanism_type": "quick_return", "stroke_mm": 150, "time_ratio": 1.5, "whitworth": False, "max_load_N": None}
+SP = {"mechanism_type": "spline", "torque_Nm": 100, "spline_use": "fixed", "spline_profile": None}
+WG = {"mechanism_type": "worm_gear", "gear_ratio": 30, "output_torque_Nm": 50, "speed_rpm": 1400, "self_locking": True}
 EDIT_CASES = [
     (FB, "krankı 40 mm yap", dict(crank_length_mm=40, output_swing_deg=60)),
     (FB, "alüminyum olsun", dict(material="aluminum", crank_length_mm=30)),
@@ -207,6 +210,9 @@ EDIT_CASES = [
     (RED, "devri iki katına çıkar", dict(speed_rpm=2900)),
     (RED, "use 1020 steel for the shafts", dict(shaft_material="1020")),
     (SL, "düz yolu 150 mm yap, 15 N itsin", dict(stroke_mm=150, max_load_N=15)),
+    (QR, "Whitworth olsun", dict(whitworth=True, stroke_mm=150)),
+    (SP, "evolvent yap, göbek kaysın", dict(spline_profile="involute", spline_use="sliding")),
+    (WG, "kendini kilitlemesin", dict(self_locking=False, gear_ratio=30)),
 ]
 
 

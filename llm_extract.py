@@ -526,7 +526,7 @@ CAM = (_schema({
     "follower_load_N": {"type": ["number", "null"]},
 }), COMMON + (
     "The user wants a disk cam with a translating roller follower. cam_rise_mm: follower lift/stroke "
-    "('20 mm kaldırsın', 'strok 20'). rise_deg: cam angle for the rise ('120 derecede yükselsin'). "
+    "('20 mm kaldırsın', 'strok 20'). rise_deg: cam angle for the rise ('120 derecede yükselsin', '120 derecede yükselen', 'rise over 120°'). "
     "dwell_top_deg: dwell at the top ('60 derece beklesin', 'üstte 60° bekleme'). return_deg: cam angle for the "
     "return/fall ('120 derecede insin'). motion_law: 'cycloidal' (sikloidal), 'harmonic' (basit harmonik), "
     "'poly345' (3-4-5 polinom) only if named. roller_radius_mm: roller radius if given. speed_rpm: cam speed "
@@ -579,6 +579,11 @@ DESCRIPTION = {"fourbar": "four-bar linkage", "slider_crank": "slider-crank (pis
 NOT_EDITABLE = {"mechanism_type", "quick_return", "spring_shape"}
 
 
+def boolean_fields(kind):
+    """Yes / no fields of a module (an edit reports them as the choice 'yes' / 'no')."""
+    return {k for k, v in MODULE_EXTRACTORS[kind][0]["properties"].items() if v.get("type") == "boolean"}
+
+
 def editable_fields(kind):
     """Fields of a module that an edit may change: (numeric fields, {text field: allowed values})."""
     props = MODULE_EXTRACTORS[kind][0]["properties"]
@@ -586,7 +591,9 @@ def editable_fields(kind):
     for k, v in props.items():
         if k in NOT_EDITABLE:
             continue
-        if "enum" in v:
+        if v.get("type") == "boolean":
+            choice[k] = ["yes", "no"]
+        elif "enum" in v:
             choice[k] = [e for e in v["enum"] if e is not None]
         else:
             numeric.append(k)
@@ -624,7 +631,10 @@ def extract_edit(user_text: str, prev_spec: dict) -> dict:
         "number: ONLY an amount written in the message, converted to the field's unit (_mm: mm, _deg: degrees, "
         "_N: newtons with 1 kg = 9.81 N, _Nm: N·m, _rpm: rpm, _kW: kW); if the message gives no amount "
         "('biraz daha uzun', 'a bit longer') number = null. "
-        f"choice: for these text fields only, one of the allowed values: {json.dumps(choice)}; otherwise null.")
+        f"choice: for these text / yes-no fields only, one of the allowed values: {json.dumps(choice)} "
+        "('Whitworth olsun' -> whitworth 'yes', 'kendini kilitlemesin' -> self_locking 'no', 'evolvent yap' -> "
+        "spline_profile 'involute', 'göbek kaysın' -> spline_use 'sliding'); otherwise null. A choice change has no "
+        "number: never add a numeric change the message does not state.")
     return _chat(prompt, user_text, _edit_schema(numeric + list(choice)), "edit")
 
 
