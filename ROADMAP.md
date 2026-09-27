@@ -95,6 +95,7 @@ In a system one module's output is another's input (forces, diameters and masses
 
 ## K. Usability
 - [x] **K1. Edits in the chat.** "Make the crank 40 mm", "use aluminium", "krankı 5 mm uzat", "devri iki katına çıkar": the LLM lists the changes (field, set / add / multiply, amount), the engine applies them to the design in the panel and redesigns. Every amount must appear in the message (unit conversions allowed); "a bit longer" gets a question, not a guess. llm_eval 36/36 (11 edit cases)
+- [x] **K3. Panel order and motion.** Types grouped in the panel and the README (linkages, intermittent motion and cams, gears, chain and belt, shafts / screws / couplings, joints, springs, 3D printing; pipeline.MODULE_GROUPS); every spring animated by frames (extension opens its coils, torsion winds and its leg turns, disc stack flattens); '1 turn' / 'Loop' hidden when the drawing has nothing to move. Finding: the add-in's module reload failed when a module imported a name newly added to one reloaded after it: such modules are reloaded again at the end
 - [x] **K2. Torque curve and dynamic forces for the four-bar.** Norton's 9×9 matrix per crank angle (links as uniform bars of their section and material), velocities / accelerations by central differences at a constant crank speed; three independent checks (energy method, quasi-static = statics, mean torque = load work per turn); sections resized for the dynamic forces when larger; flywheel from the torque's energy fluctuation; 'Crank speed' slider and a torque plot in the panel
 
 ## D. Outside world

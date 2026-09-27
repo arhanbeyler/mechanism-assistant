@@ -436,6 +436,20 @@ MODULES = {
     },
 }
 
+# The panel's Type selector shows the modules in these groups, in this order (the four-bar heads "Linkages")
+MODULE_GROUPS = [
+    ("Linkages", ["slider_crank", "straight_line", "toggle_clamp", "scotch_yoke", "quick_return", "dwell", "press"]),
+    ("Intermittent motion and cams", ["geneva", "ratchet", "cam"]),
+    ("Gears", ["spur_gear", "helical_gear", "bevel_gear", "worm_gear", "rack_pinion", "planetary", "reducer"]),
+    ("Chain and belt drives", ["chain_drive", "belt_drive"]),
+    ("Shafts, screws and couplings", ["shaft", "spline", "press_fit", "coupling", "clutch", "flywheel", "power_screw"]),
+    ("Bolted and welded joints", ["bolted_joint", "welded_joint"]),
+    ("Springs", ["spring", "extension_spring", "torsion_spring", "disc_spring"]),
+    ("3D printing", ["snap_fit", "flexure"]),
+]
+assert sorted(MODULES) == sorted(k for _, ks in MODULE_GROUPS for k in ks), "a module is missing from MODULE_GROUPS"
+MODULES = {k: dict(MODULES[k], group=g) for g, ks in MODULE_GROUPS for k in ks}
+
 
 def max_feasible_swing(a, psi_start):
     """If the wanted swing is not feasible: the largest swing meeting the design target (45-135, compact)."""
@@ -2421,7 +2435,7 @@ def _disc_spring(result, spec, say):
         return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
             "No disc stack does it: allow more deflection (more discs in series) or a larger diameter."]))
     result.update(disc_spring=b, checks=checks, notes=notes, target={"force_N": float(F), "deflection_mm": float(y)},
-                  fusion={"type": "disc_spring", "passed_checks": True, **{k: b[k] for k in ("De", "Di", "t", "h0", "np", "ns")},
+                  fusion={"type": "disc_spring", "passed_checks": True, **{k: b[k] for k in ("De", "Di", "t", "h0", "np", "ns", "s")},
                           "rod": rod})
     stack = (f"{b['ns']} in series" if b["np"] == 1 else f"{b['ns']} groups of {b['np']} nested discs in series")
     msg = (f"All checks passed. Disc springs {b['De']:g} × {b['Di']:g} × {b['t']:g} mm (series {b['series']}, h0 {b['h0']:g}), "
@@ -2447,7 +2461,8 @@ def _extension_spring(result, spec, say):
         return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
             "No extension spring found: allow more extension or less force."]))
     result.update(extension=s, checks=checks, notes=notes, target={"force_N": float(F), "extension_mm": float(y)},
-                  fusion={"type": "extension_spring", "passed_checks": True, "d": s["d"], "D": s["D"], "Nb": s["Nb"]})
+                  fusion={"type": "extension_spring", "passed_checks": True, "d": s["d"], "D": s["D"], "Nb": s["Nb"],
+                          "y": float(y)})
     msg = (f"All checks passed. Wire Ø{s['d']:g} mm, coil Ø{s['D']:.1f} mm, {s['Nb']:g} body coils, free length {s['L0']:.1f} mm "
            f"inside the hooks; it starts to open at {s['Fi']:.1f} N (initial tension), k = {s['k']:.2f} N/mm, "
            f"{s['F']:.1f} N at {float(y):g} mm. The hooks decide: bending {s['sigma_A']:.0f} MPa.")

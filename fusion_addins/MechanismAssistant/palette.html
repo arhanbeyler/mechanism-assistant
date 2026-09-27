@@ -192,12 +192,21 @@ Everything is computed on this computer, with a local AI.</div>
   const kind = () => $("k-kind").value;
   const isFourbar = () => kind() === "fourbar";
 
-  function buildModules(mods) {                       // add the modules to the Type selector
+  function buildModules(mods) {                       // add the modules to the Type selector, in their groups
     MODULES = mods || {};
+    const groups = {};
+    const four = $("k-kind").querySelector('option[value="fourbar"]');
     for (const [key, m] of Object.entries(MODULES)) {
+      const name = m.group || "Other";
+      if (!groups[name]) {
+        groups[name] = document.createElement("optgroup");
+        groups[name].label = name;
+        $("k-kind").appendChild(groups[name]);
+        if (name === "Linkages" && four) groups[name].appendChild(four);   // the four-bar heads the linkages
+      }
       const o = document.createElement("option");
       o.value = key; o.textContent = m.title;
-      $("k-kind").appendChild(o);
+      groups[name].appendChild(o);
     }
   }
   function buildGenKnobs() {                          // the chosen module's sliders (from its definition)
@@ -372,7 +381,8 @@ Everything is computed on this computer, with a local AI.</div>
     $("draw").disabled = !(d.status === "ok");
     const tone = { ok: "ok", failed: "bad", error: "bad" }[d.status] || "info";
     let text = d.message;
-    if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion.";
+    if (d.status === "ok" && d.drawn) text += "\nDrawn in Fusion." + (d.can_move ? "" : " Nothing in it moves.");
+    if (d.drawn != null) $("turn").hidden = $("loop").hidden = !d.can_move;   // only for a drawing that moves
     if (d.status === "failed") text += "\nThis design was not drawn. Use the sliders to look for a value that works.";
     addMsg("ai", text, tone);
     if (d.lengths || d.gear || d.spring || d.cam || d.shaft || d.reducer || d.reducer2 || d.slider || d.straight || d.geneva || d.clamp || d.yoke || d.lever || d.ratchet || d.screw || d.rack || d.drive || d.planetary || d.helical || d.worm || d.bevel || d.bolted || d.welded || d.press_fit || d.torsion || d.flywheel || d.clutch || d.snap_fit || d.flexure || d.press || d.pathsynth || d.sixbar || d.coupling || d.disc_spring || d.extension || d.spline || d.whitworth || d.dwell) { renderCard(d); if (d.spec) setKnobs(d); }

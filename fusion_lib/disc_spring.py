@@ -3,13 +3,18 @@ H4b: Draws a disc spring stack in Fusion 360 (runs inside Fusion only), free (un
 
 Every disc is revolved from its section, a parallelogram in the (r, z) plane (a cone of height h0 and thickness
 t); discs in a group are nested (same way up), groups alternate (inner edges touch, then outer edges), on a
-grey guide rod. Nothing moves.
+grey guide rod.
+Animation: FRAMES frames from free to the working deflection s per disc (cone height h0 - s), shown in turn by
+the add-in; the rod stays.
 """
 
 import adsk.core
 import adsk.fusion
 
 from fusion_lib.fourbar import mm
+from fusion_lib.spring import frame_occurrences
+
+FRAMES = 6
 
 
 def _disc(comp, ro, ri, t, h0, z0, up, name):
@@ -31,18 +36,24 @@ def _disc(comp, ro, ri, t, h0, z0, up, name):
     comp.features.revolveFeatures.add(ri_).bodies.item(0).name = name
 
 
-def build(g, root, design=None):
-    ro, ri, t, h0, np_, ns = g["De"] / 2, g["Di"] / 2, g["t"], g["h0"], g["np"], g["ns"]
-    occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-    c = occ.component
-    c.name = "Disc springs"
+def _frame(c, g, s):
+    """The stack with every disc flattened by s (cone height h0 - s)."""
+    ro, ri, t, np_, ns = g["De"] / 2, g["Di"] / 2, g["t"], g["np"], g["ns"]
+    h = g["h0"] - s
     z = 0.0
     for k in range(ns):
         up = k % 2 == 0
         for j in range(np_):
-            _disc(c, ro, ri, t, h0, z + j * t, up, f"Disc {k + 1}.{j + 1}")
-        z += h0 + np_ * t
-    occ.isGrounded = True
+            _disc(c, ro, ri, t, h, z + j * t, up, f"Disc {k + 1}.{j + 1}")
+        z += h + np_ * t
+    return f"{ns * s:.2f} mm"
+
+
+def build(g, root, design=None):
+    ri, t, h0, np_, ns = g["Di"] / 2, g["t"], g["h0"], g["np"], g["ns"]
+    s = g.get("s") or 0.0
+    occ = frame_occurrences(root, design, FRAMES, lambda c, f: _frame(c, g, s * f))[0]
+    z = ns * (h0 + np_ * t)
     rod = g.get("rod") or max(2.0, 2 * ri - 1.0)
     r_occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
     r_occ.component.name = "Arbor"

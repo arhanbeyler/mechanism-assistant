@@ -43,3 +43,10 @@ def test_absurd_values_fail_with_a_reason():
     r = pipeline.design_from_spec({"mechanism_type": "press", "force_N": 400, "stroke_mm": 1e6, "working_stroke_mm": 1,
                                    "speed_rpm": 50})
     assert r["status"] == "failed" and "outside what" in r["message"]
+
+
+def test_every_module_is_in_one_group():
+    import pipeline
+    keys = [k for _, ks in pipeline.MODULE_GROUPS for k in ks]
+    assert len(keys) == len(set(keys)) == len(pipeline.MODULES)
+    assert all(m["group"] for m in pipeline.MODULES.values())

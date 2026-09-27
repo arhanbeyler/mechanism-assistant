@@ -225,10 +225,11 @@ def build(mech, reuse=True):
         design.attributes.add(MARK_GROUP, MARK_NAME, "1")
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
-    for key, owner in (("cam_table", "cam"), ("cam_slide_sign", "cam"), ("spring_frames", "spring"),
-                       ("geneva_table", "geneva"), ("geneva_signs", "geneva")):
+    springs_ = ("spring", "extension_spring", "torsion_spring", "disc_spring")
+    for key, owners in (("cam_table", ("cam",)), ("cam_slide_sign", ("cam",)), ("spring_frames", springs_),
+                        ("geneva_table", ("geneva",)), ("geneva_signs", ("geneva",))):
         old = design.attributes.itemByName(MARK_GROUP, key)
-        if old and mech.get("type") != owner:
+        if old and mech.get("type") not in owners:
             old.deleteMe()                    # no animation data of the previous design may remain
     other = {"spur_gear": "gear",             # C9: gear pair
              "spring": "spring",              # C10: compression spring (+ compression animation frames)
@@ -263,7 +264,8 @@ def build(mech, reuse=True):
              "extension_spring": "extension_spring",   # H4c: extension spring
              "spline": "spline",                # H3b: splined shaft
              "whitworth": "whitworth",          # F4c: Whitworth quick return
-             "dwell": "dwell"}.get(mech.get("type"))   # F4d: dwell six-bar
+             "dwell": "dwell",                  # F4d: dwell six-bar
+             "clearance_coupon": "coupon"}.get(mech.get("type"))   # B8c: print-in-place clearance coupon
     if other:
         import importlib
         importlib.import_module(f"fusion_lib.{other}").build(mech, root, design)

@@ -11,35 +11,69 @@ that you can rotate. Everything runs locally: a local LLM (Ollama), deterministi
 
 Sentences can be written in English or Turkish.
 
-| Four-bar (crank-rocker / rocker-rocker) | Spur gear pair | Conical compression spring |
+#### Linkages
+
+| Four-bar (crank-rocker / rocker-rocker) | Slider-crank (piston) | Straight-line linkage (Hoeckens) |
 |---|---|---|
-| ![four-bar](docs/img/fourbar.png) | ![gear](docs/img/gear.png) | ![spring](docs/img/spring.png) |
-| **Disk cam + roller follower** | **Two-bearing shaft (fatigue)** | **Single-stage reducer (system)** |
-| ![cam](docs/img/cam.png) | ![shaft](docs/img/shaft.png) | ![reducer](docs/img/reducer.png) |
-| **Slider-crank (piston)** | **Two-stage reducer (system)** | **Straight-line linkage (Hoeckens)** |
-| ![slider-crank](docs/img/slider_crank.png) | ![two-stage reducer](docs/img/reducer2.png) | ![straight-line](docs/img/straight_line.png) |
-| **Geneva (intermittent rotation)** | **Toggle clamp (over-centre)** | **Scotch yoke** |
-| ![geneva](docs/img/geneva.png) | ![toggle clamp](docs/img/toggle_clamp.png) | ![scotch yoke](docs/img/scotch_yoke.png) |
-| **Quick return (shaper)** | **Ratchet and pawl** | **Power screw (Tr, modelled thread)** |
-| ![quick return](docs/img/quick_return.png) | ![ratchet](docs/img/ratchet.png) | ![power screw](docs/img/power_screw.png) |
-| **Rack and pinion** | **Roller chain drive** | **V-belt drive** |
-| ![rack and pinion](docs/img/rack_pinion.png) | ![chain drive](docs/img/chain_drive.png) | ![V-belt drive](docs/img/belt_drive.png) |
-| **Planetary gear set** | **Helical gear pair** | **Worm gear (self-locking)** |
-| ![planetary](docs/img/planetary.png) | ![helical gears](docs/img/helical_gear.png) | ![worm gear](docs/img/worm_gear.png) |
-| **Bevel gear pair** | **Bolted joint** | **Welded bracket** |
-| ![bevel gears](docs/img/bevel_gear.png) | ![bolted joint](docs/img/bolted_joint.png) | ![welded bracket](docs/img/welded_joint.png) |
-| **Press fit (ISO H7 fits)** | **Torsion spring** | **Flywheel** |
-| ![press fit](docs/img/press_fit.png) | ![torsion spring](docs/img/torsion_spring.png) | ![flywheel](docs/img/flywheel.png) |
-| **Disc clutch** | **Snap-fit (printed)** | **Living hinge (printed)** |
-| ![disc clutch](docs/img/clutch.png) | ![snap-fit](docs/img/snap_fit.png) | ![living hinge](docs/img/flexure.png) |
-| **Crank press (system)** | **Path synthesis (through given points)** | **Watt six-bar (large swing)** |
-| ![crank press](docs/img/press.png) | ![path synthesis](docs/img/path_synthesis.png) | ![six-bar](docs/img/six_bar.png) |
-| **Flange coupling** | **Disc spring stack** | **Extension spring** |
-| ![flange coupling](docs/img/coupling.png) | ![disc springs](docs/img/disc_spring.png) | ![extension spring](docs/img/extension_spring.png) |
-| **Splined shaft (ISO 14)** | **Whitworth quick return** | **Dwell six-bar** |
-| ![spline](docs/img/spline.png) | ![Whitworth](docs/img/whitworth.png) | ![dwell](docs/img/dwell.png) |
-| **Involute spline (DIN 5480)** | | |
-| ![involute spline](docs/img/spline_din5480.png) | | |
+| ![four-bar](docs/img/fourbar.png) | ![slider-crank](docs/img/slider_crank.png) | ![straight-line](docs/img/straight_line.png) |
+| **Toggle clamp (over-centre)** | **Scotch yoke** | **Quick return (shaper)** |
+| ![toggle clamp](docs/img/toggle_clamp.png) | ![scotch yoke](docs/img/scotch_yoke.png) | ![quick return](docs/img/quick_return.png) |
+| **Whitworth quick return** | **Watt six-bar (large swing)** | **Dwell six-bar** |
+| ![Whitworth](docs/img/whitworth.png) | ![six-bar](docs/img/six_bar.png) | ![dwell](docs/img/dwell.png) |
+| **Path synthesis (through given points)** | **Crank press (system)** |  |
+| ![path synthesis](docs/img/path_synthesis.png) | ![crank press](docs/img/press.png) |  |
+
+#### Intermittent motion and cams
+
+| Geneva (intermittent rotation) | Ratchet and pawl | Disk cam + roller follower |
+|---|---|---|
+| ![geneva](docs/img/geneva.png) | ![ratchet](docs/img/ratchet.png) | ![cam](docs/img/cam.png) |
+
+#### Gears
+
+| Spur gear pair | Helical gear pair | Bevel gear pair |
+|---|---|---|
+| ![gear](docs/img/gear.png) | ![helical gears](docs/img/helical_gear.png) | ![bevel gears](docs/img/bevel_gear.png) |
+| **Worm gear (self-locking)** | **Rack and pinion** | **Planetary gear set** |
+| ![worm gear](docs/img/worm_gear.png) | ![rack and pinion](docs/img/rack_pinion.png) | ![planetary](docs/img/planetary.png) |
+| **Single-stage reducer (system)** | **Two-stage reducer (system)** |  |
+| ![reducer](docs/img/reducer.png) | ![two-stage reducer](docs/img/reducer2.png) |  |
+
+#### Chain and belt drives
+
+| Roller chain drive | V-belt drive |  |
+|---|---|---|
+| ![chain drive](docs/img/chain_drive.png) | ![V-belt drive](docs/img/belt_drive.png) |  |
+
+#### Shafts, screws and couplings
+
+| Two-bearing shaft (fatigue) | Splined shaft (ISO 14) | Involute spline (DIN 5480) |
+|---|---|---|
+| ![shaft](docs/img/shaft.png) | ![spline](docs/img/spline.png) | ![involute spline](docs/img/spline_din5480.png) |
+| **Press fit (ISO H7 fits)** | **Flange coupling** | **Disc clutch** |
+| ![press fit](docs/img/press_fit.png) | ![flange coupling](docs/img/coupling.png) | ![disc clutch](docs/img/clutch.png) |
+| **Flywheel** | **Power screw (Tr, modelled thread)** |  |
+| ![flywheel](docs/img/flywheel.png) | ![power screw](docs/img/power_screw.png) |  |
+
+#### Bolted and welded joints
+
+| Bolted joint | Welded bracket |  |
+|---|---|---|
+| ![bolted joint](docs/img/bolted_joint.png) | ![welded bracket](docs/img/welded_joint.png) |  |
+
+#### Springs
+
+| Conical compression spring | Extension spring | Torsion spring |
+|---|---|---|
+| ![spring](docs/img/spring.png) | ![extension spring](docs/img/extension_spring.png) | ![torsion spring](docs/img/torsion_spring.png) |
+| **Disc spring stack** |  |  |
+| ![disc springs](docs/img/disc_spring.png) |  |  |
+
+#### 3D printing
+
+| Snap-fit (printed) | Living hinge (printed) |  |
+|---|---|---|
+| ![snap-fit](docs/img/snap_fit.png) | ![living hinge](docs/img/flexure.png) |  |
 
 ## Core rule: the LLM never produces a number
 
@@ -68,6 +102,8 @@ flowchart LR
 
 ## Modules
 
+#### Linkages
+
 | Module | Design method | Checks |
 |---|---|---|
 | Four-bar, full rotation | Crank-rocker Q = 1 (c = a / sin(ψ/2)), quick-return Q > 1 (Norton) | Grashof, transmission angle 40–140° (synthesis targets 45°), branch consistency, simulated swing and Q; with a crank speed (K2): drive torque, pin and shaking forces with the links' inertia by Norton's matrix method (checked against the energy method and, at a slow crank, against the statics; the mean torque equals the load's work per turn), sections resized when the dynamic forces are larger, the flywheel that keeps the speed within ±2.5 %, torque curve on the panel |
@@ -77,45 +113,80 @@ flowchart LR
 | Slider-crank (piston) | Stroke given; crank from the exact stroke formula (with offset), rod the shortest whole mm with b/a ≥ 3 and rod angle ≤ 20° | Simulated stroke, rod ratio, rod angle (side load), quick-return Q with offset; crank torque by virtual work T = F·|dx/dθ| (tested against the rod-force moment); crank and rod sized like the four-bar links; piston speed / acceleration; in Fusion the solver's piston position equals x(θ) at 36 angles |
 | Straight-line linkage | Hoeckens four-bar (a : b : c : d = 1 : 2.5 : 2.5 : 2, point at 2 × AB) scaled to the asked straight path; the straight part is found on the simulated coupler curve (longest run within 0.2 % of its length from its best-fit line), not taken from a table | Straight length, deviation, crank-rotation share and speed variation on the line, lift on return, transmission angle on the working stroke; crank torque from coupler statics equals virtual work; links sized with the coupler also bending (point overhangs B); layer clearance; in Fusion the drawn point stays within 0.003 mm of the engine curve over a full turn |
 | Path synthesis | 3–8 points (x, y) the coupler point must pass through; a crank-rocker with the point on the coupler's line (a three-hole bar) | Nelder–Mead from 40 seeded starts on the squared distances to the coupler curve with penalties for Grashof, transmission angle 30–150° and link ratios; the report re-measures the misses on a finer curve; in Fusion the solver-driven point, traced over a turn, passes the points within 0.2 mm (1° steps) |
-| Geneva | Slots (or step angle) and centre distance; tangential pin entry a = C·sin(π/n); wheel with slots and locking arcs, driver with locking disk whose relief is sized by sweeping the wheel outline over the index; with speed and a load (disk mass + diameter) the pin and wheel thickness are sized | Index / dwell split, closed-form ω and α (tested against numerical derivatives), peak ω = λ/(1−λ), pin force from J·α, pin shear and bending, slot bearing, both shafts, lock engaged < 1° after the pin leaves, material under the slots, rim vs driver shaft; point-sampled interference test; in Fusion zero overlap over two turns driven by the add-in |
 | Toggle clamp | Arm opening, spindle distance (handle travel, handle length defaulted and reported); dead-centre synthesis (handle link and coupler in line at the clamped pose) swept and refined for the transmission angle, then 3° over centre onto a stop | Opening (simulation), arm back-off past the dead centre, transmission angle near the lock (40..140°) and over the stroke (≥ 20°); handle torque from statics equals virtual work and falls to 0 at the dead centre; locked-pose statics (coupler, arm pivot, stop torque), steel pins, arm bending at B; split base plates + post clear of the sweep; in Fusion zero overlap over the stroke, arm swing exactly as asked |
 | Scotch yoke | Stroke (or crank); crank r = S/2, pin in a slot square to the slide | Exactly harmonic x = r cos θ (a_max against a slider-crank's), crank torque F·r, slotted yoke bar in bending + slot bearing, pins, shaft; in Fusion the yoke follows r cos θ exactly over a turn, no overlap |
 | Quick return (shaper) | Stroke and time ratio Q: β = 180/(Q+1), r/d = cos β, lever L = S/(2 cos β), pin travel kept 15 % short of the lever tip | Simulated stroke and Q, slow-stroke direction, cutting / return speeds, crank torque from statics = virtual work, slotted lever bending, pins, shaft (up to Ø30); in Fusion two pin-slot joints, the ram follows L sin ψ exactly over a turn, no overlap |
 | Whitworth quick return | Stroke and time ratio, 'Whitworth' named (or chosen on the panel): the crank longer than the pivot distance, so the slotted lever turns full circles and drives the ram through a rod | Q = (180 + 2α)/(180 − 2α), sin α = d/r; stroke, Q and the slot's radius range from the simulation (tested); rod angle; crank torque by virtual work; in Fusion the crank is a ring round a fixed hub that carries the lever pivot (as on the real machines), stroke 200.0 mm and Q 1.50 measured from the solver, no overlap over a turn |
-| Ratchet and pawl | Holding torque (teeth, diameter optional); saw teeth with an undercut locking face, pawl pivot on the tangent at the contact; smallest wheel that passes, face width ≤ one pitch | Self-engagement tan(hook) > μ (hook = friction angle + 5°), tooth bending / shear / face bearing, pawl buckling and compression, pivot pin and shaft (steel); the pawl's ride over the teeth found by collision search (least lift, 0.3° margin); in Fusion 0.2 mm clearance at rest and the pawl riding in contact, no overlap |
-| Power screw | Axial load, travel, ends (both supported / jack), nut material; smallest ISO trapezoidal size that passes AND self-locks, nut at least one diameter long | Raising / lowering torque (Shigley 8-1 reproduced: 15.94 N·m, −0.47 N·m), self-locking with lubricated friction, efficiency, body von Mises, Euler / Johnson column, thread bearing, root bending (first thread 38 %), nut thread shear; in Fusion a modelled Tr thread, the nut moves one lead per turn with zero thread overlap |
-| Rack and pinion | Force on the rack, travel (default 200 mm, reported), speed optional; the lightest pinion (z 18..40, standard module, face 8..12 m) + rack that passes | Pinion torque F·d/2, travel π·d per turn, Lewis bending of pinion (Y(z)) and rack (Y = 0.485), Barth K_v, contact ratio with a rack ≥ 1.2, no undercut, steel shaft and hub web; in Fusion a motion-linked pinion and rack, zero tooth overlap over 10 teeth and rack travel exactly π·d·θ/360 |
-| Roller chain drive | Power (or torque), input speed, speed ratio, load type (service factor, default moderate shock, reported), centre distance optional; ANSI / ISO 606 chains no. 25–160, 1–3 strands, small sprocket 17–25 teeth; the smallest sprocket pair that passes | Rating per strand from Shigley's link-plate and roller-bushing formulas (reproduce Table 17-20), multi-strand factor, chain pull vs breaking load (≥ 7), whole even number of links and the exact centre distance, wrap ≥ 120°, chordal speed variation, steel shafts and hub web; in Fusion the plates clear the teeth and the driven sprocket turns at exactly N1/N2 |
-| V-belt drive | Same inputs; classical A / B / C sections, standard belt lengths; the smallest sheave pair (with the real sheave width) that passes, at most 5 belts | Shigley 17-4: tabulated rating, angle-of-contact K1 and length K2 factors, number of belts and n_fs, belt tensions and the initial tension to set, belt life (Table 17-17), belt speed ≤ 25 m/s, centre distance, steel shafts; Shigley example 17-4 reproduced (F1 = 64.4 lbf, F_i = 32.2 lbf); in Fusion each belt sits 0.2 mm off both groove walls |
-| Planetary gear set | Ratio (3–12, sun in, carrier out, ring fixed), input torque or power, planets 3–5 (or the lightest); tooth numbers that give the ratio within 2 % AND assemble ((Z_s + Z_r)/n whole) AND clear their neighbours; the smallest ring that passes | Willis ratio (tested against pitch-point velocities), ring reaction from statics, load sharing K_γ (assumed, reported), Lewis bending of sun, planet as an idler (×0.7) and ring, both contact ratios (internal formula tends to the rack's), steel planet pins as cantilevers, sun and carrier shafts; mesh phases computed for every planet; in Fusion the carrier turns at exactly 1/i and each planet by the Willis relation, contact only (< 0.001 mm³) |
+| **Crank press (system)** | Press force, stroke, the part of the stroke it acts over (10 % if not given), strokes per minute: the slider-crank, its torque curve by virtual work, the energy per stroke, the flywheel on the fast shaft (4:1 belt, gears to the crank) and the motor, all from one torque curve | Work per stroke = F s_w (the integral of the torque, tested), the motor supplies the mean power while the flywheel covers the fluctuation (the same flywheel on the crankshaft would need the ratio² more inertia, tested), crank and rod sized for the working-zone forces with larger steel pins; in Fusion the flywheel turns at the gear ratio with the crank |
 | Link sizing | Per-link width/thickness for load and material (PLA, PETG, Al 6061, steel), local bosses D = 2.5d | Euler buckling, net section, bending, pin shear and bearing, Roark K_t, L/200 deflection incl. FEA-calibrated hub compliance, steel shaft torsion, layer interference ≥ 1 mm |
-| Spur gears | Lewis bending (Shigley Y table, Barth K_v), involute teeth | Contact ratio ≥ 1.2, undercut z ≥ 17, Hertz contact stress (info), shaft and hub |
-| Helical gears | Ratio, input torque, helix angle (default 20°, reported); normal module, opposite hands; the lightest pair that passes | Shigley's helical geometry reproduced (d, p_x, φ_t), Lewis in the normal plane with the virtual tooth number z/cos³ψ, hobbed K_v, transverse contact ratio ≥ 1.2 and face contact ratio ≥ 1 (the helix overlaps), no undercut 2cosψ/sin²φ_t, axial thrust reported, shafts and hubs; in Fusion each tooth is swept along the axis with a twist (an exact helicoid), teeth in contact with zero gap and no overlap while turning |
-| Worm gear | Ratio 5–100, worm speed, output torque (or input torque / power: the output follows the efficiency, iterated), self-locking on request; starts 1–4, standard module, diameter quotient q; the smallest set that passes | Shigley 15-4 / AGMA: wheel rating C_s d_G^0.8 F_e C_m C_v, sliding speed, friction curve, efficiency (tested against the force ratio), worm and wheel forces, self-locking with a 40 % margin on the static friction (λ ≲ 5.5°), worm not too slender, N_G ≥ 21, shafts; Shigley example 15-4 reproduced (λ 4.764°, f 0.0178, e 0.818, W_Gt 1050 lbf, (W_t)all 1456 lbf); in Fusion an Archimedean thread (its transverse section swept with a twist of 2π per lead) on a helical wheel, zero overlap over a worm turn |
-| Bevel gears | Ratio 1–6, input torque, straight teeth, shafts at 90°; the lightest pair that passes | Pitch cones and one apex, Tredgold's virtual teeth z/cos γ for Lewis (at the mean section), contact ratio and undercut, face ≤ A_o/3 and 10 m, forces W_t, W_r = W_t tan φ cos γ, W_a = W_t tan φ sin γ (Shigley's example reproduced: 406 → 140 / 46.7 lbf; swapped on the gear), shafts and hubs; in Fusion the virtual tooth on the back cone lofted to its copy scaled towards the apex (straight elements through the apex), contact with no overlap while turning |
-| Bolted joint | Separating load (static or fluctuating), clamped thickness, plate material, bolt class, number of bolts (4 tried first); the smallest ISO metric bolt that passes, with nut, standard length | Shigley ch. 8: bolt stiffness from its threaded and plain lengths, member stiffness (Wileman; within 8 % of the frustum model), joint constant C (tested against the two-spring model), preload 0.75 F_p and tightening torque, yield / load / separation factors, Goodman fatigue (the load line meets the Goodman line at n_f, tested); in Fusion two flanges with clearance holes, hex bolts with a cosmetic ISO thread at the free end and nuts |
-| Welded bracket | Load and its arm, bar section (sized in bending when not given), weld all around / top and bottom / sides; the smallest fillet leg that passes | Shigley ch. 9: welds as lines (unit area and second moment, tested by integrating along the lines), primary and bending shear on the throat combined, AISC 0.30 S_ut (E70), AISC minimum leg for the thickness, bar bending 0.6 S_y; in Fusion the wall, the bar and triangular fillet beads touching both |
-| Press fit | Torque, shaft diameter (sized in torsion when not given), hub size optional; the loosest H7 fit (k6 … s6) and the shortest, slimmest hub that pass | ISO 286 limits (Shigley's H7/s6 48 mm example reproduced), Lamé pressure (same-material closed form tested), torque at the SMALLEST interference ×2, hub von Mises at the LARGEST, assembly temperature; says honestly when no standard fit works (small shafts: use a key or spline) |
-| Splined shaft | Torque, fixed or sliding hub (flank pressure 100 / 40 / 10 MPa); the smallest ISO 14 straight-sided spline (light / medium series) with a hub ≤ 1.5 D | Flank bearing with 75 % of the teeth carrying (formula tested), shaft torsion on the minor diameter, hub length; in Fusion the splined shaft and a hub with a 0.1 mm clearance spline hole (measured) |
-| Involute spline (DIN 5480) | Torque, use as above, 'involute' / 'DIN 5480' in the sentence or the panel's Profile choice; the smallest W d_B × m × z with a hub ≤ 1.5 d_B | Sizes by the standard's rules (profile shift −0.05 … 0.45 fixes z: W 25×1.25×18, W 30×2×14, W 100×3×32 reproduced), tip / root diameters, 30° involute; the same flank-pressure rule, shaft torsion on the root, tip not pointed. Fusion: involute shaft and hub, zero overlap, 0.05 mm flank gap, cross-section equal to the integrated involute outline (839.4 mm²) |
-| Torsion spring | Moment at a working angle, arbor optional; the lightest music-wire spring in whole quarter body turns | Shigley 10-12: inner-fibre stress with K_i, S_y = 0.78 S_ut, rate d⁴E/(10.8 D N_a) with the legs' share, winding-down of the coil onto the arbor; Shigley example 10-8 reproduced (M 7.55 lbf·in, k' 29.2 lbf·in/turn, 93°); in Fusion a close-wound helix sweep with straight legs |
-| Disc spring stack | Force and the deflection at it, guide rod optional; the lightest stack of DIN 2093-proportioned discs (series A / B / C), nested and in series | DIN 2092 force and σ_OM (the 40 mm catalogue discs reproduced: 6.5 / 2.6 / 1.0 kN), working deflection ≤ 0.75 h0, stress ≤ 1400 MPa (51CrV4), stack deflection within 10 %, free and loaded length; in Fusion the discs revolved as cones, alternating, on a guide rod |
-| Extension spring | Force and the extension to reach it; the lightest music-wire spring with full-loop hooks | Shigley 10-10: initial tension from the preferred stress range, N_a = N_b + G/E, force = F_i + k y (tested), body torsion and the hooks' bending (A) and torsion (B), which govern; in Fusion a close-wound helix with loop hooks |
-| Flywheel | Energy fluctuation (or the work of one press stroke and the share of the cycle it takes), mean speed, C_s (from the application, reported), max diameter optional | I = ΔE/(C_s ω²) (tested: the energy between the speed limits is ΔE), steel disk t = 0.1 D, rotating-disk stress, rim speed, speed range; in Fusion the disk turns on its shaft between pedestals |
-| Disc clutch | Torque (or power and speed), lining, max diameter optional; service factor 1.3 | Shigley 16-5 uniform wear: T = N π f p_a r_i (r_o² − r_i²) (both forms tested equal), the best r_i = r_o/√3 found numerically, clamp force; more plates when the diameter is limited; in Fusion flywheel, friction disks, intermediate and pressure plates, input and output linked 1:1 (engaged) |
-| Flange coupling | Torque (service factor 1.5), shaft (sized in torsion when not given), bolts optional; the usual proportions (hub 2d × 1.5d, bolt circle 3d, flange 4d × 0.5d) | Key (DIN 6885) shear, crushing and its fit in the hub; bolts carrying the torque by friction μ N F_i r (the next smaller bolt tested to slip); hub torsion, flange shear; says when the shaft is too thin; in Fusion both hubs, shafts, bolts with a cosmetic thread and nuts |
-| Snap-fit (printed) | Undercut, PLA / PETG, hold force optional, permanent or releasable, repeated use; the shortest printable cantilever | Bayer / Covestro cantilever method: root strain 1.5 y h / l² within the material's allowance (tested against beam theory), deflection force, snap-in and pull-out forces over the ramp and the retaining face (a square face locks); in Fusion the snap and the catch against its hook, touching |
-| Living hinge (printed) | Bend angle, PLA / PETG, a few or many cycles; the shortest, thinnest printable strip | A strip in pure bending: strain t θ/(2L) (tested as t/2 over the radius) kept elastic (S_y/E, halved for many cycles), stiffness E I / L (tested as E I / ρ), moment at the full bend, the pivot's wander along the strip |
-| Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)); fatigue for a cycling force (Zimmerli + Gerber, the Gerber point tested on the curve) |
+
+#### Intermittent motion and cams
+
+| Module | Design method | Checks |
+|---|---|---|
+| Geneva | Slots (or step angle) and centre distance; tangential pin entry a = C·sin(π/n); wheel with slots and locking arcs, driver with locking disk whose relief is sized by sweeping the wheel outline over the index; with speed and a load (disk mass + diameter) the pin and wheel thickness are sized | Index / dwell split, closed-form ω and α (tested against numerical derivatives), peak ω = λ/(1−λ), pin force from J·α, pin shear and bending, slot bearing, both shafts, lock engaged < 1° after the pin leaves, material under the slots, rim vs driver shaft; point-sampled interference test; in Fusion zero overlap over two turns driven by the add-in |
+| Ratchet and pawl | Holding torque (teeth, diameter optional); saw teeth with an undercut locking face, pawl pivot on the tangent at the contact; smallest wheel that passes, face width ≤ one pitch | Self-engagement tan(hook) > μ (hook = friction angle + 5°), tooth bending / shear / face bearing, pawl buckling and compression, pivot pin and shaft (steel); the pawl's ride over the teeth found by collision search (least lift, 0.3° margin); in Fusion 0.2 mm clearance at rest and the pawl riding in contact, no overlap |
 | Disk cam | Cycloidal, harmonic or 3-4-5 motion; smallest base circle | Pressure angle ≤ 30°, no undercut, ρ ≥ 2·R_roller |
 | **Cam + follower spring (system)** | With speed and follower mass: the follower's acceleration sets the spring force needed against jump (1.3 × inertia); the preload is swept and the spring module designs the lightest spring that also passes with its real (rounded) rate | Contact force > 0 over the whole turn (recomputed from the motion table), all spring checks at the real top force |
-| **Crank press (system)** | Press force, stroke, the part of the stroke it acts over (10 % if not given), strokes per minute: the slider-crank, its torque curve by virtual work, the energy per stroke, the flywheel on the fast shaft (4:1 belt, gears to the crank) and the motor, all from one torque curve | Work per stroke = F s_w (the integral of the torque, tested), the motor supplies the mean power while the flywheel covers the fluctuation (the same flywheel on the crankshaft would need the ratio² more inertia, tested), crank and rod sized for the working-zone forces with larger steel pins; in Fusion the flywheel turns at the gear ratio with the crank |
-| Shaft | DE-Goodman fatigue with Marin factors, k_b iteration, Table 7-1 K_t; catalogue ball bearings; DIN 6885 key; diameter raised until every check passes | Fatigue n_f and yield at the hub and at the torque-carrying bearing seat, L10 life ≥ 20 000 h, key shear and crushing, slope ≤ 1 mrad and deflection ≤ 0.13 mm (numerical integration on the stepped shaft), Rayleigh critical speed ≥ 2× running speed |
+
+#### Gears
+
+| Module | Design method | Checks |
+|---|---|---|
+| Spur gears | Lewis bending (Shigley Y table, Barth K_v), involute teeth | Contact ratio ≥ 1.2, undercut z ≥ 17, Hertz contact stress (info), shaft and hub |
+| Helical gears | Ratio, input torque, helix angle (default 20°, reported); normal module, opposite hands; the lightest pair that passes | Shigley's helical geometry reproduced (d, p_x, φ_t), Lewis in the normal plane with the virtual tooth number z/cos³ψ, hobbed K_v, transverse contact ratio ≥ 1.2 and face contact ratio ≥ 1 (the helix overlaps), no undercut 2cosψ/sin²φ_t, axial thrust reported, shafts and hubs; in Fusion each tooth is swept along the axis with a twist (an exact helicoid), teeth in contact with zero gap and no overlap while turning |
+| Bevel gears | Ratio 1–6, input torque, straight teeth, shafts at 90°; the lightest pair that passes | Pitch cones and one apex, Tredgold's virtual teeth z/cos γ for Lewis (at the mean section), contact ratio and undercut, face ≤ A_o/3 and 10 m, forces W_t, W_r = W_t tan φ cos γ, W_a = W_t tan φ sin γ (Shigley's example reproduced: 406 → 140 / 46.7 lbf; swapped on the gear), shafts and hubs; in Fusion the virtual tooth on the back cone lofted to its copy scaled towards the apex (straight elements through the apex), contact with no overlap while turning |
+| Worm gear | Ratio 5–100, worm speed, output torque (or input torque / power: the output follows the efficiency, iterated), self-locking on request; starts 1–4, standard module, diameter quotient q; the smallest set that passes | Shigley 15-4 / AGMA: wheel rating C_s d_G^0.8 F_e C_m C_v, sliding speed, friction curve, efficiency (tested against the force ratio), worm and wheel forces, self-locking with a 40 % margin on the static friction (λ ≲ 5.5°), worm not too slender, N_G ≥ 21, shafts; Shigley example 15-4 reproduced (λ 4.764°, f 0.0178, e 0.818, W_Gt 1050 lbf, (W_t)all 1456 lbf); in Fusion an Archimedean thread (its transverse section swept with a twist of 2π per lead) on a helical wheel, zero overlap over a worm turn |
+| Rack and pinion | Force on the rack, travel (default 200 mm, reported), speed optional; the lightest pinion (z 18..40, standard module, face 8..12 m) + rack that passes | Pinion torque F·d/2, travel π·d per turn, Lewis bending of pinion (Y(z)) and rack (Y = 0.485), Barth K_v, contact ratio with a rack ≥ 1.2, no undercut, steel shaft and hub web; in Fusion a motion-linked pinion and rack, zero tooth overlap over 10 teeth and rack travel exactly π·d·θ/360 |
+| Planetary gear set | Ratio (3–12, sun in, carrier out, ring fixed), input torque or power, planets 3–5 (or the lightest); tooth numbers that give the ratio within 2 % AND assemble ((Z_s + Z_r)/n whole) AND clear their neighbours; the smallest ring that passes | Willis ratio (tested against pitch-point velocities), ring reaction from statics, load sharing K_γ (assumed, reported), Lewis bending of sun, planet as an idler (×0.7) and ring, both contact ratios (internal formula tends to the rack's), steel planet pins as cantilevers, sun and carrier shafts; mesh phases computed for every planet; in Fusion the carrier turns at exactly 1/i and each planet by the Willis relation, contact only (< 0.001 mm³) |
 | **Reducer (system)** | Gear pair → gear forces and masses → both shafts → bearings → keys → housing, iterated until the constraints agree (gear bore = shaft, key ≤ face width, bearings side by side, common span) | All of the above + housing web; in Fusion, tooth overlap 0 mm³ at 6 angles and the output turns at exactly 1/i |
 | **Two-stage reducer (system)** | Ratios above 6: the ratio is split over two stages (lightest gear set near √i); three shafts, the intermediate one carries two gears (loads in two planes, reactions, M/EI deflection and Rayleigh speed with several masses); gear bores, key lengths, bearing seats and the common span iterated together | Per shaft: fatigue / yield at every seat, keys, bearing life, slopes and deflections at each gear; gear 2 clears the output shaft, gear 4 clears the input shaft, material between bearing seats; in Fusion, tooth overlap 0 in both stages at 5 angles, both ratios exact |
 
+#### Chain and belt drives
+
+| Module | Design method | Checks |
+|---|---|---|
+| Roller chain drive | Power (or torque), input speed, speed ratio, load type (service factor, default moderate shock, reported), centre distance optional; ANSI / ISO 606 chains no. 25–160, 1–3 strands, small sprocket 17–25 teeth; the smallest sprocket pair that passes | Rating per strand from Shigley's link-plate and roller-bushing formulas (reproduce Table 17-20), multi-strand factor, chain pull vs breaking load (≥ 7), whole even number of links and the exact centre distance, wrap ≥ 120°, chordal speed variation, steel shafts and hub web; in Fusion the plates clear the teeth and the driven sprocket turns at exactly N1/N2 |
+| V-belt drive | Same inputs; classical A / B / C sections, standard belt lengths; the smallest sheave pair (with the real sheave width) that passes, at most 5 belts | Shigley 17-4: tabulated rating, angle-of-contact K1 and length K2 factors, number of belts and n_fs, belt tensions and the initial tension to set, belt life (Table 17-17), belt speed ≤ 25 m/s, centre distance, steel shafts; Shigley example 17-4 reproduced (F1 = 64.4 lbf, F_i = 32.2 lbf); in Fusion each belt sits 0.2 mm off both groove walls |
+
+#### Shafts, screws and couplings
+
+| Module | Design method | Checks |
+|---|---|---|
+| Shaft | DE-Goodman fatigue with Marin factors, k_b iteration, Table 7-1 K_t; catalogue ball bearings; DIN 6885 key; diameter raised until every check passes | Fatigue n_f and yield at the hub and at the torque-carrying bearing seat, L10 life ≥ 20 000 h, key shear and crushing, slope ≤ 1 mrad and deflection ≤ 0.13 mm (numerical integration on the stepped shaft), Rayleigh critical speed ≥ 2× running speed |
+| Splined shaft | Torque, fixed or sliding hub (flank pressure 100 / 40 / 10 MPa); the smallest ISO 14 straight-sided spline (light / medium series) with a hub ≤ 1.5 D | Flank bearing with 75 % of the teeth carrying (formula tested), shaft torsion on the minor diameter, hub length; in Fusion the splined shaft and a hub with a 0.1 mm clearance spline hole (measured) |
+| Involute spline (DIN 5480) | Torque, use as above, 'involute' / 'DIN 5480' in the sentence or the panel's Profile choice; the smallest W d_B × m × z with a hub ≤ 1.5 d_B | Sizes by the standard's rules (profile shift −0.05 … 0.45 fixes z: W 25×1.25×18, W 30×2×14, W 100×3×32 reproduced), tip / root diameters, 30° involute; the same flank-pressure rule, shaft torsion on the root, tip not pointed. Fusion: involute shaft and hub, zero overlap, 0.05 mm flank gap, cross-section equal to the integrated involute outline (839.4 mm²) |
+| Press fit | Torque, shaft diameter (sized in torsion when not given), hub size optional; the loosest H7 fit (k6 … s6) and the shortest, slimmest hub that pass | ISO 286 limits (Shigley's H7/s6 48 mm example reproduced), Lamé pressure (same-material closed form tested), torque at the SMALLEST interference ×2, hub von Mises at the LARGEST, assembly temperature; says honestly when no standard fit works (small shafts: use a key or spline) |
+| Flange coupling | Torque (service factor 1.5), shaft (sized in torsion when not given), bolts optional; the usual proportions (hub 2d × 1.5d, bolt circle 3d, flange 4d × 0.5d) | Key (DIN 6885) shear, crushing and its fit in the hub; bolts carrying the torque by friction μ N F_i r (the next smaller bolt tested to slip); hub torsion, flange shear; says when the shaft is too thin; in Fusion both hubs, shafts, bolts with a cosmetic thread and nuts |
+| Disc clutch | Torque (or power and speed), lining, max diameter optional; service factor 1.3 | Shigley 16-5 uniform wear: T = N π f p_a r_i (r_o² − r_i²) (both forms tested equal), the best r_i = r_o/√3 found numerically, clamp force; more plates when the diameter is limited; in Fusion flywheel, friction disks, intermediate and pressure plates, input and output linked 1:1 (engaged) |
+| Flywheel | Energy fluctuation (or the work of one press stroke and the share of the cycle it takes), mean speed, C_s (from the application, reported), max diameter optional | I = ΔE/(C_s ω²) (tested: the energy between the speed limits is ΔE), steel disk t = 0.1 D, rotating-disk stress, rim speed, speed range; in Fusion the disk turns on its shaft between pedestals |
+| Power screw | Axial load, travel, ends (both supported / jack), nut material; smallest ISO trapezoidal size that passes AND self-locks, nut at least one diameter long | Raising / lowering torque (Shigley 8-1 reproduced: 15.94 N·m, −0.47 N·m), self-locking with lubricated friction, efficiency, body von Mises, Euler / Johnson column, thread bearing, root bending (first thread 38 %), nut thread shear; in Fusion a modelled Tr thread, the nut moves one lead per turn with zero thread overlap |
+
+#### Bolted and welded joints
+
+| Module | Design method | Checks |
+|---|---|---|
+| Bolted joint | Separating load (static or fluctuating), clamped thickness, plate material, bolt class, number of bolts (4 tried first); the smallest ISO metric bolt that passes, with nut, standard length | Shigley ch. 8: bolt stiffness from its threaded and plain lengths, member stiffness (Wileman; within 8 % of the frustum model), joint constant C (tested against the two-spring model), preload 0.75 F_p and tightening torque, yield / load / separation factors, Goodman fatigue (the load line meets the Goodman line at n_f, tested); in Fusion two flanges with clearance holes, hex bolts with a cosmetic ISO thread at the free end and nuts |
+| Welded bracket | Load and its arm, bar section (sized in bending when not given), weld all around / top and bottom / sides; the smallest fillet leg that passes | Shigley ch. 9: welds as lines (unit area and second moment, tested by integrating along the lines), primary and bending shear on the throat combined, AISC 0.30 S_ut (E70), AISC minimum leg for the thickness, bar bending 0.6 S_y; in Fusion the wall, the bar and triangular fillet beads touching both |
+
+#### Springs
+
+| Module | Design method | Checks |
+|---|---|---|
+| Compression spring | Cylindrical or conical, Shigley ch. 10 | Bergsträsser, S_ut = A/dᵐ, solid-safe, buckling, conical rate k = Gd⁴ / (16Nₐ(R₁+R₂)(R₁²+R₂²)); fatigue for a cycling force (Zimmerli + Gerber, the Gerber point tested on the curve) |
+| Extension spring | Force and the extension to reach it; the lightest music-wire spring with full-loop hooks | Shigley 10-10: initial tension from the preferred stress range, N_a = N_b + G/E, force = F_i + k y (tested), body torsion and the hooks' bending (A) and torsion (B), which govern; in Fusion a close-wound helix with loop hooks |
+| Torsion spring | Moment at a working angle, arbor optional; the lightest music-wire spring in whole quarter body turns | Shigley 10-12: inner-fibre stress with K_i, S_y = 0.78 S_ut, rate d⁴E/(10.8 D N_a) with the legs' share, winding-down of the coil onto the arbor; Shigley example 10-8 reproduced (M 7.55 lbf·in, k' 29.2 lbf·in/turn, 93°); in Fusion a close-wound helix sweep with straight legs |
+| Disc spring stack | Force and the deflection at it, guide rod optional; the lightest stack of DIN 2093-proportioned discs (series A / B / C), nested and in series | DIN 2092 force and σ_OM (the 40 mm catalogue discs reproduced: 6.5 / 2.6 / 1.0 kN), working deflection ≤ 0.75 h0, stress ≤ 1400 MPa (51CrV4), stack deflection within 10 %, free and loaded length; in Fusion the discs revolved as cones, alternating, on a guide rod |
+
+#### 3D printing
+
+| Module | Design method | Checks |
+|---|---|---|
+| Snap-fit (printed) | Undercut, PLA / PETG, hold force optional, permanent or releasable, repeated use; the shortest printable cantilever | Bayer / Covestro cantilever method: root strain 1.5 y h / l² within the material's allowance (tested against beam theory), deflection force, snap-in and pull-out forces over the ramp and the retaining face (a square face locks); in Fusion the snap and the catch against its hook, touching |
+| Living hinge (printed) | Bend angle, PLA / PETG, a few or many cycles; the shortest, thinnest printable strip | A strip in pure bending: strain t θ/(2L) (tested as t/2 over the radius) kept elastic (S_y/E, halved for many cycles), stiffness E I / L (tested as E I / ρ), moment at the full bend, the pivot's wander along the strip |
+
 In Fusion: **⟳ 1 turn** and **▶ continuous** buttons drive the input joint (gear motion link, cam follower from
-the s(θ) table, Geneva wheel from its φ(θ) table, ratchet pawl riding the teeth, rocker-rocker oscillation within limits). The spring is animated as pre-built compression frames.
+the s(θ) table, Geneva wheel from its φ(θ) table, ratchet pawl riding the teeth, rocker-rocker oscillation within limits). Springs (compression, extension, torsion, disc) are animated as pre-built frames from free to the working load. For a drawing with nothing that moves (joints, fits, printed parts) the two buttons are hidden. The panel's Type list is grouped as in the tables above.
 Sliders in the panel re-run the engine live and colour the swing slider by feasibility.
 
 ## Verification highlights
@@ -169,7 +240,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   press *Draw in Fusion*, *1 turn* / *Loop* and *FEA*.
 * **Terminal:** `python main.py "30 mm crank, 60° swing, 5 kg at the tip, PETG"` writes `output/mechanism.json`
   (the *FourBar* script in `fusion_scripts/` draws it).
-* **Tests:** `python -m pytest`. This runs 383 tests on formulas, simulation, sizing, FEA and geometry.
+* **Tests:** `python -m pytest`. This runs 392 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
 * **Fusion smoke test:** `python tools/fusion_smoke.py` builds every module's default design in Fusion through the add-in's bridge (36/36 build).
 

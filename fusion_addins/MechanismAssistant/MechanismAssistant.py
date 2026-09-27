@@ -97,7 +97,13 @@ def reload_modules():
             and os.path.normcase(os.path.realpath(m.__file__)).startswith(root)
             and os.path.normcase(ADDIN_DIR) not in os.path.normcase(os.path.realpath(m.__file__))]
     # dependencies first: pipeline last (it imports the others)
+    retry = []
     for mod in sorted(ours, key=lambda m: m.__name__ == "pipeline"):
+        try:
+            importlib.reload(mod)
+        except ImportError:
+            retry.append(mod)             # imports a name that a module reloaded after it has just gained
+    for mod in retry:
         importlib.reload(mod)
     return sys.modules["pipeline"], sys.modules["fusion_lib.fourbar"]
 
@@ -221,6 +227,7 @@ def finish_design(result, fourbar):
         try:
             fourbar.build(result["fusion"])
             result["drawn"] = True
+            result["can_move"] = bool(crank_motion() or spring_frames())   # else the panel hides 1 turn / Loop
         except Exception as e:
             log("drawing error:\n" + traceback.format_exc())
             result["drawn"] = False

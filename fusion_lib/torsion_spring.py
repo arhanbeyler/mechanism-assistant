@@ -3,7 +3,10 @@ H4: Draws a helical torsion spring in Fusion 360 (runs inside Fusion only).
 
 Body: the wire's centre line as a helix spline (close wound, pitch 1.05 d so the sweep does not touch
 itself), a circle swept along it; the two straight legs are extruded from the planes normal to the path at
-its ends, along the helix tangent. With an arbor, a grey rod goes through the coils. Nothing moves.
+its ends, along the helix tangent. With an arbor, a grey rod goes through the coils.
+Animation: FRAMES frames wound from free to the working angle, shown in turn by the add-in. Winding adds
+theta / 360 turns to the same wire length (the coil diameter shrinks in proportion, the body gets one wire
+longer per turn); the first leg stays, the second turns by theta.
 """
 
 import math
@@ -12,19 +15,20 @@ import adsk.core
 import adsk.fusion
 
 from fusion_lib.fourbar import mm
+from fusion_lib.spring import frame_occurrences
 
 GAP = 1.05
 PER_TURN = 24
+FRAMES = 6
 
 
-def build(g, root, design=None):
-    d, D, Nb, legs = g["d"], g["D"], g["Nb"], g["legs"]
-    R = D / 2
+def _frame(comp, g, theta):
+    """The spring wound by theta degrees."""
+    d, legs = g["d"], g["legs"]
+    Nb = g["Nb"] + theta / 360.0
+    R = g["D"] / 2 * g["Nb"] / Nb
     p = GAP * d
     P = adsk.core.Point3D.create
-    occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-    comp = occ.component
-    comp.name = "Spring (torsion)"
 
     n = int(round(Nb * PER_TURN))
     col = adsk.core.ObjectCollection.create()
@@ -60,15 +64,22 @@ def build(g, root, design=None):
         fi.setOneSideExtent(adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(mm(legs))), direction)
         fi.participantBodies = [body]
         ext.add(fi)
-    occ.isGrounded = True
+    return f"{theta:.0f}°"
 
+
+def build(g, root, design=None):
+    d, Nb = g["d"], g["Nb"]
+    p = GAP * d
+    P = adsk.core.Point3D.create
+    theta = g.get("theta_deg") or 0.0
+    occ = frame_occurrences(root, design, FRAMES, lambda comp, f: _frame(comp, g, theta * f))[0]
     if g.get("arbor"):
         a_occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
         a_occ.component.name = "Arbor"
         ak = a_occ.component.sketches.add(a_occ.component.xYConstructionPlane)
         ak.sketchCurves.sketchCircles.addByCenterRadius(P(0, 0, 0), mm(g["arbor"] / 2))
         a_occ.component.features.extrudeFeatures.addSimple(
-            ak.profiles.item(0), adsk.core.ValueInput.createByReal(mm(p * Nb + d + 10)),
+            ak.profiles.item(0), adsk.core.ValueInput.createByReal(mm(p * (Nb + theta / 360.0) + d + 10)),
             adsk.fusion.FeatureOperations.NewBodyFeatureOperation).bodies.item(0).name = "Arbor"
         a_occ.isGrounded = True
     return occ
