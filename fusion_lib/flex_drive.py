@@ -19,6 +19,7 @@ import adsk.fusion
 import chain
 from fusion_lib.fourbar import mm
 from fusion_lib.gear import _bore_edge
+from fusion_lib.marker import marker
 
 PLATE_T = 3.0            # base plate
 GAP = 0.5
@@ -109,6 +110,9 @@ def _sprocket(comp, g, N, bore, z_bottom):
     _disk(comp, bore / 2, 0, width, "Shaft bore", Cut, [body])
     body.name = f"Sprocket z{N}"
     _shaft(comp, bore, z_bottom, width + SHAFT_OUT)
+    r1 = gap["R"] - chain.PLATE_H * p / 2 - 2.0                  # inside the chain plates' reach
+    if r1 > bore / 2 + 6:
+        marker(comp, bore / 2 + 2, r1, width, max(4.0, 0.3 * p))
     return width, gap
 
 
@@ -200,6 +204,7 @@ def _sheave(comp, g, d, bore, z_bottom):
     body = rev.add(ri).bodies.item(0)
     body.name = f"Sheave Ø{d:.0f}"
     _shaft(comp, bore, z_bottom, g["width"] + SHAFT_OUT)
+    marker(comp, bore / 2 + 2, Ro - 3, g["width"], max(5.0, Ro / 10))
     return Ro, wt, f
 
 

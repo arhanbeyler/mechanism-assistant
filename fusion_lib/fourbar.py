@@ -180,7 +180,7 @@ APPEARANCES = {"Ground": "Plastic - Matte (Gray)", "Base": "Plastic - Matte (Gra
                "Piston": "Plastic - Matte (Green)",
                "Shaft": "Steel - Satin", "Input shaft": "Steel - Satin", "Output shaft": "Steel - Satin",
                "Intermediate shaft": "Steel - Satin",
-               "Spring": "Steel - Satin", "Key": "Brass - Matte"}
+               "Spring": "Steel - Satin", "Key": "Brass - Matte", "Marker": "Plastic - Matte (Yellow)"}
 
 
 def _appearance(design, name):
@@ -200,7 +200,9 @@ def paint(design):
             if key in APPEARANCES:
                 occ.appearance = _appearance(design, APPEARANCES[key])
             for body in occ.component.bRepBodies:
-                if body.name.startswith("Key "):
+                if body.name == "Marker":                                 # fusion_lib.marker: shows the turning
+                    body.appearance = _appearance(design, APPEARANCES["Marker"])
+                elif body.name.startswith("Key "):
                     body.appearance = _appearance(design, APPEARANCES["Key"])
                 elif body.name == "Top plate":
                     body.appearance = _appearance(design, APPEARANCES["Base"])

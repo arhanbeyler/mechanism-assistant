@@ -14,6 +14,7 @@ import adsk.fusion
 
 from fusion_lib.flywheel import PLATE_T, horizontal, pedestals, revolute
 from fusion_lib.fourbar import mm
+from fusion_lib.marker import marker
 
 PLATE = 12.0          # flywheel / intermediate / pressure plate thickness
 DISK = 8.0            # friction disk (lining + core)
@@ -63,6 +64,9 @@ def build(g, root, design=None):
         _ring(ic, R_plate, bore / 2 + 2, z, PLATE, name)
         z += PLATE
     shaft_out = _ring(oc, bore / 2, 0, -length / 2 + PLATE, span / 2 + 20 + length / 2 - PLATE, "Shaft")
+    marker(ic, bore / 2 + 4, 0.9 * R_plate, length / 2, max(6.0, R_plate / 12))    # on the pressure plate
+    marker(oc, 0, bore / 2 + 12, span / 2 + 20, 6.0, 3.0)                        # a flag on the output end
+    marker(ic, 0, bore / 2 + 12, -span / 2 - 20, 6.0, -3.0)                      # and on the input end
 
     j_in = revolute(root, inp, ground, shaft_in, bore / 2, "Ground-Driver")
     j_out = revolute(root, out, ground, shaft_out, bore / 2, "Ground-Driven")

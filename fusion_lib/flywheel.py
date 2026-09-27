@@ -7,6 +7,7 @@ import adsk.core
 import adsk.fusion
 
 from fusion_lib.fourbar import mm
+from fusion_lib.marker import marker
 
 PLATE_T = 10.0
 CLEAR = 10.0
@@ -87,5 +88,6 @@ def build(g, root, design=None):
     c.name = "Flywheel"
     disk = _cyl(c, D / 2, -t / 2, t, f"Flywheel Ø{D:.0f}x{t:.0f}")
     shaft = _cyl(c, bore / 2, -span / 2 - 20, span + 40, "Shaft")
+    marker(c, bore / 2 + 5, 0.9 * D / 2, t / 2, max(6.0, D / 25))
     revolute(root, occ, ground, shaft, bore / 2, "Ground-Driver")
     return occ

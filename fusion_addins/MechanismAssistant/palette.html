@@ -287,7 +287,8 @@ Everything is computed on this computer, with a local AI.</div>
   ["k-a", "k-in", "k-psi", "k-q", "k-f", "k-rpm"].forEach((id) => $(id).addEventListener("input", schedulePreview));
   $("k-mat").addEventListener("change", schedulePreview);
   $("draw").addEventListener("click", () => {
-    if (!ready() || !lastPreview || lastPreview.status !== "ok") return;
+    if (!ready() || !lastPreview || !(lastPreview.status === "ok" || lastPreview.six_bar_pending)) return;
+    if (lastPreview.six_bar_pending) addMsg("ai", "Synthesizing the six-bar (a few seconds), then drawing...", "info");
     $("draw").disabled = true;
     $("status").textContent = "Drawing in Fusion...";
     adsk.fusionSendData("draw", JSON.stringify({ params: params() }));
