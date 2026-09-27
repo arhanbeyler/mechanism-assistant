@@ -186,7 +186,7 @@ flowchart LR
 | Living hinge (printed) | Bend angle, PLA / PETG, a few or many cycles; the shortest, thinnest printable strip | A strip in pure bending: strain t θ/(2L) (tested as t/2 over the radius) kept elastic (S_y/E, halved for many cycles), stiffness E I / L (tested as E I / ρ), moment at the full bend, the pivot's wander along the strip |
 
 In Fusion: **⟳ 1 turn** and **▶ continuous** buttons drive the input joint (gear motion link, cam follower from
-the s(θ) table, Geneva wheel from its φ(θ) table, ratchet pawl riding the teeth, rocker-rocker oscillation within limits). Springs (compression, extension, torsion, disc) are animated as pre-built frames from free to the working load. For a drawing with nothing that moves (joints, fits, printed parts) the two buttons are hidden. The panel's Type list is grouped as in the tables above.
+the s(θ) table, Geneva wheel from its φ(θ) table, ratchet pawl riding the teeth, rocker-rocker oscillation within limits). Springs (compression, extension, torsion, disc), the snap-fit (the catch slides in, the beam bends just enough for the hook to pass, then snaps back) and the living hinge (flat as printed, folding to its angle as a circular arc) are animated as pre-built frames. For a drawing with nothing that moves (bolted and welded joints, fits, splines, the coupling) the two buttons are hidden. The panel's Type list is grouped as in the tables above.
 Sliders in the panel re-run the engine live and colour the swing slider by feasibility.
 
 ## Verification highlights

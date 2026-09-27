@@ -2276,7 +2276,8 @@ def _flexure(result, spec, say):
         return dict(result, status="failed", checks=checks, notes=notes, message=" ".join(notes + [
             "No printable strip up to 80 mm bends that far within the elastic range."]))
     result.update(flexure=d, checks=checks, notes=notes, target={"theta": float(th)},
-                  fusion={"type": "flexure", "passed_checks": True, "L": d["L"], "t": d["t"], "w": d["w"]})
+                  fusion={"type": "flexure", "passed_checks": True, "L": d["L"], "t": d["t"], "w": d["w"],
+                          "theta_deg": d["theta_deg"]})
     msg = (f"All checks passed. Strip {d['L']:g} × {d['t']:g} mm, {d['w']:g} mm wide: {d['theta_deg']:g}° gives "
            f"{100 * d['eps']:.2f} % strain (limit {100 * d['eps_allow']:.2f} %) and takes {d['M']:.1f} N·mm "
            f"({d['k_Nmm_deg']:.3f} N·mm/°); its pivot wanders about {d['pivot_shift']:.0f} mm along the strip.")

@@ -110,13 +110,13 @@ def mark_frames(design, n):
     design.attributes.add(MARK_GROUP, "spring_frames", str(n))
 
 
-def frame_occurrences(root, design, n, make):
-    """n grounded frame components, only the first visible; make(comp, frac) draws one (frac 0 = free ... 1 =
-    working) and returns its label. Marks the design for the add-in's spring animation."""
+def frame_occurrences(root, design, n, make, part="Spring"):
+    """n grounded frame components "<part> k (label)", only the first visible; make(comp, frac) draws one (frac 0 =
+    free ... 1 = working) and returns its label. Marks the design for the add-in's frame animation."""
     occs = []
     for k in range(n):
         occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-        occ.component.name = f"Spring {k} ({make(occ.component, k / (n - 1))})"
+        occ.component.name = f"{part} {k} ({make(occ.component, k / (n - 1))})"
         occ.isGrounded = True
         occ.isLightBulbOn = (k == 0)
         occs.append(occ)

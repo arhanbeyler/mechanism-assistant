@@ -16,6 +16,7 @@ import io
 import json
 import math
 import os
+import re
 import secrets
 import sys
 import threading
@@ -287,11 +288,12 @@ def geneva_wheel():
 
 
 def spring_frames():
-    """For a spring design: the compression frame components (0 = free ... last = working) or None."""
+    """For a design drawn as frames (springs, snap-fit, living hinge): the frame components, named "<Part> k (...)"
+    (0 = free ... last = working), or None."""
     design = adsk.fusion.Design.cast(app.activeProduct)
     if not design or not design.attributes.itemByName(MARK_GROUP, "spring_frames"):
         return None
-    occs = [o for o in design.rootComponent.occurrences if o.component.name.startswith("Spring ")]
+    occs = [o for o in design.rootComponent.occurrences if re.match(r"[A-Za-z]+ \d+ \(", o.component.name)]
     return sorted(occs, key=lambda o: int(o.component.name.split()[1])) or None
 
 
