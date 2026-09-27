@@ -11,6 +11,18 @@ that you can rotate. Everything runs locally: a local LLM (Ollama), deterministi
 
 Sentences can be written in English or Turkish.
 
+#### In motion (Fusion's own solver turning the drawn assemblies; `tools/make_gifs.py`)
+
+| Four-bar | Slider-crank | Dwell six-bar |
+|---|---|---|
+| ![four-bar](docs/img/anim/fourbar.gif) | ![slider-crank](docs/img/anim/slider_crank.gif) | ![dwell](docs/img/anim/dwell.gif) |
+| **Quick return** | **Planetary gear set** | **Worm gear** |
+| ![quick return](docs/img/anim/quick_return.gif) | ![planetary](docs/img/anim/planetary.gif) | ![worm gear](docs/img/anim/worm_gear.gif) |
+| **Crank press (flywheel drive)** | **Compression spring** | **Torsion spring** |
+| ![crank press](docs/img/anim/press.gif) | ![spring](docs/img/anim/spring.gif) | ![torsion spring](docs/img/anim/torsion_spring.gif) |
+| **Snap-fit** | **Living hinge** | |
+| ![snap-fit](docs/img/anim/snap_fit.gif) | ![living hinge](docs/img/anim/flexure.gif) | |
+
 #### Linkages
 
 | Four-bar (crank-rocker / rocker-rocker) | Slider-crank (piston) | Straight-line linkage (Hoeckens) |

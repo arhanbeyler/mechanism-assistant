@@ -100,7 +100,7 @@ In a system one module's output is another's input (forces, diameters and masses
 
 ## D. Outside world
 - [ ] **D12. Physical print** (a friend's printer)
-- [ ] **D13. README and demo video** (portfolio). README + Fusion images done (parts in the panel colours); the video is to be recorded: shot list in `docs/demo.md`
+- [ ] **D13. README and demo video** (portfolio). README + Fusion images done (parts in the panel colours), animated GIFs of 11 designs made by `tools/make_gifs.py` (Fusion turns the input joint or shows the frames; the camera is fitted to the whole motion through a temporary sketch of the swept box's corners); the video is to be recorded: shot list in `docs/demo.md`
 - [ ] **D14. Later:** FreeCAD / AutoCAD support, a "free mode" (unverified, clearly labelled)
 
 ## Robustness
