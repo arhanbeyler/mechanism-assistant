@@ -2,6 +2,8 @@
 
 **Project:** AI-Driven Autonomous Kinematic Synthesis and Parametric CAD Generation System
 
+**Status:** v1.0 released on 2026-10-16 (34 modules, 398 tests, llm_eval 122/122, every module built in Fusion). The open items below are for later versions.
+
 **Core rule:** the LLM only understands the request and turns it into JSON; it produces no dimension.
 Deterministic engines compute the numbers, an independent simulation verifies them, Fusion draws.
 

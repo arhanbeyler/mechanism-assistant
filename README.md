@@ -296,4 +296,8 @@ tools/               hub-compliance calibration, LLM evaluation, Fusion smoke te
 * The development bridge (127.0.0.1, token-protected) executes Python inside Fusion. It exists for automated
   testing and should stay local.
 
-Planned next: see [ROADMAP.md](ROADMAP.md): the folding platform (a senior-project candidate), print-in-place pins and a physical print.
+Planned next (after v1.0): see [ROADMAP.md](ROADMAP.md): print-in-place pins after a physical print, a demo video, the folding platform.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
