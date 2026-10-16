@@ -5,8 +5,9 @@ __pycache__/
 # Generated output (recreated on every run)
 output/
 
-# Secret token of the Fusion bridge
+# Secret token of the Fusion bridge, and its opt-in flag (this machine only)
 .bridge_token
+.bridge_enabled
 
 # Path of this computer's Python (for the FEA; the one with numpy / scipy / gmsh)
 .local_python

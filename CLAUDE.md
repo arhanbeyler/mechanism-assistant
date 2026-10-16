@@ -29,7 +29,7 @@ deterministic Python engines size and verify the design; a Fusion 360 add-in dra
 - Tests: `python -m pytest -q` (~2 min).
 - LLM eval: `python tools/llm_eval.py` (Ollama running; ~12 min).
 - Fusion (add-in running): `python tools/fusion_smoke.py [kinds]`, `python tools/make_gifs.py [kinds]`,
-  `python tools/print_coupon.py`. The bridge is `POST http://127.0.0.1:8765/exec` with header `X-Token`
+  `python tools/print_coupon.py`. The bridge starts only if `.bridge_enabled` exists in the repo root (gitignored). It is `POST http://127.0.0.1:8765/exec` with header `X-Token`
   (from `.bridge_token`), 120 s per request. **Fusion freezes while it builds: warn the user before long runs.**
 - Add-in code changes need a Fusion restart; `fusion_lib` / engines reload on each build.
 

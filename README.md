@@ -254,7 +254,7 @@ More findings are in [ROADMAP.md](ROADMAP.md).
   (the *FourBar* script in `fusion_scripts/` draws it).
 * **Tests:** `python -m pytest`. This runs 398 tests on formulas, simulation, sizing, FEA and geometry.
 * **LLM evaluation:** `python tools/llm_eval.py` (requires Ollama running).
-* **Fusion smoke test:** `python tools/fusion_smoke.py` builds every module's default design in Fusion through the add-in's bridge (36/36 build).
+* **Fusion smoke test:** `python tools/fusion_smoke.py` builds every module's default design in Fusion through the add-in's bridge (36/36 build); create an empty `.bridge_enabled` file in the repository root first and restart the add-in.
 
 Idea and direction: Arhan Beyler. Code written together with Claude (Anthropic) as the coding partner.
 
@@ -293,8 +293,8 @@ tools/               hub-compliance calibration, LLM evaluation, Fusion smoke te
 * Chains, belts and some couplings are drawn static (a chain or a belt looks the same when it moves); gears and
   linkages move with Fusion joints.
 * The FEA covers the most loaded link as a cantilever with its hub. It is not a full-assembly contact analysis.
-* The development bridge (127.0.0.1, token-protected) executes Python inside Fusion. It exists for automated
-  testing and should stay local.
+* The development bridge (127.0.0.1, token-protected) executes Python inside Fusion. It is off by default and
+  starts only when an empty file `.bridge_enabled` exists in the repository root (needed for the tools below).
 
 Planned next (after v1.0): see [ROADMAP.md](ROADMAP.md): print-in-place pins after a physical print, a demo video, the folding platform.
 

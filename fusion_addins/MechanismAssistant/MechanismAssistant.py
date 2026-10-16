@@ -3,8 +3,9 @@ Mechanism Assistant: Fusion 360 add-in.
 
 1) Panel: a chat box + sliders + result card. The user types a sentence; the LLM and the engines run in
    the BACKGROUND (Fusion does not freeze), the result is drawn on the main thread.
-2) Bridge: a small token-protected HTTP server on 127.0.0.1. During development it lets Claude run code
-   in Fusion and take screenshots.
+2) Bridge (development only, off by default): a small token-protected HTTP server on 127.0.0.1 that lets
+   tools and Claude run code in Fusion and take screenshots. It starts only if the file .bridge_enabled
+   exists in the repository root.
 
 Rule: the Fusion API may only be called from the MAIN thread. Background threads hand work over to the
 main thread with run_on_main() (a custom event).
@@ -40,6 +41,7 @@ EVENT_ID = "MechanismAssistantMainThread"
 MARK_GROUP = "MechanismAssistant"   # attribute group of the drawn document (same as fusion_lib.fourbar)
 BRIDGE_PORT = 8765
 TOKEN_FILE = os.path.join(ROOT, ".bridge_token")
+BRIDGE_FLAG = os.path.join(ROOT, ".bridge_enabled")    # opt-in: users who only design never open the port
 LOG_FILE = os.path.join(ROOT, "output", "addin.log")
 
 app = None
@@ -663,7 +665,8 @@ def run(context):
         if panel and not panel.controls.itemById(CMD_ID):
             panel.controls.addCommand(cmd_def)
 
-        start_bridge()
+        if os.path.exists(BRIDGE_FLAG):
+            start_bridge()
         warm_up_llm()
         if app.isStartupComplete:
             show_palette()            # Run pressed by hand: open now
