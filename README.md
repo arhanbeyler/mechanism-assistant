@@ -3,7 +3,7 @@
 Describe a machine element in plain language and get a **sized, checked and drawn** Fusion 360 assembly
 that you can rotate. Everything runs locally: a local LLM (Ollama), deterministic Python engines and local FEA.
 
-**Website:** [arhanbeyler.github.io/github-slideshow](https://arhanbeyler.github.io/github-slideshow/), a scroll-driven
+**Website:** [arhanbeyler.github.io/mechanism-assistant-web](https://arhanbeyler.github.io/mechanism-assistant-web/), a scroll-driven
 tour in which the planetary gear set, four-bar, slider-crank, Geneva and cam turn in 3D as you scroll, built from
 the engines' default designs.
 
