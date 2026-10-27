@@ -3,6 +3,10 @@
 Describe a machine element in plain language and get a **sized, checked and drawn** Fusion 360 assembly
 that you can rotate. Everything runs locally: a local LLM (Ollama), deterministic Python engines and local FEA.
 
+**Website:** [arhanbeyler.github.io/github-slideshow](https://arhanbeyler.github.io/github-slideshow/), a scroll-driven
+tour in which the planetary gear set, four-bar, slider-crank, Geneva and cam turn in 3D as you scroll, built from
+the engines' default designs.
+
 > *"turn a 4 cm arm 45° and the other arm turns 120°, PETG, 2 kg"*
 > → Freudenstein function generator, strength and interference checks → four-bar in Fusion with joint limits
 >
